@@ -26,7 +26,11 @@ class AdminServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Merge admin views into the existing magna:: namespace.
-        $this->loadViewsFrom(__DIR__.'/resources/views', 'magna');
+        // Directory is capital `Resources` (it also holds the PSR-4
+        // Magna\Admin\Resources\* classes); the path must match exactly or it
+        // silently fails on case-sensitive (Linux) hosts while working on
+        // case-insensitive Windows/macOS.
+        $this->loadViewsFrom(__DIR__.'/Resources/views', 'magna');
 
         // Wire plugin contracts after all providers have booted.
         $this->app->booted(function (): void {
