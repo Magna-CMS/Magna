@@ -42,6 +42,12 @@
                 <div class="check-help">Media thumbnails and other background jobs need <code>php artisan queue:work</code> running continuously under a process supervisor. See <code>docs/DEPLOYMENT.md</code> section 4.</div>
             </div>
         </li>
+        <li>
+            <div>
+                <div class="check-label">The scheduler cron</div>
+                <div class="check-help">Drives update checks, dashboard announcements, backups, and cleanup. Add one cron entry:<br><code>* * * * * cd {{ base_path() }} &amp;&amp; php artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code><br>Announcements and updates still refresh when an admin opens the dashboard, but the cron keeps everything current on its own.</div>
+            </div>
+        </li>
     </ul>
 
     <p class="foot" style="margin-top:16px;">

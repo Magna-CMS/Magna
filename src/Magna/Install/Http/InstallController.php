@@ -15,6 +15,7 @@ use Magna\Install\DatabaseInstaller;
 use Magna\Install\EnvWriter;
 use Magna\Install\Installer;
 use Magna\Install\Requirements;
+use Magna\Updater\UpdateCheckClient;
 use Magna\Users\User;
 use Magna\Users\UserStatus;
 use Throwable;
@@ -169,6 +170,15 @@ class InstallController
         } catch (Throwable) {
             // Symlinks may need elevated rights on some hosts; not fatal.
         }
+
+        // First hub check-in, right after install, so the welcome notice and any
+        // live announcements appear immediately instead of waiting up to 12h for
+        // the scheduler's first run. Deferred past the response and rescued: it
+        // must never delay or fail the final install step if the hub is slow or
+        // unreachable.
+        app()->terminating(function (): void {
+            rescue(fn () => app(UpdateCheckClient::class)->checkIn(), report: false);
+        });
 
         return redirect('/install/complete');
     }

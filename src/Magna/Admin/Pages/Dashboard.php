@@ -6,8 +6,11 @@ namespace Magna\Admin\Pages;
 
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
+use Illuminate\Support\Carbon;
 use Magna\Admin\Widgets\EntryCounts;
 use Magna\Admin\Widgets\RecentActivity;
+use Magna\Updater\UpdateCheck;
+use Magna\Updater\UpdateCheckClient;
 use Magna\Users\User;
 
 class Dashboard extends \Filament\Pages\Dashboard
@@ -17,6 +20,24 @@ class Dashboard extends \Filament\Pages\Dashboard
     protected static ?int $navigationSort = -1;
 
     protected string $view = 'magna::admin.dashboard';
+
+    public function mount(): void
+    {
+        // Keep announcements/updates fresh without depending on the scheduler
+        // cron: if the last hub check-in is stale (>12h) or never happened,
+        // refresh — deferred past the response so it never slows the dashboard
+        // and never breaks it if the hub is unreachable. Gated on the timestamp
+        // so the hub is hit at most once per window no matter how many admins
+        // load the page.
+        app()->terminating(function (): void {
+            rescue(function (): void {
+                $last = UpdateCheck::query()->max('checked_at');
+                if ($last === null || Carbon::parse((string) $last)->lessThanOrEqualTo(now()->subHours(12))) {
+                    app(UpdateCheckClient::class)->checkIn();
+                }
+            }, report: false);
+        });
+    }
 
     /** @return list<class-string<Widget>> */
     public function getWidgets(): array
