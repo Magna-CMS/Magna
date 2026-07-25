@@ -38,7 +38,7 @@
     </ul>
 
     <div class="actions">
-        <a class="btn btn-ghost" href="/install" style="width:auto; padding-inline:18px;">Re-check</a>
+        <a class="btn btn-ghost" href="/install">Re-check</a>
         @if ($canContinue)
             <a class="btn" href="/install/site?install_token={{ urlencode($installToken) }}">Continue</a>
         @else

@@ -114,7 +114,11 @@
         .btn-ghost {
             background: transparent; border: 1px solid var(--input-border); color: var(--muted); font-weight: 600;
         }
-        .actions { display: flex; gap: 12px; margin-top: 20px; }
+        .actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+        /* Buttons on a shared row size to their label instead of stretching
+           full-width; the primary action is pushed to the right. */
+        .actions .btn { width: auto; margin-top: 0; padding-inline: 22px; }
+        .actions .btn:not(.btn-ghost) { margin-left: auto; }
         .errors {
             background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
             border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; font-size: 14px; color: #fecaca;
