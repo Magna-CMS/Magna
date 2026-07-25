@@ -127,10 +127,13 @@ return [
     |
     */
 
-    'cookie' => env(
-        'SESSION_COOKIE',
-        Str::slug((string) env('APP_NAME', 'laravel')).'-session'
-    ),
+    // Fixed cookie name, NOT derived from APP_NAME. The installer writes
+    // APP_NAME during the "site" step; if the cookie name tracked APP_NAME it
+    // would change mid-install, orphan the session, and drop the
+    // `magna_install_verified` flag — leaving the installer stuck looping back
+    // to step 1. A stable name also means renaming the site later doesn't log
+    // everyone out. Override with SESSION_COOKIE only if you must.
+    'cookie' => env('SESSION_COOKIE', 'magna-session'),
 
     /*
     |--------------------------------------------------------------------------

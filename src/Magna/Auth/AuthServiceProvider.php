@@ -18,6 +18,7 @@ use Magna\Auth\Http\Middleware\DenyManagementCrossOriginMiddleware;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorAuthenticated;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
 use Magna\Auth\Http\Middleware\ForceHttpsMiddleware;
+use Magna\Install\Installer;
 use Magna\Auth\Http\Middleware\MagnaApiMiddleware;
 use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
 use Magna\Settings\SecuritySettings;
@@ -63,7 +64,13 @@ class AuthServiceProvider extends ServiceProvider
         // it explicitly would otherwise ship a session cookie that can
         // legally be sent over a plaintext HTTP connection. Not gated on
         // runningInConsole() since it doesn't touch the DB.
-        if ($this->app->environment('production')) {
+        //
+        // Skipped until installed: a fresh unzip defaults APP_ENV to
+        // production, but the installer itself may run over plain HTTP before
+        // TLS is configured. Forcing Secure there makes the session cookie
+        // never come back, so every installer POST fails CSRF (419) and the
+        // install can't complete. Once installed, production enforces it.
+        if ($this->app->environment('production') && Installer::isInstalled()) {
             config(['session.secure' => true]);
         }
 
