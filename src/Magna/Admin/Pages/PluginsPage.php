@@ -555,6 +555,11 @@ class PluginsPage extends Page
 
     public function refreshPlugins(): void
     {
+        // Surface any pre-bundled (vendor/) plugins that were never installed
+        // through the marketplace/zip flow, so they appear here and can be
+        // enabled. Idempotent; only creates missing rows, always disabled.
+        app(PluginManager::class)->syncDiscovered();
+
         $records = PluginRecord::query()->orderBy('display_name')->get();
         $installedNames = $records->pluck('name')->all();
 

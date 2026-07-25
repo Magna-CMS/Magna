@@ -370,6 +370,41 @@ class PluginManager
     }
 
     /**
+     * Ensure every discovered plugin has a row in the `plugins` table so it
+     * shows up in the admin plugin list. Plugins that ship pre-bundled in
+     * vendor/ (e.g. a marketplace/hub build) are discoverable but never went
+     * through the install flow that writes a PluginRecord, so without this
+     * they are invisible and can never be enabled. New rows are created
+     * DISABLED — a bundled plugin still requires an explicit, deliberate
+     * enable (it runs with full application access). Existing rows are left
+     * untouched: enabled state, timestamps, and version are never overwritten
+     * here.
+     */
+    public function syncDiscovered(): void
+    {
+        if (! Schema::hasTable('plugins')) {
+            return;
+        }
+
+        $existing = PluginRecord::query()->pluck('name')->all();
+
+        foreach ($this->discovery->discover() as $info) {
+            if (in_array($info->manifest->name, $existing, true)) {
+                continue;
+            }
+
+            PluginRecord::create([
+                'name' => $info->manifest->name,
+                'display_name' => $info->manifest->displayName,
+                'version' => $info->manifest->version,
+                'enabled' => false,
+                'base_path' => $info->basePath,
+                'manifest' => $info->manifest->toArray(),
+            ]);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $manifest
      *
      * @throws PluginNotFoundException if the entry class cannot be autoloaded
