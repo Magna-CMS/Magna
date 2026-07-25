@@ -47,7 +47,7 @@ class AccountCentreController
         abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
 
         $expectedState = $request->session()->pull(self::SESSION_STATE_KEY);
-        $accountPageUrl = AccountCentrePage::getUrl();
+        $accountPageUrl = AccountCentrePage::getUrl(panel: 'magna');
 
         if ($request->query('error') !== null) {
             return redirect($accountPageUrl)->with('account_centre_error', 'The connection attempt failed. Please try again.');
@@ -93,7 +93,7 @@ class AccountCentreController
         abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
 
         $settings = AccountCentreSettings::get();
-        $accountPageUrl = AccountCentrePage::getUrl();
+        $accountPageUrl = AccountCentrePage::getUrl(panel: 'magna');
 
         if ($settings->token !== null) {
             $client->disconnect($settings->token);
