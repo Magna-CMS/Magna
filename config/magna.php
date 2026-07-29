@@ -54,10 +54,32 @@ return [
     |--------------------------------------------------------------------------
     | Two-Factor Authentication
     |--------------------------------------------------------------------------
+    | window: how many 30-second steps either side of "now" are accepted. Each
+    |   extra step multiplies the codes valid at any instant — and so the odds
+    |   for an online brute-force. Raise only if users report clock-drift
+    |   failures.
     */
     'two_factor' => [
         'issuer' => env('APP_NAME', 'Magna CMS'),
         'recovery_codes' => (int) env('MAGNA_2FA_RECOVERY_CODES', 8),
+        'window' => (int) env('MAGNA_2FA_WINDOW', 1),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Password Policy
+    |--------------------------------------------------------------------------
+    | Applied by Magna\Auth\PasswordRules to registration and password reset
+    | alike, so the two can never drift apart.
+    |
+    | check_compromised queries the Have I Been Pwned range API with a 5-char
+    | hash prefix (the password itself never leaves the server). Turn it off on
+    | installs with no outbound network access, where it only adds a timeout.
+    */
+    'password' => [
+        'min_length' => (int) env('MAGNA_PASSWORD_MIN_LENGTH', 12),
+        'require_symbols' => (bool) env('MAGNA_PASSWORD_REQUIRE_SYMBOLS', false),
+        'check_compromised' => (bool) env('MAGNA_PASSWORD_CHECK_COMPROMISED', true),
     ],
 
     /*
@@ -72,6 +94,38 @@ return [
         'max_attempts' => (int) env('MAGNA_LOGIN_MAX_ATTEMPTS', 5),
         'base_lockout_seconds' => (int) env('MAGNA_LOGIN_BASE_LOCKOUT_SECONDS', 30),
         'max_lockout_seconds' => (int) env('MAGNA_LOGIN_MAX_LOCKOUT_SECONDS', 900),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Licensing
+    |--------------------------------------------------------------------------
+    | public_key: Ed25519 public key (base64) that every licence response is
+    |   verified against. The key in force is normally the constant baked into
+    |   Magna\Marketplace\Marketplace — a site operator who could point this at
+    |   their own key could mint "valid" licence responses locally, so the env
+    |   override is honoured ONLY outside production, where it exists for the
+    |   test suite and for a pre-release marketplace running its own keypair.
+    |
+    | require_signed_checksum: refuse a core update whose sha256 arrives without
+    |   a valid Ed25519 signature. The checksum alone only defeats an attacker
+    |   who can swap the archive but not the /updates response; the signature
+    |   also defeats one who can forge both. Enable once Update Manager
+    |   publishes `zip_sha256_signature` for every release.
+    */
+    'licensing' => [
+        'public_key' => env('APP_ENV') === 'production' ? '' : env('MAGNA_LICENSE_PUBLIC_KEY', ''),
+    ],
+
+    'account_centre' => [
+        // Refuse an account-exchange response that is not Ed25519-signed.
+        // Enable once Update Manager wraps /account/exchange in a signed
+        // envelope; an invalid signature is refused either way.
+        'require_signed_exchange' => (bool) env('MAGNA_ACCOUNT_REQUIRE_SIGNED_EXCHANGE', false),
+    ],
+
+    'updater' => [
+        'require_signed_checksum' => (bool) env('MAGNA_UPDATER_REQUIRE_SIGNED_CHECKSUM', false),
     ],
 
     /*

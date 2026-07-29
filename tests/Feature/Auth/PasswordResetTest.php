@@ -35,13 +35,13 @@ it('resets password with a valid token', function (): void {
     $this->post(route('password.update'), [
         'token' => $token,
         'email' => $user->email,
-        'password' => 'newpassword',
-        'password_confirmation' => 'newpassword',
-    ])->assertRedirect(route('auth.login'))
+        'password' => 'Str0ngN3wPassphrase',
+        'password_confirmation' => 'Str0ngN3wPassphrase',
+    ])->assertRedirect(route('filament.magna.auth.login'))
         ->assertSessionHas('status');
 
     // Verify the new password hashes correctly
-    expect(auth()->attempt(['email' => $user->email, 'password' => 'newpassword']))->toBeTrue();
+    expect(auth()->attempt(['email' => $user->email, 'password' => 'Str0ngN3wPassphrase']))->toBeTrue();
 });
 
 it('rejects reset with an invalid token', function (): void {
@@ -50,8 +50,8 @@ it('rejects reset with an invalid token', function (): void {
     $this->post(route('password.update'), [
         'token' => 'bad-token',
         'email' => $user->email,
-        'password' => 'newpassword',
-        'password_confirmation' => 'newpassword',
+        'password' => 'Str0ngN3wPassphrase',
+        'password_confirmation' => 'Str0ngN3wPassphrase',
     ])->assertRedirect()->assertSessionHasErrors('email');
 });
 
@@ -64,15 +64,15 @@ it('rate limits repeated reset-password submission attempts', function (): void 
         $this->post(route('password.update'), [
             'token' => 'bad-token',
             'email' => $user->email,
-            'password' => 'newpassword',
-            'password_confirmation' => 'newpassword',
+            'password' => 'Str0ngN3wPassphrase',
+            'password_confirmation' => 'Str0ngN3wPassphrase',
         ])->assertStatus(302);
     }
 
     $this->post(route('password.update'), [
         'token' => 'bad-token',
         'email' => $user->email,
-        'password' => 'newpassword',
-        'password_confirmation' => 'newpassword',
+        'password' => 'Str0ngN3wPassphrase',
+        'password_confirmation' => 'Str0ngN3wPassphrase',
     ])->assertStatus(429);
 });

@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible problem in Magna CMS core.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. For **security vulnerabilities** do not use this
+        form — follow [SECURITY.md](../blob/main/SECURITY.md). For **plugin**
+        problems, open the issue on that plugin's own repository.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, deterministic steps. Include a code snippet if relevant.
+      placeholder: |
+        1. …
+        2. …
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: magna-version
+    attributes:
+      label: Magna version
+      description: Output of the admin System Info page, or the release/commit.
+    validations:
+      required: true
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP version
+    validations:
+      required: true
+  - type: input
+    id: db
+    attributes:
+      label: Database & driver
+      placeholder: "e.g. PostgreSQL 16 / MySQL 8 / SQLite"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste the shortest decisive error/stack trace. Redact secrets.
+      render: text

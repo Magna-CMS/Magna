@@ -47,7 +47,38 @@ class MarketplaceClient
         return $this->toCompatibleListings(is_array($raw) ? $raw : []);
     }
 
-    /** Whether the most recent plugins() call had to fetch fresh and that fetch failed. */
+    /** Cache key for the theme catalog — kept apart from the plugin one. */
+    private const THEME_CACHE_KEY = Marketplace::CACHE_KEY.'.themes';
+
+    /**
+     * All marketplace THEMES compatible with the running core version.
+     *
+     * A separate call rather than a filter over plugins(): the catalog
+     * endpoint answers with plugins unless asked otherwise, so a site that
+     * never looks at themes never fetches them — and a marketplace that
+     * predates themes simply returns nothing here.
+     *
+     * @return list<PluginListing>
+     */
+    public function themes(): array
+    {
+        $this->lastFetchFailed = false;
+        $raw = Cache::get(self::THEME_CACHE_KEY);
+
+        if (! is_array($raw)) {
+            $raw = $this->fetch('/plugins', ['type' => 'theme']);
+
+            if ($raw !== null) {
+                Cache::put(self::THEME_CACHE_KEY, $raw, Marketplace::CACHE_TTL);
+            } else {
+                $this->lastFetchFailed = true;
+            }
+        }
+
+        return $this->toCompatibleListings(is_array($raw) ? $raw : []);
+    }
+
+    /** Whether the most recent plugins()/themes() call had to fetch fresh and that fetch failed. */
     public function wasUnreachable(): bool
     {
         return $this->lastFetchFailed;
@@ -95,6 +126,7 @@ class MarketplaceClient
     public function clearCache(): void
     {
         Cache::forget(Marketplace::CACHE_KEY);
+        Cache::forget(self::THEME_CACHE_KEY);
     }
 
     /**
@@ -188,14 +220,15 @@ class MarketplaceClient
      * GET a marketplace endpoint. Returns the decoded JSON array, or null on any
      * failure (network error, non-2xx, or a non-array body).
      *
+     * @param  array<string, string>  $query  extra query parameters
      * @return array<array-key, mixed>|null
      */
-    private function fetch(string $path): ?array
+    private function fetch(string $path, array $query = []): ?array
     {
         try {
             $response = Http::timeout(Marketplace::REQUEST_TIMEOUT)
                 ->acceptJson()
-                ->get(Marketplace::API_BASE.$path, ['magna' => MagnaServiceProvider::VERSION]);
+                ->get(Marketplace::API_BASE.$path, ['magna' => MagnaServiceProvider::VERSION] + $query);
 
             if (! $response->successful()) {
                 return null;

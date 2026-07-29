@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a new capability or improvement to Magna CMS core.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For open-ended ideas or "should Magna do X?" questions, prefer
+        [Discussions](../discussions). Use this form for a concrete proposal.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, or what is painful? Focus on the need, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like Magna to do. Note if it could be a plugin instead of core.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

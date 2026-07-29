@@ -7,13 +7,15 @@ namespace Magna\Updater;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Octane\OctaneServiceProvider;
+use Magna\Licensing\PackageExtractor;
+use Magna\Licensing\SignedPayload;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
 use Symfony\Component\Filesystem\Filesystem;
 use Throwable;
-use ZipArchive;
 
 /**
  * Applies a published core release: downloads the pre-built archive, overlays
@@ -56,12 +58,16 @@ class CoreUpdater
      * `bootstrap/`, and `src/Magna` — i.e. the code that runs on every
      * request — on every connected install that clicks "Update Now"). A
      * compromised or MITM'd response could otherwise point this at an
-     * arbitrary host. This allowlist is a floor, not a full fix: it stops
-     * an attacker-supplied arbitrary host, but does not verify archive
-     * integrity. That needs Update Manager to publish a signature/checksum
-     * alongside the URL and this class to verify it before extracting —
-     * tracked as an open item in docs/SECURITY_AUDIT.md pending that
-     * server-side change.
+     * arbitrary host. The allowlist alone was a floor, not a full fix — it
+     * stopped an attacker-supplied arbitrary host, but didn't verify archive
+     * integrity. `$expectedSha256` closes that: Update Manager's `/updates`
+     * response now must include `zip_sha256` (see `UpdateEntry::$downloadSha256`
+     * / `UpdateEntry::fromArray()`), and `apply()` refuses to proceed without
+     * a valid-looking one — fail-closed, not "verify if present."
+     *
+     * The checksum and the URL still travel together, so a hostile update
+     * server forges both — which is what `$checksumSignature` and
+     * `checkChecksumSignature()` exist for.
      *
      * @var list<string>
      */
@@ -75,11 +81,26 @@ class CoreUpdater
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly Filesystem $files,
+        private readonly PackageExtractor $extractor,
     ) {}
 
-    public function apply(string $targetVersion, string $zipUrl, bool $force = false): CoreUpdateState
-    {
+    public function apply(
+        string $targetVersion,
+        string $zipUrl,
+        ?string $expectedSha256,
+        bool $force = false,
+        ?string $checksumSignature = null,
+    ): CoreUpdateState {
         $this->setProgress(CoreUpdateState::Running, 'Starting…');
+
+        if (! is_string($expectedSha256) || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
+            return $this->fail('This release has no verified checksum from Update Manager — refusing to apply it. If this persists, the update server may need attention.');
+        }
+
+        $signatureError = $this->checkChecksumSignature($expectedSha256, $checksumSignature);
+        if ($signatureError !== null) {
+            return $this->fail($signatureError);
+        }
 
         $lock = Cache::lock(self::LOCK_KEY, 1800);
         if (! $lock->get()) {
@@ -103,6 +124,9 @@ class CoreUpdater
 
             $this->setProgress(CoreUpdateState::Running, 'Downloading release…');
             $zipPath = $this->download($zipUrl);
+
+            $this->setProgress(CoreUpdateState::Running, 'Verifying archive checksum…');
+            $this->verifyChecksum($zipPath, $expectedSha256);
 
             $this->setProgress(CoreUpdateState::Running, 'Extracting…');
             $extractPath = $this->extract($zipPath);
@@ -306,26 +330,83 @@ class CoreUpdater
         return $zipPath;
     }
 
+    /**
+     * The checksum defeats an attacker who can swap the archive. It does NOT
+     * defeat one who controls the `/updates` response itself, because the URL
+     * and the checksum arrive together over the same channel — whoever forges
+     * one forges both, and the payload lands on code that runs every request.
+     *
+     * The Ed25519 signature closes that: it is minted by the marketplace's
+     * private key, which never leaves the marketplace, and verified against
+     * the public key baked into this build — the same control licensed plugin
+     * downloads already use (Magna\Licensing\LicenseInstaller).
+     *
+     * A present-but-invalid signature is always fatal. A *missing* one is
+     * fatal only when `magna.updater.require_signed_checksum` is on, because
+     * Update Manager has to publish `zip_sha256_signature` for every release
+     * before that can be enforced without bricking updates. Flip the flag as
+     * soon as it does — until then this is checksum-only against a hostile
+     * update server.
+     */
+    private function checkChecksumSignature(string $expectedSha256, ?string $signature): ?string
+    {
+        $required = (bool) config('magna.updater.require_signed_checksum', false);
+
+        if ($signature === null || $signature === '') {
+            if ($required) {
+                return 'This release was published without a signed checksum — refusing to apply it.';
+            }
+
+            Log::warning('Core update applied with an unsigned checksum; the update server has not published zip_sha256_signature.', [
+                'sha256' => $expectedSha256,
+            ]);
+
+            return null;
+        }
+
+        if (! SignedPayload::verify($signature, SignedPayload::canonicalize(['sha256' => $expectedSha256]))) {
+            Log::critical('Core update refused: the release checksum failed Ed25519 signature verification.', [
+                'sha256' => $expectedSha256,
+            ]);
+
+            return 'The release checksum failed signature verification — refusing to apply it. This can mean the update response was tampered with.';
+        }
+
+        return null;
+    }
+
+    /** @throws \RuntimeException if the downloaded archive doesn't match the checksum Update Manager published for it. */
+    private function verifyChecksum(string $zipPath, string $expectedSha256): void
+    {
+        $actual = hash_file('sha256', $zipPath);
+
+        if (! is_string($actual) || ! hash_equals($expectedSha256, $actual)) {
+            throw new \RuntimeException(
+                "Downloaded archive checksum does not match — expected {$expectedSha256}, got ".($actual ?: 'unreadable').
+                '. The archive will not be applied.'
+            );
+        }
+    }
+
+    /**
+     * Extraction goes through the same PackageExtractor licensed plugin
+     * installs use — entry-name validation, symlink rejection, and an
+     * uncompressed-size ceiling, all applied before a byte is written.
+     *
+     * A core archive is a strictly higher-value target than a plugin package
+     * (it lands on `bootstrap/` and `src/Magna`), so it must not have weaker
+     * structural checks than one. It previously called `extractTo()` directly
+     * with none of them.
+     */
     private function extract(string $zipPath): string
     {
         $extractPath = storage_path('app/magna-updates/tmp/extract-'.uniqid());
-        $zip = new ZipArchive;
 
-        if ($zip->open($zipPath) !== true) {
-            throw new \RuntimeException('The downloaded release archive is not a valid zip file.');
-        }
-
-        $zip->extractTo($extractPath);
-        $zip->close();
+        $this->extractor->extract($zipPath, $extractPath);
 
         // GitHub-style archives wrap contents in a single top-level folder
-        // (e.g. "Magna-1.2.0/") — descend into it if that's what we got.
-        $entries = array_values(array_diff(scandir($extractPath) ?: [], ['.', '..']));
-        if (count($entries) === 1 && is_dir($extractPath.'/'.$entries[0])) {
-            return $extractPath.'/'.$entries[0];
-        }
-
-        return $extractPath;
+        // (e.g. "Magna-<version>/") — descend into it if that's what we got.
+        return $this->extractor->resolveContentRoot($extractPath);
     }
 
     /** Replace only the core-owned paths — never composer.json/composer.lock/vendor/, never .env or storage/. */

@@ -28,6 +28,29 @@ final class WebhookUrlGuard
      */
     public static function ensureSafe(string $url): void
     {
+        self::resolvePinnedTarget($url);
+    }
+
+    /**
+     * Validate the URL and return the address the outbound request must be
+     * pinned to, so the HTTP client connects to exactly the IP that passed this
+     * guard rather than re-resolving DNS at connect time.
+     *
+     * This closes the DNS-rebinding window: the guard resolves the host, every
+     * resolved address is checked against the non-routable ranges, and the
+     * returned IP is fed to cURL's CURLOPT_RESOLVE by WebhookSender so the
+     * socket connects there — the Host header, TLS SNI, and certificate
+     * validation still use the original hostname. Without pinning, a hostile
+     * short-TTL record could answer the guard with a public IP and answer
+     * cURL's own later lookup with 127.0.0.1 / 169.254.169.254 / an internal
+     * host. All resolved addresses must pass, so returning the first is safe.
+     *
+     * @return array{host: string, port: int, ip: string}
+     *
+     * @throws WebhookUrlBlockedException
+     */
+    public static function resolvePinnedTarget(string $url): array
+    {
         $scheme = parse_url($url, PHP_URL_SCHEME);
         if (! in_array($scheme, ['http', 'https'], true)) {
             throw new WebhookUrlBlockedException("Webhook URL must use http or https (got \"{$scheme}\").");
@@ -38,13 +61,28 @@ final class WebhookUrlGuard
             throw new WebhookUrlBlockedException('Webhook URL has no resolvable host.');
         }
 
-        foreach (self::resolveIps($host) as $ip) {
+        $ips = self::resolveIps($host);
+        foreach ($ips as $ip) {
             if (self::isBlockedIp($ip)) {
                 throw new WebhookUrlBlockedException(
                     "Webhook URL host \"{$host}\" resolves to a non-routable address ({$ip}).",
                 );
             }
         }
+
+        $pinnedIp = reset($ips);
+        if ($pinnedIp === false) {
+            // resolveIps() never returns an empty list (it fails closed), but
+            // keep the guard explicit rather than trusting that invariant here.
+            throw new WebhookUrlBlockedException("Webhook URL host \"{$host}\" could not be resolved.");
+        }
+
+        $port = parse_url($url, PHP_URL_PORT);
+        if (! is_int($port)) {
+            $port = $scheme === 'https' ? 443 : 80;
+        }
+
+        return ['host' => $host, 'port' => $port, 'ip' => $pinnedIp];
     }
 
     public static function isSafe(string $url): bool

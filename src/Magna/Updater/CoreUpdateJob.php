@@ -28,12 +28,14 @@ class CoreUpdateJob implements ShouldQueue
     public function __construct(
         public readonly string $targetVersion,
         public readonly string $zipUrl,
+        public readonly ?string $expectedSha256 = null,
         public readonly bool $force = false,
+        public readonly ?string $checksumSignature = null,
     ) {}
 
     public function handle(CoreUpdater $updater): void
     {
-        if ($updater->apply($this->targetVersion, $this->zipUrl, $this->force) === CoreUpdateState::Queued) {
+        if ($updater->apply($this->targetVersion, $this->zipUrl, $this->expectedSha256, $this->force, $this->checksumSignature) === CoreUpdateState::Queued) {
             $this->release(15);
         }
     }

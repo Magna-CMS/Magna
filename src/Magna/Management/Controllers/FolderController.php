@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Magna\Media\Http\Resources\MediaFolderResource;
 use Magna\Media\MediaFolder;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -21,7 +22,7 @@ class FolderController extends ManagementController
         $folders = MediaFolder::query()->orderBy('name')->get();
 
         return response()->json([
-            'data' => $folders->map(fn (MediaFolder $f): array => $this->folderToArray($f))->all(),
+            'data' => MediaFolderResource::collection($folders),
         ]);
     }
 
@@ -55,31 +56,17 @@ class FolderController extends ManagementController
             'path' => $path,
         ]);
 
-        return response()->json(['data' => $this->folderToArray($folder)], 201);
+        return response()->json(['data' => MediaFolderResource::make($folder)], 201);
     }
 
     public function destroy(Request $request, string $folder): Response
     {
         Gate::authorize('media.delete');
 
-        $record = $this->findOrNotFound(MediaFolder::query(), $folder, 'Folder');
-        if ($record instanceof JsonResponse) {
-            return $record;
-        }
+        $record = $this->findOrFail(MediaFolder::query(), $folder, 'Folder');
 
         $record->delete();
 
         return response()->noContent();
-    }
-
-    /** @return array<string, mixed> */
-    private function folderToArray(MediaFolder $folder): array
-    {
-        return [
-            'id' => $folder->id,
-            'name' => $folder->name,
-            'parent_id' => $folder->parent_id,
-            'created_at' => $folder->created_at?->toIso8601String(),
-        ];
     }
 }

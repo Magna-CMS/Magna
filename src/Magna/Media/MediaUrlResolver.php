@@ -105,7 +105,7 @@ class MediaUrlResolver
             ->implode(', ');
     }
 
-    private function conversionPath(Media $media, string $preset): ?string
+    public function conversionPath(Media $media, string $preset): ?string
     {
         $conversion = MediaConversion::where('media_id', $media->id)
             ->where('preset', $preset)

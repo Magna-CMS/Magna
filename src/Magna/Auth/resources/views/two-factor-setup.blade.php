@@ -1,27 +1,34 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Set up two-factor authentication — {{ config('app.name') }}</title>
-</head>
-<body>
-<p>Your role requires two-factor authentication. Scan the QR code below with an authenticator app (Google Authenticator, 1Password, etc.), then enter the 6-digit code it shows to finish setting up your account.</p>
+@extends('magna::partials.auth-shell')
 
-{!! $qrCodeSvg !!}
+@section('title', 'Set up two-factor authentication')
 
-<p>Can't scan the code? Enter this key manually: <code>{{ $secret }}</code></p>
+@section('content')
+    <h1>Secure your account</h1>
+    <p class="lead">Scan this QR code with an authenticator app — Google Authenticator, 1Password, Authy — then enter the 6-digit code it shows.</p>
 
-<form method="POST" action="{{ route('auth.two-factor.setup.store') }}">
-    @csrf
-    @error('code')<p>{{ $message }}</p>@enderror
-    <label>Authentication code <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" autofocus required></label>
-    <button type="submit">Confirm</button>
-</form>
+    <div class="qr">{!! $qrCodeSvg !!}</div>
 
-<form method="POST" action="{{ route('auth.logout') }}">
-    @csrf
-    <button type="submit">Sign out</button>
-</form>
-</body>
-</html>
+    <p class="hint" style="margin-top:0;">Can't scan it? Enter this key manually:</p>
+    <div class="keybox">{{ $secret }}</div>
+
+    <div class="divider">then</div>
+
+    @error('code')<div class="alert">{{ $message }}</div>@enderror
+
+    <form method="POST" action="{{ route('auth.two-factor.setup.store') }}">
+        @csrf
+        <div class="field">
+            <label for="code">Authentication code</label>
+            <input id="code" class="otp" type="text" name="code" maxlength="6" inputmode="numeric"
+                   autocomplete="one-time-code" autofocus placeholder="000000" required>
+        </div>
+        <button type="submit" class="btn">Confirm &amp; enable</button>
+    </form>
+
+    <div class="row-between">
+        <form method="POST" action="{{ route('auth.logout') }}">
+            @csrf
+            <button type="submit" class="btn-ghost">← Sign out</button>
+        </form>
+    </div>
+@endsection

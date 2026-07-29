@@ -14,6 +14,10 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Contracts\RegistersSettingsPages;
+use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
+use Magna\Licensing\LicenseClient;
+use Magna\Licensing\LicenseInstaller;
+use Magna\Licensing\LicenseStore;
 use Magna\Marketplace\InstallPluginJob;
 use Magna\Marketplace\InstallState;
 use Magna\Marketplace\MarketplaceClient;
@@ -23,10 +27,15 @@ use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
+use Magna\Updater\UpdateCheck;
 use Throwable;
 
 class PluginsPage extends Page
 {
+    // Buying a paid plugin: open the order, show the gateway, wait for the
+    // webhook. onOrderSettled() below is this page's half of it.
+    use ChecksOutWithRazorpay;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-puzzle-piece';
 
     protected static string|\UnitEnum|null $navigationGroup = 'System';
@@ -238,6 +247,21 @@ class PluginsPage extends Page
     public function update(string $name): void
     {
         try {
+            // A licensed plugin updates by fetching entitled bytes, not by
+            // re-reading what is already on disk: its new version lives on
+            // the marketplace and only the licence can authorise the
+            // download. Re-enabling alone would report "updated" while
+            // changing nothing — the failure mode this branch exists to
+            // prevent.
+            if (app(LicenseStore::class)->get($name) !== null) {
+                $message = app(LicenseInstaller::class)->update($name);
+                Notification::make()->title($message)->success()->send();
+                $url = static::getUrl();
+                $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+
+                return;
+            }
+
             // Re-enable syncs the version from the manifest and re-runs any new migrations.
             app(PluginManager::class)->enable($name);
             Notification::make()->title('Plugin updated.')->success()->send();
@@ -325,7 +349,7 @@ class PluginsPage extends Page
      * whether the caller may proceed; when not connected, points the admin
      * at the Account Centre instead of opening the modal.
      */
-    private function requireConnectedAccount(): bool
+    private function requireConnectedAccount(?string $because = null): bool
     {
         if (AccountCentreSettings::get()->connected) {
             return true;
@@ -333,7 +357,7 @@ class PluginsPage extends Page
 
         Notification::make()
             ->title('Connect your Magna Account first')
-            ->body('Reviews and reports are tied to your Magna Account so they can be traced back to a real install.')
+            ->body($because ?? 'Reviews and reports are tied to your Magna Account so they can be traced back to a real install.')
             ->warning()
             ->actions([
                 Action::make('connect')->label('Go to Magna Account')->url(AccountCentrePage::getUrl()),
@@ -420,6 +444,114 @@ class PluginsPage extends Page
                     ? Notification::make()->title('Reported — thanks for flagging this.')->success()->send()
                     : Notification::make()->title("Couldn't submit the report")->body('The marketplace could not be reached. Please try again later.')->danger()->send();
             });
+    }
+
+    // ── Storefront ────────────────────────────────────────────────────────────
+
+    /**
+     * Open a checkout for a paid product.
+     *
+     * No price travels from here: the term is a name, the marketplace prices
+     * it, and the amount that comes back is only used to render the gateway
+     * window. This page never handles card data.
+     */
+    public function buy(string $package, string $term): void
+    {
+        if (! $this->requireConnectedAccount('Buying a plugin needs a Magna Account — that is who the licence belongs to.')) {
+            return;
+        }
+
+        if (! in_array($term, ['lifetime', 'annual'], true)) {
+            return;
+        }
+
+        $this->beginCheckout(app(LicenseClient::class)->checkout($package, $term), $package);
+    }
+
+    /**
+     * The sale is real — install what was bought.
+     *
+     * A failure here is reported as a failure to INSTALL, never as a failure
+     * to buy: the licence is already in the account, and telling someone who
+     * has just paid that something "failed" without that distinction is how
+     * support tickets are made.
+     */
+    protected function onOrderSettled(int $licenseId, string $productSlug): void
+    {
+        try {
+            $message = app(LicenseInstaller::class)->installLicense($licenseId, $productSlug);
+        } catch (Throwable $e) {
+            Notification::make()
+                ->title('Purchased — but the install did not finish')
+                ->body($e->getMessage().' Your licence is safe; install it from the Magna Account page.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        app(MarketplaceClient::class)->clearCache();
+
+        Notification::make()->title($message)->success()->send();
+
+        $url = static::getUrl();
+        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 800)');
+    }
+
+    /**
+     * Start a product's free trial straight from the catalog, then install
+     * it — a trial someone has to go and find on another page is a trial
+     * most people never start.
+     */
+    public function startTrial(string $package): void
+    {
+        if (! $this->requireConnectedAccount('A trial is issued to your Magna Account, so connect one first.')) {
+            return;
+        }
+
+        $client = app(LicenseClient::class);
+        $result = $client->startTrial($package);
+
+        if (($result['ok'] ?? false) !== true) {
+            Notification::make()
+                ->title('Trial could not be started')
+                ->body($result['message'] ?? 'The marketplace refused this trial.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $client->forgetCache();
+
+        // The trial licence exists now, but its id is not in the reply — the
+        // wallet is the one place that knows it, and reading it back also
+        // proves the licence really landed.
+        $licenseId = $this->walletLicenseIdFor($package);
+
+        if ($licenseId === null) {
+            Notification::make()
+                ->title('Trial started')
+                ->body('Install it from the Magna Account page.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        $this->onOrderSettled($licenseId, $package);
+    }
+
+    /** The wallet licence id for a product, or null when it is not there. */
+    private function walletLicenseIdFor(string $package): ?int
+    {
+        foreach (app(LicenseClient::class)->wallet() ?? [] as $licence) {
+            if (($licence['product_slug'] ?? null) === $package && is_numeric($licence['id'] ?? null)) {
+                return (int) $licence['id'];
+            }
+        }
+
+        return null;
     }
 
     private function feedbackDisplayName(): string
@@ -571,6 +703,16 @@ class PluginsPage extends Page
 
         $bootedPlugins = app(PluginManager::class)->getEnabled();
 
+        // Updates a licence no longer covers. The marketplace deliberately
+        // reports these as NOT available (the download would be refused), so
+        // without this the admin would simply never hear that a newer version
+        // exists — the worst way to learn a licence lapsed.
+        $licenseBlocked = UpdateCheck::query()
+            ->where('type', 'plugin')
+            ->where('license_required', true)
+            ->pluck('latest_version', 'slug')
+            ->all();
+
         $this->installed = $records->map(function (PluginRecord $r) use ($discoveredVersions, $bootedPlugins): array {
             $settingsUrl = null;
             $booted = $bootedPlugins[$r->name] ?? null;
@@ -603,6 +745,10 @@ class PluginsPage extends Page
                 // magna.json's optional "icon" field, served through PluginIconController;
                 // null when the plugin declared none — the view falls back to a letter avatar.
                 'icon_url' => is_string($icon) && $icon !== '' ? route('plugins.icon', explode('/', $r->name, 2)) : null,
+                // Set when a newer version exists that this site's licence
+                // does not entitle it to — rendered as a renew prompt rather
+                // than an Update button that cannot work.
+                'license_blocked_version' => $licenseBlocked[$r->name] ?? null,
             ];
         })->values()->all();
 
@@ -625,6 +771,15 @@ class PluginsPage extends Page
                 'rating' => $l->rating,
                 'ratings_count' => $l->ratingsCount,
                 'website' => $l->website,
+                // Commerce. A paid product is not installable by Composer —
+                // it is bought here, and the licence is what fetches the
+                // bytes. `prices` is term => minor units.
+                'is_paid' => $l->isPaid(),
+                'currency' => $l->currency,
+                'prices' => $l->prices,
+                'trial_enabled' => $l->trialEnabled && $l->isPaid(),
+                'trial_days' => $l->trialDays,
+                'seat_limit' => $l->seatLimit,
             ])->values()->all();
     }
 

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Magna\Audit\AuditLog;
 use Magna\Auth\PermissionRegistry;
-use Magna\Plugins\PluginManager;
+use Magna\Plugins\PluginSecurityGuard;
 use Magna\Testing\PluginTestCase;
 use Magna\Users\User;
 
@@ -20,29 +20,26 @@ uses(PluginTestCase::class);
 // container, Router, and Event-dispatcher access — nothing stops it
 // re-aliasing a security-critical middleware name, rebinding a
 // security-critical singleton like PermissionRegistry, or silently
-// unregistering the login audit listeners via Event::forget(). PluginManager
-// now detects and reverts all of these after every plugin-boot pass.
-// Exercised directly against the private capture/verify methods (rather than
-// via a fixture plugin that actually tampers, which would require a
-// dedicated malicious test plugin) since that's the actual unit of behavior
+// unregistering the login audit listeners via Event::forget().
+// PluginSecurityGuard detects and reverts all of these after every
+// plugin-boot pass. Exercised directly against its public capture()/verify()
+// (rather than via a fixture plugin that actually tampers, which would require
+// a dedicated malicious test plugin) since that's the actual unit of behavior
 // being protected.
 
-function pluginManagerReflect(string $method): ReflectionMethod
+function pluginSecurityGuard(): PluginSecurityGuard
 {
-    $reflection = new ReflectionMethod(PluginManager::class, $method);
-    $reflection->setAccessible(true);
-
-    return $reflection;
+    return new PluginSecurityGuard(app());
 }
 
 it('reverts a tampered protected middleware alias and logs it', function (): void {
     /** @var Router $router */
     $router = app('router');
-    $manager = app(PluginManager::class);
+    $guard = pluginSecurityGuard();
 
     $originalClass = $router->getMiddleware()['magna.api'];
 
-    $snapshot = pluginManagerReflect('captureSecurityIntegritySnapshot')->invoke($manager);
+    $snapshot = $guard->capture();
 
     // Simulate a plugin's boot() re-aliasing a protected middleware name.
     $router->aliasMiddleware('magna.api', ThrottleRequests::class);
@@ -50,26 +47,26 @@ it('reverts a tampered protected middleware alias and logs it', function (): voi
 
     Log::shouldReceive('critical')->once()->with(Mockery::pattern('/magna\.api/'));
 
-    pluginManagerReflect('verifySecurityIntegrity')->invoke($manager, $snapshot);
+    $guard->verify($snapshot);
 
     expect($router->getMiddleware()['magna.api'])->toBe($originalClass);
 });
 
 it('does not log or revert when protected middleware aliases are unchanged', function (): void {
-    $manager = app(PluginManager::class);
+    $guard = pluginSecurityGuard();
 
-    $snapshot = pluginManagerReflect('captureSecurityIntegritySnapshot')->invoke($manager);
+    $snapshot = $guard->capture();
 
     Log::shouldReceive('critical')->never();
 
-    pluginManagerReflect('verifySecurityIntegrity')->invoke($manager, $snapshot);
+    $guard->verify($snapshot);
 });
 
 it('reverts a rebound PermissionRegistry singleton and logs it', function (): void {
-    $manager = app(PluginManager::class);
+    $guard = pluginSecurityGuard();
     $original = app(PermissionRegistry::class);
 
-    $snapshot = pluginManagerReflect('captureSecurityIntegritySnapshot')->invoke($manager);
+    $snapshot = $guard->capture();
 
     // Simulate a plugin's boot() rebinding the security-critical singleton.
     app()->instance(PermissionRegistry::class, new PermissionRegistry);
@@ -77,7 +74,7 @@ it('reverts a rebound PermissionRegistry singleton and logs it', function (): vo
 
     Log::shouldReceive('critical')->once()->with(Mockery::pattern('/PermissionRegistry/'));
 
-    pluginManagerReflect('verifySecurityIntegrity')->invoke($manager, $snapshot);
+    $guard->verify($snapshot);
 
     expect(app(PermissionRegistry::class))->toBe($original);
 });
@@ -87,11 +84,11 @@ it('reverts a rebound PermissionRegistry singleton and logs it', function (): vo
 // process — no error, no trace, just quietly-missing audit entries. The
 // integrity check must detect this and re-register the listener.
 it('re-registers the Login audit listener after a plugin forgets it, and logs it', function (): void {
-    $manager = app(PluginManager::class);
+    $guard = pluginSecurityGuard();
 
     expect(Event::hasListeners(Login::class))->toBeTrue();
 
-    $snapshot = pluginManagerReflect('captureSecurityIntegritySnapshot')->invoke($manager);
+    $snapshot = $guard->capture();
 
     // Simulate a plugin's boot() suppressing the login audit trail.
     Event::forget(Login::class);
@@ -99,7 +96,7 @@ it('re-registers the Login audit listener after a plugin forgets it, and logs it
 
     Log::shouldReceive('critical')->once()->with(Mockery::pattern('/Login/'));
 
-    pluginManagerReflect('verifySecurityIntegrity')->invoke($manager, $snapshot);
+    $guard->verify($snapshot);
 
     expect(Event::hasListeners(Login::class))->toBeTrue();
 
@@ -110,30 +107,30 @@ it('re-registers the Login audit listener after a plugin forgets it, and logs it
 });
 
 it('re-registers the Failed (login) audit listener after a plugin forgets it, and logs it', function (): void {
-    $manager = app(PluginManager::class);
+    $guard = pluginSecurityGuard();
 
     expect(Event::hasListeners(Failed::class))->toBeTrue();
 
-    $snapshot = pluginManagerReflect('captureSecurityIntegritySnapshot')->invoke($manager);
+    $snapshot = $guard->capture();
 
     Event::forget(Failed::class);
     expect(Event::hasListeners(Failed::class))->toBeFalse();
 
     Log::shouldReceive('critical')->once()->with(Mockery::pattern('/Failed/'));
 
-    pluginManagerReflect('verifySecurityIntegrity')->invoke($manager, $snapshot);
+    $guard->verify($snapshot);
 
     expect(Event::hasListeners(Failed::class))->toBeTrue();
 });
 
 it('does not log or re-register the login listeners when they were never touched', function (): void {
-    $manager = app(PluginManager::class);
+    $guard = pluginSecurityGuard();
 
-    $snapshot = pluginManagerReflect('captureSecurityIntegritySnapshot')->invoke($manager);
+    $snapshot = $guard->capture();
 
     Log::shouldReceive('critical')->never();
 
-    pluginManagerReflect('verifySecurityIntegrity')->invoke($manager, $snapshot);
+    $guard->verify($snapshot);
 
     expect(Event::hasListeners(Login::class))->toBeTrue()
         ->and(Event::hasListeners(Failed::class))->toBeTrue();

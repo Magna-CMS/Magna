@@ -6,6 +6,7 @@ namespace Magna\Delivery\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Magna\Content\ContentType;
 use Magna\Content\Entry;
 use Magna\Content\EntryStatus;
 use Magna\Content\FieldTypes\RelationField;
@@ -15,6 +16,7 @@ use Magna\Delivery\ETagService;
 use Magna\Delivery\PreviewTokenService;
 use Magna\Delivery\RelationLoader;
 use Magna\Delivery\ResponseCacheService;
+use Magna\Delivery\SurrogateKeyCollector;
 use Magna\Media\Media;
 use Magna\Settings\GeneralSettings;
 use Magna\Settings\LocalizationSettings;
@@ -47,7 +49,7 @@ final class ContentSingleController extends DeliveryController
         $isPublic = ! $preview || $previewToken === '';
         $wonLock = false;
         if ($isPublic) {
-            $cachedBody = $this->responseCache->get($bodyCacheKey, $keys);
+            $cachedBody = $this->responseCache->get($bodyCacheKey, $contentType->handle);
             if ($cachedBody !== null) {
                 return $this->cachedResponse($cachedBody, $keys);
             }
@@ -61,6 +63,35 @@ final class ContentSingleController extends DeliveryController
             }
         }
 
+        // try/finally guarantees the rebuild lock is released on every exit
+        // path below (404/403/400 early returns, serialization 500, success).
+        try {
+            return $this->resolveEntryResponse(
+                $request, $contentType, $type, $id, $keys, $cacheKey, $bodyCacheKey, $preview, $previewToken, $isPublic,
+            );
+        } finally {
+            if ($wonLock) {
+                $this->responseCache->releaseLock($bodyCacheKey);
+            }
+        }
+    }
+
+    /**
+     * Resolve, transform, cache and return a single entry. Split from
+     * __invoke() so the caller can wrap it in try/finally for lock release.
+     */
+    private function resolveEntryResponse(
+        Request $request,
+        ContentType $contentType,
+        string $type,
+        string $id,
+        SurrogateKeyCollector $keys,
+        string $cacheKey,
+        string $bodyCacheKey,
+        bool $preview,
+        string $previewToken,
+        bool $isPublic,
+    ): Response {
         // Build query — allow drafts if a preview token is present
         $query = Entry::type($type);
         if ($preview && $previewToken !== '') {
@@ -155,10 +186,7 @@ final class ContentSingleController extends DeliveryController
         $this->etag->store($cacheKey, $etagValue, $type);
 
         if ($isPublic) {
-            $this->responseCache->put($bodyCacheKey, $json, $keys);
-            if ($wonLock) {
-                $this->responseCache->releaseLock($bodyCacheKey);
-            }
+            $this->responseCache->put($bodyCacheKey, $json, $contentType->handle);
         }
 
         return $this->deliveryResponse($json, $etagValue, $keys, 'MISS');

@@ -90,6 +90,17 @@ it('uses an explicit archive password over the site-configured one', function ()
 
 // ── Security: refuse an implausibly large archive before extracting ────────
 
+it('refuses an archive containing a path-traversal entry (zip-slip)', function (): void {
+    // An imported archive from an untrusted source could try to escape the
+    // extraction directory. The guard must reject it before extractTo().
+    $path = makeImportArchive(['../../evil.txt' => 'pwned']);
+
+    $service = new RestoreService;
+
+    expect(fn () => $service->prepareFromDiskPath('local', $path))
+        ->toThrow(RestoreFailedException::class, 'unsafe path');
+});
+
 it('refuses to extract an archive whose uncompressed size exceeds the configured limit', function (): void {
     $path = makeImportArchive(['storage/app/magna-import-test-marker.txt' => str_repeat('x', 1000)]);
 

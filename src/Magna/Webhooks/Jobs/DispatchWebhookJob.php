@@ -62,10 +62,12 @@ class DispatchWebhookJob implements ShouldQueue
             // public IP to a private/metadata one between when the URL was
             // saved and when a retry actually fires, up to ~25 minutes later
             // per the backoff schedule below. Redirects are disabled so a
-            // URL that passes this check can't 302 to an internal target.
-            WebhookUrlGuard::ensureSafe($subscription->url);
+            // URL that passes this check can't 302 to an internal target, and
+            // the resolved IP is pinned into the connection (below) so DNS
+            // cannot be rebound between this check and the socket connect.
+            $pinnedTarget = WebhookUrlGuard::resolvePinnedTarget($subscription->url);
 
-            $result = $sender->send($subscription->url, $payload, $signature, $timestamp);
+            $result = $sender->send($subscription->url, $payload, $signature, $timestamp, $pinnedTarget);
         } catch (WebhookUrlBlockedException $e) {
             $delivery->forceFill([
                 'status' => 'dead',

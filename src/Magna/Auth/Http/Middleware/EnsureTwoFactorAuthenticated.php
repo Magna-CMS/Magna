@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Blocks access until the 2FA challenge is completed when:
- *  - the session has a pending 2FA user (set by LoginController), AND
+ *  - the session has a pending 2FA user (set by the Filament login page), AND
  *  - the user has confirmed 2FA enrollment.
  *
  * Routes that are part of the challenge flow itself are excluded via

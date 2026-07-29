@@ -17,6 +17,7 @@ pest()->extend(TestCase::class)->use(RefreshDatabase::class)->in(
     'Feature/Api',
     'Feature/Settings',
     'Feature/Audit',
+    'Feature/Licensing',
 );
 // Management and Webhook tests declare uses() explicitly at the top of each file
 // (same pattern as Feature/Content and Feature/Media) so they are not listed here.

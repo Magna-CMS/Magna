@@ -87,7 +87,7 @@ it('re-notifies when the latest_version changes on a later check-in', function (
 it('posts a bell notification for a newly available plugin update', function (): void {
     $admin = updateCheckSuperAdmin();
     fakeUpdatesResponse([
-        'core' => ['latest_version' => '1.0.0-dev', 'update_available' => false, 'changelog_url' => null],
+        'core' => ['latest_version' => '1.3.0-beta', 'update_available' => false, 'changelog_url' => null],
         'plugins' => ['acme/forum' => ['latest_version' => '2.0.0', 'update_available' => true, 'changelog_url' => null]],
     ]);
 
@@ -109,7 +109,7 @@ it('posts a bell notification for a new Magna announcement and does not repeat i
         'description' => 'Thanks for installing Magna CMS.',
     ];
     fakeUpdatesResponse([
-        'core' => ['latest_version' => '1.0.0-dev', 'update_available' => false, 'changelog_url' => null],
+        'core' => ['latest_version' => '1.3.0-beta', 'update_available' => false, 'changelog_url' => null],
         'notices' => [$notice],
     ]);
 

@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use Filament\Facades\Filament;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
+use Magna\Auth\Filament\Login;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
 use Magna\Auth\Role;
 use Magna\Auth\TwoFactorService;
@@ -174,7 +177,7 @@ it('completes challenge with a recovery code and removes it', function (): void 
     $user = User::factory()->create([
         'two_factor_secret' => $twoFactor->generateSecret(),
         'two_factor_confirmed_at' => now(),
-        'two_factor_recovery_codes' => json_encode($codes),
+        'two_factor_recovery_codes' => $codes,
     ]);
 
     $this->withSession(['auth.two_factor_user_id' => $user->getKey()])
@@ -184,7 +187,7 @@ it('completes challenge with a recovery code and removes it', function (): void 
     $this->assertAuthenticatedAs($user);
 
     /** @var list<string> $remaining */
-    $remaining = json_decode((string) $user->fresh()?->two_factor_recovery_codes, true);
+    $remaining = $user->fresh()?->two_factor_recovery_codes ?? [];
     expect($remaining)->toHaveCount(7)
         ->and($remaining)->not->toContain($codes[0]);
 });
@@ -199,10 +202,11 @@ it('role-required 2FA blocks login until challenge is passed', function (): void
     $user->assignRole($role);
 
     // Login attempt → redirect to challenge (not to dashboard)
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'secret',
-    ])->assertRedirect(route('auth.two-factor.challenge'));
+    Filament::setCurrentPanel(Filament::getPanel('magna'));
+    Livewire::test(Login::class)
+        ->fillForm(['email' => $user->email, 'password' => 'secret'])
+        ->call('authenticate')
+        ->assertRedirect(route('auth.two-factor.challenge'));
 
     $this->assertGuest();
 });
@@ -218,13 +222,12 @@ it('forces an un-enrolled user with a 2FA-required role to the setup page on eve
     ]);
     $user->assignRole($role);
 
-    // Previously: LoginController::requiresTwoFactor() only challenged
-    // ALREADY-enrolled users, so this login went straight through to a full
-    // session with no 2FA at all.
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'secret',
-    ])->assertRedirect(route('dashboard'));
+    // A user who has NOT enrolled is logged in normally (no challenge); the
+    // enrollment gate below is what then forces them to set 2FA up.
+    Filament::setCurrentPanel(Filament::getPanel('magna'));
+    Livewire::test(Login::class)
+        ->fillForm(['email' => $user->email, 'password' => 'secret'])
+        ->call('authenticate');
 
     $this->assertAuthenticatedAs($user);
 

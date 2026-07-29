@@ -22,11 +22,12 @@ use Magna\Auth\Concerns\HasRoles;
 use Magna\Auth\SuspendedAccessRevoker;
 
 /**
+ * @property string $id ULID primary key (HasUlids)
  * @property UserStatus $status
  * @property Carbon|null $email_verified_at
  * @property string|null $avatar_path
  * @property string|null $two_factor_secret
- * @property string|null $two_factor_recovery_codes
+ * @property list<string>|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  */
 #[Fillable(['name', 'email', 'password', 'status', 'widget_order', 'avatar_path'])]
@@ -51,6 +52,13 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, MustVerif
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'status' => UserStatus::class,
+            // Encrypted at rest, not merely hidden from serialization: a
+            // plaintext TOTP secret turns any database read — a leaked dump, a
+            // stolen backup, SQL injection in a plugin — into the ability to
+            // generate valid second factors for every admin, which is the one
+            // thing 2FA exists to prevent.
+            'two_factor_secret' => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
             'two_factor_confirmed_at' => 'datetime',
             'widget_order' => 'array',
         ];

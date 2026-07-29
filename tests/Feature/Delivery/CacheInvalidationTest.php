@@ -155,17 +155,15 @@ it('EntryUpdated flushes the body cache and queues an edge purge', function (): 
     $entry = cacheTestEntry();
 
     $rc = app(ResponseCacheService::class);
-    $keys = new SurrogateKeyCollector;
-    $keys->addType('cache_article');
-    $rc->put('magna.delivery.body.somekey', '{"data":{}}', $keys);
+    $rc->put('magna.delivery.body.somekey', '{"data":{}}', 'cache_article');
 
     // Ensure stored
-    expect($rc->get('magna.delivery.body.somekey', $keys))->toBe('{"data":{}}');
+    expect($rc->get('magna.delivery.body.somekey', 'cache_article'))->toBe('{"data":{}}');
 
     Event::dispatch(new EntryUpdated($entry, null));
 
     // Body cache should now be flushed
-    expect($rc->get('magna.delivery.body.somekey', $keys))->toBeNull();
+    expect($rc->get('magna.delivery.body.somekey', 'cache_article'))->toBeNull();
     Queue::assertPushed(PurgeEdgeCacheJob::class);
 });
 
@@ -228,17 +226,15 @@ it('tryLock returns true for the first caller and false for subsequent callers',
 
 it('stale grace copy is served after put() even after tagged cache is flushed', function (): void {
     $rc = app(ResponseCacheService::class);
-    $keys = new SurrogateKeyCollector;
-    $keys->addType('stale_test');
     $cacheKey = 'magna.delivery.body.staletest';
 
-    $rc->put($cacheKey, '{"stale":true}', $keys);
+    $rc->put($cacheKey, '{"stale":true}', 'stale_test');
 
-    // Flush the tagged cache (simulating an invalidation)
-    Cache::tags(['magna.delivery.type.stale_test'])->flush();
+    // Invalidate the type (simulating a content change)
+    $rc->invalidateType('stale_test');
 
     // Tagged get should now return null
-    expect($rc->get($cacheKey, $keys))->toBeNull();
+    expect($rc->get($cacheKey, 'stale_test'))->toBeNull();
 
     // Stale grace copy should still be available
     expect($rc->getStale($cacheKey))->toBe('{"stale":true}');

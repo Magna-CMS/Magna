@@ -8,16 +8,13 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\HtmlString;
 use Laravel\Octane\OctaneServiceProvider;
-use Magna\Backup\BackupRun;
+use Livewire\Attributes\Locked;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
-use Magna\Settings\BackupSettings;
+use Magna\System\SystemHealthCollector;
 use Magna\Updater\CoreUpdateJob;
 use Magna\Updater\CoreUpdater;
 use Magna\Updater\CoreUpdateState;
@@ -52,12 +49,22 @@ class SystemInfoPage extends Page
      *
      * @var list<array{name: string, displayName: string, installedVersion: string, requiredCompat: string}>
      */
+    #[Locked]
     public array $incompatiblePlugins = [];
 
-    /** Target version/zip captured while the resolveIncompatiblePlugins modal is open. */
+    /**
+     * Target version captured while the resolveIncompatiblePlugins modal is
+     * open.
+     *
+     * #[Locked] because a Livewire public property round-trips through the
+     * browser: without it the client could rewrite the pending target between
+     * opening the modal and submitting it. The URL and checksum are no longer
+     * held here at all — they are re-read from the update_checks row at
+     * dispatch time, so the only thing the browser can influence is *which*
+     * already-recorded release is applied, and even that is verified.
+     */
+    #[Locked]
     public ?string $pendingUpdateVersion = null;
-
-    public ?string $pendingUpdateZipUrl = null;
 
     public static function canAccess(): bool
     {
@@ -134,8 +141,8 @@ class SystemInfoPage extends Page
                 ->modalSubmitActionLabel('Update now')
                 ->action(function (CoreUpdater $updater): void {
                     $core = UpdateCheck::core();
-                    if ($core?->latest_version === null || $core->download_url === null) {
-                        Notification::make()->title("Can't update")->body('No release archive is available for the latest version yet.')->danger()->send();
+                    if ($core?->latest_version === null || $core->download_url === null || $core->download_sha256 === null) {
+                        Notification::make()->title("Can't update")->body('No verified release archive is available for the latest version yet.')->danger()->send();
 
                         return;
                     }
@@ -143,7 +150,6 @@ class SystemInfoPage extends Page
                     $incompatible = $updater->checkCompatibility($core->latest_version);
                     if ($incompatible !== []) {
                         $this->pendingUpdateVersion = $core->latest_version;
-                        $this->pendingUpdateZipUrl = $core->download_url;
                         $this->incompatiblePlugins = array_map(
                             static fn (IncompatiblePlugin $p): array => $p->toArray(),
                             $incompatible,
@@ -153,7 +159,12 @@ class SystemInfoPage extends Page
                         return;
                     }
 
-                    CoreUpdateJob::dispatch($core->latest_version, $core->download_url);
+                    CoreUpdateJob::dispatch(
+                        $core->latest_version,
+                        $core->download_url,
+                        $core->download_sha256,
+                        checksumSignature: $core->download_sha256_signature,
+                    );
                     $this->updating = true;
                     Notification::make()->title('Update started…')->send();
                 }),
@@ -216,17 +227,17 @@ class SystemInfoPage extends Page
     /** Primary submit of resolveIncompatiblePlugins: proceed despite the conflicts. */
     private function forceUpdateAnyway(): void
     {
-        $version = $this->pendingUpdateVersion;
-        $zipUrl = $this->pendingUpdateZipUrl;
+        $target = $this->pendingReleaseTarget();
         $this->incompatiblePlugins = [];
         $this->pendingUpdateVersion = null;
-        $this->pendingUpdateZipUrl = null;
 
-        if ($version === null || $zipUrl === null) {
+        if ($target === null) {
             return;
         }
 
-        CoreUpdateJob::dispatch($version, $zipUrl, force: true);
+        [$version, $zipUrl, $sha256, $signature] = $target;
+
+        CoreUpdateJob::dispatch($version, $zipUrl, $sha256, force: true, checksumSignature: $signature);
         $this->updating = true;
         Notification::make()
             ->title('Forced update started…')
@@ -238,16 +249,16 @@ class SystemInfoPage extends Page
     /** Extra footer action of resolveIncompatiblePlugins: remove the conflicting plugins, then update. */
     private function uninstallIncompatibleAndContinue(): void
     {
-        $version = $this->pendingUpdateVersion;
-        $zipUrl = $this->pendingUpdateZipUrl;
+        $target = $this->pendingReleaseTarget();
         $names = array_column($this->incompatiblePlugins, 'name');
         $this->incompatiblePlugins = [];
         $this->pendingUpdateVersion = null;
-        $this->pendingUpdateZipUrl = null;
 
-        if ($version === null || $zipUrl === null) {
+        if ($target === null) {
             return;
         }
+
+        [$version, $zipUrl, $sha256, $signature] = $target;
 
         $manager = app(PluginManager::class);
         $failed = [];
@@ -284,9 +295,49 @@ class SystemInfoPage extends Page
             return;
         }
 
-        CoreUpdateJob::dispatch($version, $zipUrl);
+        CoreUpdateJob::dispatch($version, $zipUrl, $sha256, checksumSignature: $signature);
         $this->updating = true;
         Notification::make()->title('Plugins removed. Update started…')->send();
+    }
+
+    /**
+     * Resolve the release the modal is about, from the recorded update check
+     * rather than from anything the browser sent back.
+     *
+     * The archive URL and its checksum are what CoreUpdater overlays onto
+     * `app/`, `bootstrap/`, and `src/Magna` — code that runs on every
+     * subsequent request. They are therefore never carried in component state:
+     * they are read here, at dispatch, from the row the scheduled check-in
+     * wrote, and only after confirming it still describes the version the
+     * admin was shown.
+     *
+     * @return array{0: string, 1: string, 2: string, 3: string|null}|null
+     */
+    private function pendingReleaseTarget(): ?array
+    {
+        $version = $this->pendingUpdateVersion;
+
+        if ($version === null) {
+            return null;
+        }
+
+        $core = UpdateCheck::core();
+
+        if (
+            $core?->latest_version !== $version
+            || ! is_string($core->download_url)
+            || ! is_string($core->download_sha256)
+        ) {
+            Notification::make()
+                ->title("Can't update")
+                ->body('The recorded release for v'.$version.' has changed or is missing its verified checksum. Re-check for updates and try again.')
+                ->danger()
+                ->send();
+
+            return null;
+        }
+
+        return [$version, $core->download_url, $core->download_sha256, $core->download_sha256_signature];
     }
 
     /** Poll the running core update; notify + reload the page when it finishes. */
@@ -401,12 +452,14 @@ class SystemInfoPage extends Page
         $pluginsEnabled = PluginRecord::query()->where('enabled', true)->count();
         $pluginsTotal = PluginRecord::query()->count();
 
+        $health = app(SystemHealthCollector::class);
+
         return [
             'magna_version' => MagnaServiceProvider::VERSION,
             'laravel_version' => app()->version(),
             'php_version' => PHP_VERSION,
-            'db_driver' => $this->dbDriver(),
-            'db_version' => $this->dbVersion(),
+            'db_driver' => $health->dbDriver(),
+            'db_version' => $health->dbVersion(),
             'environment' => app()->environment(),
             'debug_mode' => (bool) config('app.debug'),
             'cache_driver' => (string) config('cache.default', 'file'),
@@ -415,264 +468,25 @@ class SystemInfoPage extends Page
             'plugins_total' => $pluginsTotal,
             'plugins_enabled' => $pluginsEnabled,
             'plugins_disabled' => $pluginsTotal - $pluginsEnabled,
-            'cache_status' => $this->cacheStatus(),
+            'cache_status' => $health->cacheStatus(),
             'app_url' => parse_url((string) config('app.url', 'http://localhost'), PHP_URL_HOST) ?? config('app.url', 'localhost'),
             'session_lifetime' => (int) config('session.lifetime', 120),
             'octane_installed' => class_exists(OctaneServiceProvider::class),
             'octane_running' => filter_var(getenv('LARAVEL_OCTANE'), FILTER_VALIDATE_BOOLEAN),
             'octane_server' => (string) config('octane.server', 'frankenphp'),
-            'performance_warnings' => $this->performanceWarnings(),
-            'boot_time_ms' => $this->bootTimeMs(),
+            'performance_warnings' => $health->performanceWarnings(),
+            'security_warnings' => $health->securityWarnings(),
+            'boot_time_ms' => $health->bootTimeMs(),
             'memory_current_mb' => round(memory_get_usage(true) / 1_048_576, 1),
             'memory_peak_mb' => round(memory_get_peak_usage(true) / 1_048_576, 1),
-            'cache_latency_ms' => $this->cacheLatencyMs(),
-            'opcache' => $this->opcacheStatus(),
-            'queue_pending' => $this->queuePendingCount(),
-            'queue_failed' => $this->queueFailedCount(),
-            'backup_health' => $this->backupHealth(),
+            'cache_latency_ms' => $health->cacheLatencyMs(),
+            'opcache' => $health->opcacheStatus(),
+            'queue_pending' => $health->queuePendingCount(),
+            'queue_failed' => $health->queueFailedCount(),
+            // Age of the oldest waiting job — the difference between "busy"
+            // and "nothing is running this queue".
+            'queue_oldest_minutes' => $health->queueOldestPendingMinutes(),
+            'backup_health' => $health->backupHealth(),
         ];
-    }
-
-    /**
-     * "Last successful backup: X ago", flagged as a warning once a
-     * scheduled backup has silently stopped succeeding rather than only
-     * distinguishing "never ran" — see docs/backup-manager-plan.md, Stage 6.
-     *
-     * Deliberately does NOT short-circuit on `enabled === false`: manual
-     * runs ("Run backup now") work regardless of that toggle (it only
-     * gates the *schedule*, per BackupSettingsPage's own tooltip on that
-     * action), so a site backing up manually with automation off still has
-     * real backup history worth showing — hiding it behind a blanket
-     * "Disabled" was a real bug caught by testing this live (three
-     * successful manual runs were completely invisible here until fixed).
-     *
-     * The staleness threshold is a fixed grace window per frequency
-     * (`daily` → 2 days, `weekly` → 9 days), not a live read of the exact
-     * next-due time — good enough to catch "this has been silently broken
-     * for a while" without duplicating BackupSchedule's own due-window
-     * logic here. `custom_cron` has no fixed interval to derive a grace
-     * window from, so it falls back to the same 2-day threshold as
-     * `daily` — a documented approximation, not a precise fit for every
-     * possible cron expression. The staleness escalation itself only
-     * applies when `enabled` is true — with no schedule promised, "stale
-     * relative to what?" doesn't have an answer.
-     *
-     * @return array{color: 'ok'|'warning'|'neutral', label: string}
-     */
-    private function backupHealth(): array
-    {
-        $settings = BackupSettings::get();
-
-        $last = BackupRun::query()
-            ->where('status', BackupRun::STATUS_SUCCESS)
-            ->orderByDesc('started_at')
-            ->first();
-
-        if ($last === null || $last->started_at === null) {
-            return $settings->enabled
-                ? ['color' => 'warning', 'label' => 'No successful backup yet']
-                : ['color' => 'neutral', 'label' => 'Never run (automation disabled)'];
-        }
-
-        if (! $settings->enabled) {
-            return ['color' => 'ok', 'label' => $last->started_at->diffForHumans().' (manual only — automation disabled)'];
-        }
-
-        $graceDays = $settings->frequency === 'weekly' ? 9 : 2;
-
-        if ($last->started_at->lt(now()->subDays($graceDays))) {
-            return ['color' => 'warning', 'label' => $last->started_at->diffForHumans().' (stale)'];
-        }
-
-        return ['color' => 'ok', 'label' => $last->started_at->diffForHumans()];
-    }
-
-    /**
-     * Time since Laravel's front controller started (defined in
-     * public/index.php) — the closest single number to "how much did booting
-     * the framework cost this request," which is exactly what Octane
-     * eliminates by keeping the app booted between requests. Without Octane
-     * this is paid on every single page load; with it, only on worker start.
-     */
-    private function bootTimeMs(): float
-    {
-        $start = defined('LARAVEL_START') ? LARAVEL_START : microtime(true);
-
-        return round((microtime(true) - $start) * 1000, 1);
-    }
-
-    /**
-     * Round-trip time for a real cache write+read on whatever driver is
-     * currently configured — a more honest number than just "ok/error",
-     * since a database-driver cache "working" can still be meaningfully
-     * slower than Redis would be.
-     */
-    private function cacheLatencyMs(): ?float
-    {
-        try {
-            $start = microtime(true);
-            Cache::put('magna_perf_probe', 1, 5);
-            Cache::get('magna_perf_probe');
-
-            return round((microtime(true) - $start) * 1000, 2);
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * @return array{available: bool, enabled: bool, hit_rate: ?float, memory_used_mb: ?float, memory_free_mb: ?float}
-     */
-    private function opcacheStatus(): array
-    {
-        if (! function_exists('opcache_get_status')) {
-            return ['available' => false, 'enabled' => false, 'hit_rate' => null, 'memory_used_mb' => null, 'memory_free_mb' => null];
-        }
-
-        $status = @opcache_get_status(false);
-
-        // False under CLI (opcache.enable_cli is normally off) and when
-        // opcache.enable itself is off — both legitimate, not errors.
-        if ($status === false) {
-            return ['available' => false, 'enabled' => false, 'hit_rate' => null, 'memory_used_mb' => null, 'memory_free_mb' => null];
-        }
-
-        $stats = $status['opcache_statistics'] ?? [];
-        $memory = $status['memory_usage'] ?? [];
-
-        return [
-            'available' => true,
-            'enabled' => (bool) ($status['opcache_enabled'] ?? false),
-            'hit_rate' => isset($stats['opcache_hit_rate']) ? round((float) $stats['opcache_hit_rate'], 1) : null,
-            'memory_used_mb' => isset($memory['used_memory']) ? round($memory['used_memory'] / 1_048_576, 1) : null,
-            'memory_free_mb' => isset($memory['free_memory']) ? round($memory['free_memory'] / 1_048_576, 1) : null,
-        ];
-    }
-
-    /**
-     * Jobs waiting in the "database" queue driver's table. Only meaningful
-     * when the queue connection is actually "database" — for Redis or other
-     * drivers this table simply isn't where jobs live, so we say so instead
-     * of showing a misleading zero.
-     */
-    private function queuePendingCount(): ?int
-    {
-        if ((string) config('queue.default', 'sync') !== 'database') {
-            return null;
-        }
-
-        try {
-            return Schema::hasTable('jobs') ? (int) DB::table('jobs')->count() : null;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * Failed jobs are logged to failed_jobs regardless of which queue
-     * connection is active, so this count is meaningful no matter the driver.
-     */
-    private function queueFailedCount(): ?int
-    {
-        try {
-            return Schema::hasTable('failed_jobs') ? (int) DB::table('failed_jobs')->count() : null;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * Proactive "you're running sub-optimally" checks — only surfaced when
-     * APP_ENV=production, so local/staging dev never gets nagged. This is
-     * deliberately here (reaching every admin who opens System Info) rather
-     * than only documented, since documentation only helps someone who
-     * already knows to go looking for it.
-     *
-     * @return list<array{label: string, help: string}>
-     */
-    private function performanceWarnings(): array
-    {
-        if (! app()->environment('production')) {
-            return [];
-        }
-
-        $warnings = [];
-
-        $octaneInstalled = class_exists(OctaneServiceProvider::class);
-        $octaneRunning = filter_var(getenv('LARAVEL_OCTANE'), FILTER_VALIDATE_BOOLEAN);
-
-        if (! $octaneRunning) {
-            $warnings[] = [
-                'label' => 'Octane is not running',
-                'help' => $octaneInstalled
-                    ? 'The package is installed but the app is still served by plain PHP-FPM/CLI — every request re-boots the framework from scratch. See docs/DEPLOYMENT.md section 3A to start it under a process supervisor.'
-                    : 'Running on plain PHP-FPM/CLI. Installing Octane (FrankenPHP) is the single biggest lever for admin-panel and API speed — see docs/DEPLOYMENT.md section 3A.',
-            ];
-        }
-
-        $cacheDriver = (string) config('cache.default', 'file');
-        if (in_array($cacheDriver, ['file', 'database'], true)) {
-            $warnings[] = [
-                'label' => 'Cache driver is "'.$cacheDriver.'", not Redis',
-                'help' => 'Every cache read/write costs a '.($cacheDriver === 'database' ? 'SQL query' : 'disk read').' instead of an in-memory lookup. Set this in Settings → Performance once a Redis server is reachable — .env alone does not change this (see the Performance settings guide for why).',
-            ];
-        }
-
-        $queueConnection = (string) config('queue.default', 'sync');
-        if ($queueConnection === 'sync') {
-            $warnings[] = [
-                'label' => 'Queue connection is "sync"',
-                'help' => 'Background jobs (media thumbnails, webhooks) run in-request instead of in the background, making uploads and other actions wait for them to finish. Switch to Redis or Database in Settings → Performance.',
-            ];
-        } elseif ($queueConnection === 'database') {
-            $warnings[] = [
-                'label' => 'Queue connection is "database", not Redis',
-                'help' => 'Works, but Redis has lower overhead for a production queue. Also confirm a "php artisan queue:work" process is actually running and supervised — queued jobs silently pile up otherwise.',
-            ];
-        }
-
-        return $warnings;
-    }
-
-    private function dbDriver(): string
-    {
-        return DB::connection()->getDriverName();
-    }
-
-    private function dbVersion(): string
-    {
-        try {
-            $driver = DB::connection()->getDriverName();
-            $result = match ($driver) {
-                'pgsql' => DB::selectOne('SELECT version() AS v'),
-                'sqlite' => DB::selectOne('SELECT sqlite_version() AS v'),
-                default => DB::selectOne('SELECT VERSION() AS v'),
-            };
-
-            if ($result === null) {
-                return 'unknown';
-            }
-
-            /** @var object{v: string} $result */
-            $raw = $result->v;
-
-            return match ($driver) {
-                'pgsql' => preg_match('/PostgreSQL\s+([\d.]+)/i', $raw, $m) === 1 ? $m[1] : $raw,
-                default => $raw,
-            };
-        } catch (Throwable) {
-            return 'unavailable';
-        }
-    }
-
-    private function cacheStatus(): string
-    {
-        try {
-            Cache::put('magna_health_check', 1, 5);
-
-            return Cache::get('magna_health_check') === 1 ? 'ok' : 'error';
-        } catch (Throwable) {
-            return 'error';
-        }
     }
 }

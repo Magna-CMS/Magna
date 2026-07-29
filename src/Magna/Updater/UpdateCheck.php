@@ -15,7 +15,11 @@ use Illuminate\Support\Carbon;
  * @property string $current_version
  * @property string|null $latest_version
  * @property string|null $changelog_url
+ * @property string|null $download_url
+ * @property string|null $download_sha256
+ * @property string|null $download_sha256_signature
  * @property bool $update_available
+ * @property bool $license_required
  * @property Carbon $checked_at
  */
 class UpdateCheck extends Model
@@ -29,7 +33,13 @@ class UpdateCheck extends Model
         'latest_version',
         'changelog_url',
         'download_url',
+        'download_sha256',
+        'download_sha256_signature',
         'update_available',
+        // A newer version exists that this site's licence does not cover.
+        // Mutually exclusive with update_available — see the /updates
+        // contract in Magna\Updater\UpdateEntry.
+        'license_required',
         'checked_at',
     ];
 
@@ -37,6 +47,7 @@ class UpdateCheck extends Model
     {
         return [
             'update_available' => 'boolean',
+            'license_required' => 'boolean',
             'checked_at' => 'datetime',
         ];
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Media;
 
 use Illuminate\Foundation\Application;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
@@ -47,8 +48,13 @@ class MediaServiceProvider extends ServiceProvider
 
         // Signed-URL delivery for private (non-S3) disks.
         // SVGs are forced to download inside the controller regardless of disk.
+        // SubstituteBindings is attached explicitly: these routes are declared
+        // outside the `web`/`api` groups (they need neither a session nor CSRF),
+        // and without it the {media} placeholder is never resolved to a model —
+        // the controller receives an empty Media instance and the raw ULID as a
+        // stray argument, so nothing is ever actually served.
         Route::get('/_media/{media}', MediaServeController::class)
-            ->middleware('signed')
+            ->middleware(['signed', SubstituteBindings::class])
             ->name('magna.media.serve');
 
         // Public (unsigned) route used exclusively for SVGs on public disks.
@@ -56,6 +62,7 @@ class MediaServiceProvider extends ServiceProvider
         // is not a practical concern. The controller adds Content-Disposition:
         // attachment so browsers cannot render SVGs inline from our origin.
         Route::get('/_media/pub/{media}', MediaServeController::class)
+            ->middleware(SubstituteBindings::class)
             ->name('magna.media.serve.public');
 
         if ($this->app->runningInConsole()) {

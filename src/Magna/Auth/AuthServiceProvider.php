@@ -18,9 +18,9 @@ use Magna\Auth\Http\Middleware\DenyManagementCrossOriginMiddleware;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorAuthenticated;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
 use Magna\Auth\Http\Middleware\ForceHttpsMiddleware;
-use Magna\Install\Installer;
 use Magna\Auth\Http\Middleware\MagnaApiMiddleware;
 use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
+use Magna\Install\Installer;
 use Magna\Settings\SecuritySettings;
 use Magna\Users\User;
 
@@ -65,12 +65,13 @@ class AuthServiceProvider extends ServiceProvider
         // legally be sent over a plaintext HTTP connection. Not gated on
         // runningInConsole() since it doesn't touch the DB.
         //
-        // Skipped until installed: a fresh unzip defaults APP_ENV to
-        // production, but the installer itself may run over plain HTTP before
-        // TLS is configured. Forcing Secure there makes the session cookie
-        // never come back, so every installer POST fails CSRF (419) and the
-        // install can't complete. Once installed, production enforces it.
-        if ($this->app->environment('production') && Installer::isInstalled()) {
+        // Relaxed only for a genuine pre-install HTTP request: a fresh unzip
+        // defaults APP_ENV to production, but the installer may run over plain
+        // HTTP before TLS exists — forcing Secure there makes the session
+        // cookie never return and every installer POST 419s. On HTTPS (or once
+        // installed) production always enforces Secure, so an install performed
+        // over TLS keeps a Secure cookie throughout.
+        if ($this->app->environment('production') && (Installer::isInstalled() || request()->isSecure())) {
             config(['session.secure' => true]);
         }
 
@@ -97,6 +98,11 @@ class AuthServiceProvider extends ServiceProvider
             'roles.manage' => 'Create, update, and delete roles; grant and revoke permissions',
             'settings.view' => 'View system settings',
             'settings.manage' => 'Change system settings',
+            // Separate from settings.manage because these actions download and
+            // enable third-party code on this server — the highest-impact thing
+            // the panel can do, and not something every settings administrator
+            // should inherit by default.
+            'licensing.manage' => 'Redeem, activate, update, and release product licences',
             'plugins.view' => 'View installed plugins',
             'plugins.manage' => 'Enable, disable, and uninstall plugins',
             'audit.view' => 'View the audit log',

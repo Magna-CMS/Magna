@@ -33,6 +33,7 @@ use Magna\Admin\Pages\SecuritySettingsPage;
 use Magna\Admin\Pages\SettingsPage;
 use Magna\Admin\Pages\StorageSettingsPage;
 use Magna\Admin\Pages\SystemInfoPage;
+use Magna\Admin\Pages\ThemesPage;
 use Magna\Admin\Pages\UrlSettingsPage;
 use Magna\Admin\Resources\ApiKeyResource;
 use Magna\Admin\Resources\AuditLogResource;
@@ -44,6 +45,7 @@ use Magna\Admin\Resources\UserResource;
 use Magna\Admin\Widgets\EntryCounts;
 use Magna\Admin\Widgets\RecentActivity;
 use Magna\Admin\Widgets\UpcomingScheduleWidget;
+use Magna\Auth\Filament\Login;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
 use Magna\Contracts\RegistersAdminResources;
 use Magna\Contracts\RegistersDashboardWidgets;
@@ -55,10 +57,24 @@ use Throwable;
 
 class AdminPanelProvider extends PanelProvider
 {
+    /** The one and only panel id — reference this instead of a magic string. */
+    public const ID = 'magna';
+
+    /** Route name of the single sign-in page — one source of truth for redirects. */
+    public static function loginRoute(): string
+    {
+        return 'filament.'.self::ID.'.auth.login';
+    }
+
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->id('magna')
+            ->id(self::ID)
+            // Sole panel → mark it default so Filament::getDefaultPanel() /
+            // getCurrentOrDefaultPanel() resolve outside a panel request
+            // context (e.g. the account-centre OAuth callback, plain web
+            // routes), instead of throwing NoDefaultPanelSetException.
+            ->default()
             // Root domain: the admin panel lives at "/" — no "/admin" prefix.
             ->path('')
             // ── Design Guide §9.1: navy-tinted color palette ─────────────────
@@ -97,7 +113,9 @@ class AdminPanelProvider extends PanelProvider
             // panel page — closes the gap where 2FA was configured as
             // "mandatory" per-role but never actually enforced.
             ->authMiddleware([Authenticate::class, EnsureTwoFactorEnrolled::class])
-            ->login()
+            // Custom login page that enforces Magna's two-factor challenge —
+            // Filament's default login ignores it. See Magna\Auth\Filament\Login.
+            ->login(Login::class)
             // ── Layout ───────────────────────────────────────────────────────
             //   SPA mode: navigation uses Livewire wire:navigate, so clicking a
             //   sidebar item swaps content client-side instead of a full page
@@ -186,6 +204,7 @@ class AdminPanelProvider extends PanelProvider
                 // docs/backup-manager-plan.md, Decision #4.
                 BackupSettingsPage::class,
                 PluginsPage::class,
+                ThemesPage::class,
                 AccountCentrePage::class,
                 ProfilePage::class,
             ], $this->resolvePluginPages()))

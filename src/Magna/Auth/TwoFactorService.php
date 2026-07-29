@@ -49,9 +49,26 @@ class TwoFactorService
         return $writer->writeString($url);
     }
 
+    /**
+     * Verify a TOTP code.
+     *
+     * The window is pinned explicitly rather than left to the library default:
+     * every extra step of tolerance multiplies the number of codes valid at
+     * any instant, which is the same multiplier an online brute-force enjoys.
+     * One step either side (~90s of tolerance) is the smallest value that
+     * still survives ordinary device clock drift.
+     *
+     * This says nothing about *reuse* — a code stays valid for its whole
+     * window, so the caller must also refuse a code it has already accepted
+     * (TwoFactorChallengeController::codeAlreadyUsed).
+     */
     public function verify(string $secret, string $code): bool
     {
-        return (bool) $this->engine->verifyKey($secret, $code);
+        return (bool) $this->engine->verifyKey(
+            $secret,
+            $code,
+            Config::integer('magna.two_factor.window', 1),
+        );
     }
 
     /**

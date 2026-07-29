@@ -25,7 +25,12 @@ final class DeliveryQueryBuilder
     /** @var list<string> */
     private const SAFE_OPERATORS = ['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'like', 'in', 'nin'];
 
-    /** @var array<string, string> */
+    /**
+     * Comparison operators handled by the generic where() branch. `like` (a
+     * literal contains-match), `in` and `nin` are handled separately.
+     *
+     * @var array<string, string>
+     */
     private const OP_MAP = [
         'eq' => '=',
         'neq' => '!=',
@@ -33,8 +38,10 @@ final class DeliveryQueryBuilder
         'lte' => '<=',
         'gt' => '>',
         'gte' => '>=',
-        'like' => 'LIKE',
     ];
+
+    /** Upper bound on a `like` filter value, to cap the work one filter can request. */
+    private const MAX_LIKE_LENGTH = 256;
 
     /**
      * Build a base query for the given content type, pre-filtered by status and locale.
@@ -174,13 +181,48 @@ final class DeliveryQueryBuilder
                     $query->whereIn($column, is_array($value) ? $value : [$value]);
                 } elseif ($op === 'nin') {
                     $query->whereNotIn($column, is_array($value) ? $value : [$value]);
+                } elseif ($op === 'like') {
+                    $this->applyLike($query, $column, $value);
                 } else {
-                    // PHPStan proves $op is a key of OP_MAP at this point (in/nin handled above,
-                    // and SAFE_OPERATORS ⊇ OP_MAP keys — all remaining ops are in the map).
+                    // PHPStan proves $op is a key of OP_MAP at this point (in/nin/like
+                    // handled above, and SAFE_OPERATORS ⊇ OP_MAP keys ∪ {in,nin,like} —
+                    // all remaining ops are in the map).
                     $query->where($column, self::OP_MAP[$op], $value);
                 }
             }
         }
+    }
+
+    /**
+     * Apply a `like` filter as a safe literal-substring (contains) match.
+     *
+     * LIKE metacharacters (`%`, `_`) and the backslash escape character are
+     * stripped from the user's term so a caller can't inject wildcards to force
+     * a pathological scan; the cleaned term is then wrapped in %…% for a
+     * contains search. Stripping (rather than escaping with an ESCAPE clause)
+     * keeps this on the structured query builder — no raw SQL — and is correct
+     * on every driver, including SQLite, whose LIKE has no default escape
+     * character. The trade-off is that a term consisting only of wildcards
+     * reduces to an empty needle (a match-all contains), and literal `%`/`_`
+     * characters are not searchable; both are acceptable for a contains filter.
+     *
+     * @param  Builder<Entry>  $query
+     *
+     * @throws DeliveryException
+     */
+    private function applyLike(Builder $query, string $column, mixed $value): void
+    {
+        if (! is_string($value)) {
+            throw new DeliveryException("Filter operator 'like' requires a string value.");
+        }
+
+        if (mb_strlen($value) > self::MAX_LIKE_LENGTH) {
+            throw new DeliveryException("Filter 'like' value must be at most ".self::MAX_LIKE_LENGTH.' characters.');
+        }
+
+        $needle = str_replace(['\\', '%', '_'], '', $value);
+
+        $query->where($column, 'like', '%'.$needle.'%');
     }
 
     /** @return list<string> */

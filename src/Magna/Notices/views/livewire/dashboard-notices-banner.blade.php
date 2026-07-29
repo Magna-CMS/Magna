@@ -12,7 +12,7 @@
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
 
-            <div class="relative flex flex-col md:flex-row items-center gap-6 md:gap-8">
+            <div class="relative flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8">
                 <div class="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 p-0.5 shadow-xl shadow-indigo-500/10 flex-shrink-0 animate-pulse">
                     <div class="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center overflow-hidden relative">
                         @if ($notice->image_url)
@@ -29,7 +29,9 @@
                     </div>
                 </div>
 
-                <div class="flex-1 text-center md:text-left space-y-2">
+                <div class="flex-1 text-center md:text-left space-y-2 min-w-0"
+                     x-data="{ expanded: false, clamped: false }"
+                     x-init="$nextTick(() => clamped = $refs.upgradeBody.scrollHeight > $refs.upgradeBody.clientHeight + 4)">
                     <div class="flex flex-wrap items-center justify-center md:justify-start gap-2">
                         <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">System Upgrade</span>
                         @if ($notice->category_description)
@@ -37,7 +39,14 @@
                         @endif
                     </div>
                     <h2 class="text-xl md:text-2xl font-bold text-white tracking-tight">{{ $notice->title }}</h2>
-                    <p class="text-sm md:text-base text-slate-400 max-w-xl leading-relaxed">{{ $notice->description }}</p>
+                    <p x-ref="upgradeBody"
+                       class="text-sm md:text-base text-slate-400 max-w-xl leading-relaxed whitespace-pre-line break-words"
+                       :class="expanded ? '' : 'line-clamp-3'">{{ $notice->description }}</p>
+                    <button type="button" x-show="clamped || expanded" x-cloak x-on:click="expanded = !expanded"
+                        class="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+                        <span x-text="expanded ? 'Show less' : 'Read more'"></span>
+                        <svg class="w-3.5 h-3.5 transition-transform" :class="expanded ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                    </button>
                 </div>
 
                 <div class="w-full md:w-auto flex-shrink-0">
@@ -148,7 +157,9 @@
         </div>
     @else
         {{-- ==================== ANNOUNCEMENT BANNER ==================== --}}
-        <div wire:key="notice-{{ $notice->id }}" x-data="{ expanded: false }" class="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/40 p-6 md:p-8 backdrop-blur-md shadow-2xl transition-all duration-300 hover:border-amber-500/30 group">
+        <div wire:key="notice-{{ $notice->id }}" x-data="{ expanded: false, clamped: false }"
+            x-init="$nextTick(() => clamped = $refs.annBody.scrollHeight > $refs.annBody.clientHeight + 4)"
+            class="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/40 p-6 md:p-8 backdrop-blur-md shadow-2xl transition-all duration-300 hover:border-amber-500/30 group">
             <div class="absolute -top-24 -right-24 h-48 w-48 rounded-full bg-amber-500/5 blur-3xl group-hover:bg-amber-500/15 transition-all duration-500"></div>
 
             <button type="button" wire:click="dismiss({{ $notice->id }})"
@@ -156,7 +167,7 @@
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
 
-            <div class="relative flex flex-col md:flex-row items-center gap-6 md:gap-8">
+            <div class="relative flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8">
                 <div class="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-yellow-400 p-0.5 shadow-xl shadow-amber-500/10 flex-shrink-0">
                     <div class="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center overflow-hidden">
                         @if ($notice->image_url)
@@ -177,10 +188,12 @@
                         @endif
                     </div>
                     <h2 class="text-xl md:text-2xl font-bold text-white tracking-tight">{{ $notice->title }}</h2>
-                    <p class="text-sm md:text-base text-slate-400 max-w-xl leading-relaxed" :class="expanded ? '' : 'line-clamp-2'">{{ $notice->description }}</p>
+                    <p x-ref="annBody"
+                       class="text-sm md:text-base text-slate-400 max-w-xl leading-relaxed whitespace-pre-line break-words"
+                       :class="expanded ? '' : 'line-clamp-3'">{{ $notice->description }}</p>
                 </div>
 
-                <div class="w-full md:w-auto flex-shrink-0">
+                <div class="w-full md:w-auto flex-shrink-0" x-show="clamped || expanded" x-cloak>
                     <button type="button" x-on:click="expanded = !expanded"
                         class="w-full md:w-auto px-6 py-3 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700/80 hover:border-amber-500/30 hover:text-white transition-all duration-200 flex items-center justify-center gap-2 group/btn shadow-md">
                         <span x-text="expanded ? 'Show less' : 'Read More'"></span>

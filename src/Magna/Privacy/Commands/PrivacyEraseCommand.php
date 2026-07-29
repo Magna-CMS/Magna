@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Magna\Contracts\HandlesPersonalData as PluginHandlesPersonalData;
 use Magna\Plugins\PluginManager;
+use Magna\Privacy\Contracts\HandlesPersonalData as LegacyHandlesPersonalData;
 use Magna\Users\User;
 use Magna\Users\UserStatus;
 
@@ -67,7 +68,7 @@ class PrivacyEraseCommand extends Command
 
         // Plugin-level erasure first (while the user record still exists).
         foreach ($plugins->getEnabled() as $name => $plugin) {
-            if ($plugin instanceof PluginHandlesPersonalData) {
+            if ($plugin instanceof PluginHandlesPersonalData || $plugin instanceof LegacyHandlesPersonalData) {
                 $plugin->erasePersonalData($user);
                 $this->line("  ✓ plugin:{$name} erased");
             }
@@ -94,12 +95,26 @@ class PrivacyEraseCommand extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Accepts either the current SDK contract or the deprecated core-side one.
+     *
+     * Matching only the new interface would silently downgrade every plugin
+     * built against the old namespace to "does not handle personal data" —
+     * and under --force that means the user is anonymised while the plugin's
+     * data survives, reported as a complete erasure.
+     */
+    private function handlesPersonalData(object $plugin): bool
+    {
+        return $plugin instanceof PluginHandlesPersonalData
+            || $plugin instanceof LegacyHandlesPersonalData;
+    }
+
     /** @return list<string> */
     private function nonCompliantPlugins(PluginManager $plugins): array
     {
         $missing = [];
         foreach ($plugins->getEnabled() as $name => $plugin) {
-            if (! $plugin instanceof PluginHandlesPersonalData) {
+            if (! $this->handlesPersonalData($plugin)) {
                 $missing[] = $name;
             }
         }

@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
+use Magna\Admin\AdminPanelProvider;
 
 class LogoutController extends Controller
 {
@@ -18,6 +19,6 @@ class LogoutController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('auth.login');
+        return redirect()->route(AdminPanelProvider::loginRoute());
     }
 }

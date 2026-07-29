@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\AccountCentre;
 
 use Illuminate\Support\Facades\Http;
+use Magna\Licensing\SignedPayload;
 use Magna\Marketplace\Marketplace;
 
 /**
@@ -27,6 +28,8 @@ class AccountCentreClient
             'fingerprint' => $fingerprint,
             'site_label' => $siteLabel,
         ], fn (mixed $v): bool => $v !== null));
+
+        $raw = $this->openEnvelope($raw);
 
         if (! is_array($raw) || ! is_string($raw['token'] ?? null) || ! is_array($raw['account'] ?? null)) {
             return null;
@@ -80,6 +83,37 @@ class AccountCentreClient
         // must never be blocked by this call failing — the site always gets
         // to forget its own connection even if Update Manager is unreachable.
         $this->post('/account/disconnect', [], $token);
+    }
+
+    /**
+     * Open a signed envelope when the marketplace sends one.
+     *
+     * The bearer token this returns authorises the wallet, installs, and
+     * deactivations — it is worth exactly as much as a licence response, which
+     * has been Ed25519-signed all along. TLS alone protects it otherwise, so a
+     * TLS-terminating proxy or a compromised marketplace could hand this site
+     * a token of its choosing.
+     *
+     * Verify-if-present rather than require, because the server has to publish
+     * the envelope before it can be demanded; a *failed* signature is always
+     * refused, so this can only ever be as weak as the previous behaviour and
+     * never weaker. Set `magna.account_centre.require_signed_exchange` once
+     * Update Manager signs the response.
+     *
+     * @param  array<array-key, mixed>|null  $raw
+     * @return array<array-key, mixed>|null
+     */
+    private function openEnvelope(?array $raw): ?array
+    {
+        $required = (bool) config('magna.account_centre.require_signed_exchange', false);
+        $isEnvelope = is_array($raw) && isset($raw['data'], $raw['signature']);
+
+        if (! $isEnvelope) {
+            return $required ? null : $raw;
+        }
+
+        /** @var array<string, mixed> $raw */
+        return SignedPayload::open($raw);
     }
 
     /**

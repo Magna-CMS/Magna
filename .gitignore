@@ -2,8 +2,16 @@
 .DS_Store
 /docs
 
-# Personal-use notes only — never pushed to GitHub.
-*.md
+# Internal notes and drafts — never pushed to GitHub. README.md and LICENSE are
+# the only documentation that ships publicly; everything else is kept local.
+/PROGRESS.md
+/SECURITY_AUDIT_PLAN.md
+/CHANGELOG.md
+/CODE_OF_CONDUCT.md
+/CONTRIBUTING.md
+/SECURITY.md
+/UPGRADING.md
+/.github/PULL_REQUEST_TEMPLATE.md
 
 # Plugins live in their own repos — never commit them to the CMS repo
 /plugins-dev/

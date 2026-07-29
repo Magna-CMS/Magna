@@ -75,12 +75,12 @@ it('builds a Manifest value object from a valid array', function (): void {
 
 it('accepts a plugin whose magna compat satisfies the core version', function (): void {
     $manifest = Manifest::fromArray(validManifestData(['compat' => ['magna' => '^1.0']]));
-    expect($manifest->isCompatibleWith('1.0.0-dev'))->toBeTrue();
+    expect($manifest->isCompatibleWith('1.3.0-beta'))->toBeTrue();
 });
 
 it('refuses to enable a plugin incompatible with the core version', function (): void {
     $manifest = Manifest::fromArray(validManifestData(['compat' => ['magna' => '^2.0']]));
-    expect($manifest->isCompatibleWith('1.0.0-dev'))->toBeFalse();
+    expect($manifest->isCompatibleWith('1.3.0-beta'))->toBeFalse();
 });
 
 it('throws PluginNotFoundException when enabling an unknown plugin', function (): void {

@@ -28,6 +28,11 @@ class RestoreFailedException extends RuntimeException
         return new self('The archive claims an implausibly large amount of uncompressed content and was refused before extraction — it may be corrupt or a zip bomb.');
     }
 
+    public static function unsafeArchivePath(string $entry): self
+    {
+        return new self("The archive contains an unsafe path (\"{$entry}\") that could escape the extraction directory, and was refused. Do not restore backups from untrusted sources.");
+    }
+
     public static function inMemoryDatabase(): self
     {
         return new self('Cannot restore into an in-memory (:memory:) database connection — there is nothing to write to on disk.');

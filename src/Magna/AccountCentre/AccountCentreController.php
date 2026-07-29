@@ -22,8 +22,8 @@ class AccountCentreController
 {
     private const SESSION_STATE_KEY = 'magna_account_centre.state';
 
-    /** Matches the two providers actually linked from account-centre.blade.php. */
-    private const ALLOWED_PROVIDERS = ['google', 'github'];
+    /** Matches the providers actually linked from account-centre.blade.php. */
+    private const ALLOWED_PROVIDERS = ['google', 'github', 'microsoft'];
 
     public function connect(Request $request, string $provider): RedirectResponse
     {
@@ -47,7 +47,7 @@ class AccountCentreController
         abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
 
         $expectedState = $request->session()->pull(self::SESSION_STATE_KEY);
-        $accountPageUrl = AccountCentrePage::getUrl(panel: 'magna');
+        $accountPageUrl = AccountCentrePage::getUrl();
 
         if ($request->query('error') !== null) {
             return redirect($accountPageUrl)->with('account_centre_error', 'The connection attempt failed. Please try again.');
@@ -93,7 +93,7 @@ class AccountCentreController
         abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
 
         $settings = AccountCentreSettings::get();
-        $accountPageUrl = AccountCentrePage::getUrl(panel: 'magna');
+        $accountPageUrl = AccountCentrePage::getUrl();
 
         if ($settings->token !== null) {
             $client->disconnect($settings->token);

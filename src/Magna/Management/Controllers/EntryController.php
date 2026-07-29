@@ -15,6 +15,7 @@ use Magna\Content\Entry;
 use Magna\Content\EntryManager;
 use Magna\Content\EntryStatus;
 use Magna\Content\Exceptions\SchemaException;
+use Magna\Content\Http\Resources\EntryResource;
 use Magna\Content\Models\Revision;
 use Magna\Content\SchemaRegistry;
 use Magna\Settings\ApiSettings;
@@ -48,13 +49,8 @@ class EntryController extends ManagementController
             ->orderByDesc('updated_at')
             ->paginate($perPage);
 
-        /** @var array<int, array<string, mixed>> $items */
-        $items = collect($paginator->items())->map(
-            fn (Entry $e): array => $this->entryToArray($e, $contentType)
-        )->all();
-
         return response()->json([
-            'data' => $items,
+            'data' => EntryResource::collection($paginator->items()),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'per_page' => $paginator->perPage(),
@@ -89,10 +85,10 @@ class EntryController extends ManagementController
             actorId: $this->actorId(),
             ip: $request->ip(),
             subject: $entry,
-            after: $this->entryToArray($entry, $contentType),
+            after: EntryResource::make($entry)->resolve(),
         );
 
-        return response()->json(['data' => $this->entryToArray($entry, $contentType)], 201);
+        return response()->json(['data' => EntryResource::make($entry)], 201);
     }
 
     public function show(Request $request, string $type, string $id): JsonResponse
@@ -105,12 +101,9 @@ class EntryController extends ManagementController
             return $this->typeNotFound($type);
         }
 
-        $entry = $this->findOrNotFound(Entry::type($type), $id, 'Entry');
-        if ($entry instanceof JsonResponse) {
-            return $entry;
-        }
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
-        return response()->json(['data' => $this->entryToArray($entry, $contentType)]);
+        return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     public function update(Request $request, string $type, string $id): JsonResponse
@@ -123,12 +116,9 @@ class EntryController extends ManagementController
             return $this->typeNotFound($type);
         }
 
-        $entry = $this->findOrNotFound(Entry::type($type), $id, 'Entry');
-        if ($entry instanceof JsonResponse) {
-            return $entry;
-        }
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
-        $before = $this->entryToArray($entry, $contentType);
+        $before = EntryResource::make($entry)->resolve();
 
         try {
             /** @var array<string, mixed> $data */
@@ -146,10 +136,10 @@ class EntryController extends ManagementController
             ip: $request->ip(),
             subject: $entry,
             before: $before,
-            after: $this->entryToArray($entry, $contentType),
+            after: EntryResource::make($entry)->resolve(),
         );
 
-        return response()->json(['data' => $this->entryToArray($entry, $contentType)]);
+        return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     public function destroy(Request $request, string $type, string $id): Response
@@ -162,12 +152,9 @@ class EntryController extends ManagementController
             return $this->typeNotFound($type);
         }
 
-        $entry = $this->findOrNotFound(Entry::type($type), $id, 'Entry');
-        if ($entry instanceof JsonResponse) {
-            return $entry;
-        }
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
-        $before = $this->entryToArray($entry, $contentType);
+        $before = EntryResource::make($entry)->resolve();
 
         $this->manager->delete($entry, $this->actorId());
 
@@ -191,10 +178,7 @@ class EntryController extends ManagementController
             return $this->typeNotFound($type);
         }
 
-        $entry = $this->findOrNotFound(Entry::type($type), $id, 'Entry');
-        if ($entry instanceof JsonResponse) {
-            return $entry;
-        }
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
         $atRaw = $request->input('publish_at');
         $at = is_string($atRaw) ? Carbon::parse($atRaw) : null;
@@ -213,7 +197,7 @@ class EntryController extends ManagementController
             after: ['status' => $entry->status->value, 'published_at' => $entry->published_at?->toIso8601String()],
         );
 
-        return response()->json(['data' => $this->entryToArray($entry, $contentType)]);
+        return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     public function unpublish(Request $request, string $type, string $id): JsonResponse
@@ -226,10 +210,7 @@ class EntryController extends ManagementController
             return $this->typeNotFound($type);
         }
 
-        $entry = $this->findOrNotFound(Entry::type($type), $id, 'Entry');
-        if ($entry instanceof JsonResponse) {
-            return $entry;
-        }
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
         if ($entry->status !== EntryStatus::Published) {
             return response()->json(['message' => 'Entry is not published.'], 422);
@@ -248,7 +229,7 @@ class EntryController extends ManagementController
             subject: $entry,
         );
 
-        return response()->json(['data' => $this->entryToArray($entry, $contentType)]);
+        return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     public function draft(Request $request, string $type, string $id): JsonResponse
@@ -261,10 +242,7 @@ class EntryController extends ManagementController
             return $this->typeNotFound($type);
         }
 
-        $entry = $this->findOrNotFound(Entry::type($type), $id, 'Entry');
-        if ($entry instanceof JsonResponse) {
-            return $entry;
-        }
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
         if ($entry->status !== EntryStatus::Published) {
             return response()->json(['message' => 'Can only create a draft of a published entry.'], 422);
@@ -276,7 +254,7 @@ class EntryController extends ManagementController
             return response()->json(['message' => $e->getMessage()], 400);
         }
 
-        return response()->json(['data' => $this->entryToArray($draft, $contentType)], 201);
+        return response()->json(['data' => EntryResource::make($draft)], 201);
     }
 
     public function revisions(Request $request, string $type, string $id): JsonResponse
@@ -289,10 +267,7 @@ class EntryController extends ManagementController
             return $this->typeNotFound($type);
         }
 
-        $entry = $this->findOrNotFound(Entry::type($type), $id, 'Entry');
-        if ($entry instanceof JsonResponse) {
-            return $entry;
-        }
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
         $revisions = Revision::query()
             ->where('entry_type', $type)
@@ -335,10 +310,7 @@ class EntryController extends ManagementController
             ->where('entry_type', $type)
             ->where('entry_id', strtolower($id));
 
-        $rev = $this->findOrNotFound($revisionQuery, $revision, 'Revision');
-        if ($rev instanceof JsonResponse) {
-            return $rev;
-        }
+        $rev = $this->findOrFail($revisionQuery, $revision, 'Revision');
 
         try {
             $entry = $this->manager->restore($rev->id, $this->actorId());
@@ -354,7 +326,7 @@ class EntryController extends ManagementController
             after: ['restored_from_revision' => $rev->id],
         );
 
-        return response()->json(['data' => $this->entryToArray($entry, $contentType)]);
+        return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     private function resolveType(string $handle): ?ContentType
@@ -365,27 +337,5 @@ class EntryController extends ManagementController
     private function typeNotFound(string $type): JsonResponse
     {
         return response()->json(['message' => "Content type '{$type}' not found."], 404);
-    }
-
-    /** @return array<string, mixed> */
-    private function entryToArray(Entry $entry, ContentType $type): array
-    {
-        $data = [
-            'id' => $entry->id,
-            'type' => $type->handle,
-            'status' => $entry->status->value,
-            'locale' => $entry->locale,
-            'author_id' => $entry->author_id,
-            'draft_of' => $entry->draft_of,
-            'published_at' => $entry->published_at?->toIso8601String(),
-            'created_at' => $entry->created_at?->toIso8601String(),
-            'updated_at' => $entry->updated_at?->toIso8601String(),
-        ];
-
-        foreach ($type->columnFields() as $field) {
-            $data[$field->handle] = $entry->getAttribute($field->handle);
-        }
-
-        return $data;
     }
 }

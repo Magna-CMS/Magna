@@ -59,38 +59,44 @@ class RunBackupJob implements ShouldQueue
             return;
         }
 
-        $run = BackupRun::create([
-            'type' => $this->type,
-            'status' => BackupRun::STATUS_RUNNING,
-            'triggered_by' => $this->triggeredBy,
-            'started_at' => now(),
-        ]);
-
-        $this->setProgress('running', 'Backing up…');
-        $settings = BackupSettings::get();
-
+        // Outer try/finally guarantees the lock is released even if the setup
+        // steps below (BackupRun::create, setProgress, settings load) throw —
+        // previously only the $service->run() call was inside a finally, so a
+        // failure before it leaked the lock for its full 1800s TTL.
         try {
-            $result = $service->run($settings);
-            $outcomes->succeeded($run, $result, $this->triggeredBy);
+            $run = BackupRun::create([
+                'type' => $this->type,
+                'status' => BackupRun::STATUS_RUNNING,
+                'triggered_by' => $this->triggeredBy,
+                'started_at' => now(),
+            ]);
 
-            $this->setProgress('completed', 'Backup completed.');
-            $this->notifySuccess($settings, $run);
-            $this->notifySizeWarning($settings, $run);
-            NotificationRecipients::notifyDashboard(
-                title: 'Backup completed',
-                body: ucfirst($run->type)." backup completed successfully ({$this->humanBytes($result->sizeBytes)}).",
-                status: 'success',
-            );
-        } catch (Throwable $e) {
-            $outcomes->failed($run, $e, $this->triggeredBy);
+            $this->setProgress('running', 'Backing up…');
+            $settings = BackupSettings::get();
 
-            $this->setProgress('failed', $e->getMessage());
-            $this->notifyFailure($settings, $run);
-            NotificationRecipients::notifyDashboard(
-                title: "Backup didn't complete",
-                body: ucfirst($run->type)." backup failed: {$e->getMessage()}",
-                status: 'danger',
-            );
+            try {
+                $result = $service->run($settings);
+                $outcomes->succeeded($run, $result, $this->triggeredBy);
+
+                $this->setProgress('completed', 'Backup completed.');
+                $this->notifySuccess($settings, $run);
+                $this->notifySizeWarning($settings, $run);
+                NotificationRecipients::notifyDashboard(
+                    title: 'Backup completed',
+                    body: ucfirst($run->type)." backup completed successfully ({$this->humanBytes($result->sizeBytes)}).",
+                    status: 'success',
+                );
+            } catch (Throwable $e) {
+                $outcomes->failed($run, $e, $this->triggeredBy);
+
+                $this->setProgress('failed', $e->getMessage());
+                $this->notifyFailure($settings, $run);
+                NotificationRecipients::notifyDashboard(
+                    title: "Backup didn't complete",
+                    body: ucfirst($run->type)." backup failed: {$e->getMessage()}",
+                    status: 'danger',
+                );
+            }
         } finally {
             $lock->release();
         }

@@ -9,7 +9,6 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Magna\Auth\PermissionRegistry;
-use Magna\Install\Installer;
 use Magna\Content\Console\AddPerformanceIndexesCommand;
 use Magna\Content\Console\MakeTypeCommand;
 use Magna\Content\Console\PublishScheduledCommand;
@@ -35,6 +34,7 @@ use Magna\Content\FieldTypes\SlugField;
 use Magna\Content\FieldTypes\TextareaField;
 use Magna\Content\FieldTypes\TextField;
 use Magna\Content\FieldTypes\UrlField;
+use Magna\Install\Installer;
 
 class ContentServiceProvider extends ServiceProvider
 {
@@ -115,7 +115,13 @@ class ContentServiceProvider extends ServiceProvider
         }
 
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
-            $schedule->command('magna:publish:scheduled')->everyMinute();
+            // withoutOverlapping: this runs every minute and mutates state
+            // (publishes/unpublishes due entries, firing EntryPublished /
+            // EntryUnpublished — which enqueue webhooks and invalidate caches).
+            // If one tick ever runs long (large backlog, slow DB) the next tick
+            // must not start concurrently and double-process the same due
+            // entries. Mirrors magna:updater:check, which already guards itself.
+            $schedule->command('magna:publish:scheduled')->everyMinute()->withoutOverlapping();
 
             // Stage 13 (S5-02): this command existed but was never actually
             // scheduled — magna_revisions only got pruned if an operator

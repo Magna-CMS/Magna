@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Magna\Contracts\HandlesPersonalData as PluginHandlesPersonalData;
 use Magna\Plugins\PluginManager;
+use Magna\Privacy\Contracts\HandlesPersonalData as LegacyHandlesPersonalData;
 use Magna\Users\User;
 
 /**
@@ -49,7 +50,8 @@ class PrivacyExportCommand extends Command
         ];
 
         foreach ($plugins->getEnabled() as $name => $plugin) {
-            if ($plugin instanceof PluginHandlesPersonalData) {
+            // Either contract — see PrivacyEraseCommand::handlesPersonalData().
+            if ($plugin instanceof PluginHandlesPersonalData || $plugin instanceof LegacyHandlesPersonalData) {
                 $export['plugins'][$name] = $plugin->exportPersonalData($user);
                 $this->line("  + plugin:{$name}");
             }

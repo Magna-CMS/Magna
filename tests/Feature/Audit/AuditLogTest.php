@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+use Filament\Facades\Filament;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 use Magna\Audit\AuditLog;
 use Magna\Auth\Role;
 use Magna\Settings\GeneralSettings;
@@ -33,23 +35,24 @@ it('prevents deleting an audit log entry', function (): void {
 // ── Auto-audited events ───────────────────────────────────────────────────────
 
 it('records an audit entry on successful login', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('magna'));
     $user = User::factory()->create(['password' => Hash::make('secret')]);
+    $user->assignRole(Role::factory()->create());
 
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'secret',
-    ]);
+    Livewire::test(Magna\Auth\Filament\Login::class)
+        ->fillForm(['email' => $user->email, 'password' => 'secret'])
+        ->call('authenticate');
 
     expect(AuditLog::query()->where('action', 'auth.login.success')->count())->toBe(1);
 });
 
 it('records an audit entry on failed login', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('magna'));
     $user = User::factory()->create();
 
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'wrong-password',
-    ]);
+    Livewire::test(Magna\Auth\Filament\Login::class)
+        ->fillForm(['email' => $user->email, 'password' => 'wrong-password'])
+        ->call('authenticate');
 
     expect(AuditLog::query()->where('action', 'auth.login.failure')->count())->toBe(1);
 });

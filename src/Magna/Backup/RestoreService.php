@@ -101,12 +101,41 @@ class RestoreService
 
         try {
             $this->guardAgainstOversizedArchive($zip);
+            $this->guardAgainstUnsafePaths($zip);
 
             if (! $zip->extractTo($extractDir)) {
                 throw RestoreFailedException::corruptArchive();
             }
         } finally {
             $zip->close();
+        }
+    }
+
+    /**
+     * Defence in depth against zip-slip. A backup may be *imported* from an
+     * untrusted third party (Import accepts an externally-supplied archive), so
+     * reject any entry whose name could escape the extraction directory —
+     * traversal (`..`), an absolute path, or a null byte — before extractTo()
+     * touches disk. Mirrors the plugin installer's ZipSafeExtractor so the same
+     * class of operation is held to the same bar, rather than relying on the
+     * PHP/libzip version's own sanitisation.
+     */
+    private function guardAgainstUnsafePaths(ZipArchive $zip): void
+    {
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if ($name === false) {
+                throw RestoreFailedException::corruptArchive();
+            }
+
+            if (
+                str_contains($name, '..')
+                || str_starts_with($name, '/')
+                || str_starts_with($name, '\\')
+                || str_contains($name, "\0")
+            ) {
+                throw RestoreFailedException::unsafeArchivePath($name);
+            }
         }
     }
 

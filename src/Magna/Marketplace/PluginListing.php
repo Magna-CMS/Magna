@@ -15,6 +15,7 @@ final class PluginListing
     /**
      * @param  list<string>  $categories
      * @param  list<string>  $permissions
+     * @param  array<string, int>  $prices  term => price in minor units
      */
     public function __construct(
         public readonly string $package,
@@ -30,7 +31,30 @@ final class PluginListing
         public readonly ?float $rating = null,
         public readonly int $ratingsCount = 0,
         public readonly ?string $website = null,
+        // Commerce, absent from marketplaces older than the licence engine.
+        // Every field below defaults to what a free plugin looks like, so an
+        // older catalog still lists correctly instead of half-rendering a
+        // price nobody can pay.
+        public readonly string $productType = 'plugin',
+        public readonly string $pricingModel = 'free',
+        public readonly bool $licenseRequired = false,
+        public readonly string $currency = 'INR',
+        public readonly array $prices = [],
+        public readonly bool $trialEnabled = false,
+        public readonly ?int $trialDays = null,
+        public readonly int $seatLimit = 1,
     ) {}
+
+    /**
+     * Whether this product is sold rather than pulled straight from Composer.
+     *
+     * A paid listing with no usable price is treated as not-for-sale: the
+     * buyer would otherwise be shown a button the gateway refuses.
+     */
+    public function isPaid(): bool
+    {
+        return $this->pricingModel === 'paid' && $this->prices !== [];
+    }
 
     /**
      * Build a listing from a raw API entry. Returns null when required fields
@@ -67,6 +91,18 @@ final class PluginListing
 
         $rating = $data['rating'] ?? null;
 
+        // Prices arrive as term => minor units. Anything non-numeric or
+        // non-positive is dropped here rather than defended against at every
+        // render site.
+        $prices = [];
+        if (is_array($data['prices'] ?? null)) {
+            foreach ($data['prices'] as $term => $price) {
+                if (is_string($term) && is_numeric($price) && (int) $price > 0) {
+                    $prices[$term] = (int) $price;
+                }
+            }
+        }
+
         return new self(
             package: $package,
             name: $name,
@@ -81,6 +117,14 @@ final class PluginListing
             rating: is_int($rating) || is_float($rating) ? (float) $rating : null,
             ratingsCount: is_int($data['ratingsCount'] ?? null) ? $data['ratingsCount'] : 0,
             website: is_string($data['website'] ?? null) ? $data['website'] : null,
+            productType: ($data['productType'] ?? null) === 'theme' ? 'theme' : 'plugin',
+            pricingModel: ($data['pricingModel'] ?? null) === 'paid' ? 'paid' : 'free',
+            licenseRequired: (bool) ($data['licenseRequired'] ?? false),
+            currency: is_string($data['currency'] ?? null) && $data['currency'] !== '' ? $data['currency'] : 'INR',
+            prices: $prices,
+            trialEnabled: (bool) ($data['trialEnabled'] ?? false),
+            trialDays: is_numeric($data['trialDays'] ?? null) ? (int) $data['trialDays'] : null,
+            seatLimit: is_numeric($data['seatLimit'] ?? null) ? max(1, (int) $data['seatLimit']) : 1,
         );
     }
 

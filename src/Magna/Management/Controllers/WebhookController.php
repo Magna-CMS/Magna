@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Magna\Webhooks\Http\Resources\WebhookSubscriptionResource;
 use Magna\Webhooks\Support\NotPrivateUrlRule;
 use Magna\Webhooks\WebhookSubscription;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,7 +35,7 @@ class WebhookController extends ManagementController
         $subs = WebhookSubscription::query()->orderByDesc('created_at')->get();
 
         return response()->json([
-            'data' => $subs->map(fn (WebhookSubscription $s): array => $this->subToArray($s))->all(),
+            'data' => WebhookSubscriptionResource::collection($subs),
         ]);
     }
 
@@ -57,29 +58,23 @@ class WebhookController extends ManagementController
             'active' => true,
         ]);
 
-        return response()->json(['data' => $this->subToArray($sub)], 201);
+        return response()->json(['data' => WebhookSubscriptionResource::make($sub)], 201);
     }
 
     public function show(string $webhook): JsonResponse
     {
         Gate::authorize('webhooks.manage');
 
-        $sub = $this->findOrNotFound(WebhookSubscription::query(), $webhook, 'Webhook');
-        if ($sub instanceof JsonResponse) {
-            return $sub;
-        }
+        $sub = $this->findOrFail(WebhookSubscription::query(), $webhook, 'Webhook');
 
-        return response()->json(['data' => $this->subToArray($sub)]);
+        return response()->json(['data' => WebhookSubscriptionResource::make($sub)]);
     }
 
     public function update(Request $request, string $webhook): JsonResponse
     {
         Gate::authorize('webhooks.manage');
 
-        $sub = $this->findOrNotFound(WebhookSubscription::query(), $webhook, 'Webhook');
-        if ($sub instanceof JsonResponse) {
-            return $sub;
-        }
+        $sub = $this->findOrFail(WebhookSubscription::query(), $webhook, 'Webhook');
 
         $validated = $request->validate([
             'url' => ['sometimes', 'url', 'max:2048', new NotPrivateUrlRule],
@@ -92,35 +87,17 @@ class WebhookController extends ManagementController
         $sub->fill($validated);
         $sub->save();
 
-        return response()->json(['data' => $this->subToArray($sub)]);
+        return response()->json(['data' => WebhookSubscriptionResource::make($sub)]);
     }
 
     public function destroy(string $webhook): Response
     {
         Gate::authorize('webhooks.manage');
 
-        $sub = $this->findOrNotFound(WebhookSubscription::query(), $webhook, 'Webhook');
-        if ($sub instanceof JsonResponse) {
-            return $sub;
-        }
+        $sub = $this->findOrFail(WebhookSubscription::query(), $webhook, 'Webhook');
 
         $sub->delete();
 
         return response()->noContent();
-    }
-
-    /** @return array<string, mixed> */
-    private function subToArray(WebhookSubscription $sub): array
-    {
-        return [
-            'id' => $sub->id,
-            'url' => $sub->url,
-            'secret' => $sub->secret,
-            'events' => $sub->events,
-            'active' => $sub->active,
-            'description' => $sub->description,
-            'created_at' => $sub->created_at->toIso8601String(),
-            'updated_at' => $sub->updated_at->toIso8601String(),
-        ];
     }
 }

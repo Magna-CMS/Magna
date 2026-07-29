@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Magna\Admin\Pages;
 
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Magna\AccountCentre\AccountCentreClient;
 use Magna\AccountCentre\AccountCentreSettings;
+use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
+use Magna\Licensing\LicenseClient;
+use Magna\Licensing\LicenseStore;
 
 /**
  * This site's connection to a Magna Account (managemagna.jrstudios.dev) — not
@@ -16,6 +20,10 @@ use Magna\AccountCentre\AccountCentreSettings;
  */
 class AccountCentrePage extends Page
 {
+    // Renewing a term licence from the Licences card. Everything about
+    // paying lives in the trait; onOrderSettled() below is this page's half.
+    use ChecksOutWithRazorpay;
+
     protected static string|\BackedEnum|null $navigationIcon = 'magna-mark';
 
     protected static string|\UnitEnum|null $navigationGroup = 'System';
@@ -54,6 +62,74 @@ class AccountCentrePage extends Page
             'accountEmail' => $settings->accountEmail,
             'connectedAt' => $settings->connectedAt,
             'otherSites' => $otherSites,
+            'licenses' => $settings->connected ? $this->licenses() : [],
+            'localLicenses' => app(LicenseStore::class)->all(),
+            'panel' => $settings->connected ? app(LicenseClient::class)->panel() : null,
+            'invoices' => $settings->connected ? app(LicenseClient::class)->invoices() : [],
         ];
+    }
+
+    /**
+     * Buy another year on a licence this account already owns.
+     *
+     * The licence id is all that is sent: the term and the price come from
+     * the licence itself on the marketplace, so nothing a browser can change
+     * affects what is charged or what is extended.
+     *
+     * Gated on `licensing.manage` like every LicenseController action — the
+     * page is readable on settings.view, but starting a checkout spends the
+     * account's money and a Livewire call reaches this method whether or not
+     * the button was rendered.
+     */
+    public function renew(int $licenseId): void
+    {
+        abort_unless(auth()->user()?->can('licensing.manage') ?? false, 403);
+
+        $product = null;
+
+        foreach ($this->licenses() as $licence) {
+            if ((int) ($licence['id'] ?? 0) === $licenseId) {
+                $product = is_string($licence['product_slug'] ?? null) ? $licence['product_slug'] : null;
+                break;
+            }
+        }
+
+        if ($product === null) {
+            Notification::make()->title('That licence is no longer in your account.')->danger()->send();
+
+            return;
+        }
+
+        $this->beginCheckout(app(LicenseClient::class)->renew($licenseId), $product);
+    }
+
+    /**
+     * The renewal went through. Nothing to install — the plugin is already
+     * on the site — so this just drops the cached wallet and reloads, which
+     * is what makes the new expiry date appear.
+     */
+    protected function onOrderSettled(int $licenseId, string $productSlug): void
+    {
+        Notification::make()
+            ->title($productSlug.' renewed')
+            ->body('Your licence has been extended and updates are entitled again.')
+            ->success()
+            ->send();
+
+        $url = static::getUrl();
+        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 800)');
+    }
+
+    /**
+     * The wallet, as the licence server sees it. Best-effort: an unreachable
+     * server hides the Licences list rather than breaking the page — the
+     * locally cached state (localLicenses) still renders, which is exactly
+     * what an admin needs during an outage.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function licenses(): array
+    {
+        return app(LicenseClient::class)->wallet() ?? [];
     }
 }

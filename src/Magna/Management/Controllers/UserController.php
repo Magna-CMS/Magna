@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Magna\Management\Controllers;
 
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Magna\Auth\Role;
 use Magna\Settings\ApiSettings;
+use Magna\Users\Http\Resources\UserResource;
 use Magna\Users\User;
 
 class UserController extends ManagementController
@@ -20,15 +19,12 @@ class UserController extends ManagementController
 
         $apiSettings = ApiSettings::get();
         $perPage = min(max($request->integer('per_page', $apiSettings->default_per_page), 1), $apiSettings->max_per_page);
-        $paginator = User::query()->orderByDesc('created_at')->paginate($perPage);
-
-        /** @var array<int, array<string, mixed>> $items */
-        $items = collect($paginator->items())->map(
-            fn (User $u): array => $this->userToArray($u)
-        )->all();
+        // Eager-load roles: UserResource reads the loaded relation, so without
+        // this each row would fire its own roles query (N+1).
+        $paginator = User::query()->with('roles')->orderByDesc('created_at')->paginate($perPage);
 
         return response()->json([
-            'data' => $items,
+            'data' => UserResource::collection($paginator->items()),
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'per_page' => $paginator->perPage(),
@@ -42,22 +38,16 @@ class UserController extends ManagementController
     {
         Gate::authorize('users.view');
 
-        $record = $this->findOrNotFound(User::query(), $user, 'User');
-        if ($record instanceof JsonResponse) {
-            return $record;
-        }
+        $record = $this->findOrFail(User::query(), $user, 'User');
 
-        return response()->json(['data' => $this->userToArray($record)]);
+        return response()->json(['data' => UserResource::make($record)]);
     }
 
     public function update(Request $request, string $user): JsonResponse
     {
         Gate::authorize('users.manage');
 
-        $record = $this->findOrNotFound(User::query(), $user, 'User');
-        if ($record instanceof JsonResponse) {
-            return $record;
-        }
+        $record = $this->findOrFail(User::query(), $user, 'User');
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -79,24 +69,6 @@ class UserController extends ManagementController
 
         $record->save();
 
-        return response()->json(['data' => $this->userToArray($record)]);
-    }
-
-    /** @return array<string, mixed> */
-    private function userToArray(User $user): array
-    {
-        /** @var Collection<int, Role> $roles */
-        $roles = $user->roles()->get();
-
-        return [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'status' => $user->status->value,
-            'roles' => $roles->pluck('name')->all(),
-            'email_verified_at' => $user->email_verified_at?->toIso8601String(),
-            'created_at' => $user->created_at?->toIso8601String(),
-            'updated_at' => $user->updated_at?->toIso8601String(),
-        ];
+        return response()->json(['data' => UserResource::make($record)]);
     }
 }

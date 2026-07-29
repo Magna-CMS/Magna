@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.2.0--beta-orange?style=for-the-badge" alt="v1.2.0-beta">
+  <img src="https://img.shields.io/badge/version-v1.3.0--beta-orange?style=for-the-badge" alt="v1.3.0-beta">
   <img src="https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP 8.3+">
   <img src="https://img.shields.io/badge/Laravel-13-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel 13">
   <img src="https://img.shields.io/badge/Filament-5-purple?style=for-the-badge" alt="Filament 5">
@@ -86,7 +86,7 @@
 
 ## 🚧 Status
 
-**Magna is in active development — currently in public beta (v1.2.0-beta).** We are building in public, spec-first: every subsystem is fully specified *before* it is coded, and the specifications live in this repository. Star the repo to follow the road to stable 1.0.
+**Magna is in active development — currently in public beta (v1.3.0-beta).** We are building in public, spec-first: every subsystem is fully specified *before* it is coded, and the specifications live in this repository. Star the repo to follow the road to stable 1.0.
 
 **Working today:**  You Can install & try Magna CMS in your sever using Web Installer or CLI .
 
@@ -94,9 +94,9 @@
 
 Ready to try Magna CMS? Grab the latest release — download it, run the installer, and you're ready to go.
 
-[![Download Magna CMS](https://img.shields.io/badge/Download-Magna%20CMS%20v1.2.0-7c3aed?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Magna-CMS/Magna/releases)
+[![Download Magna CMS](https://img.shields.io/badge/Download-Magna%20CMS%20v1.3.0--beta-7c3aed?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Magna-CMS/Magna/releases)
 
-**[⬇ Download Magna CMS v1.2.0](https://github.com/Magna-CMS/Magna/releases)**
+**[⬇ Download Magna CMS v1.3.0-beta](https://github.com/Magna-CMS/Magna/releases)**
 
 
 ---
@@ -288,7 +288,7 @@ plugins-dev/vendor/my-plugin/
 
 | Plugin | Description | Status |
 |---|---|---|
-| **[Magna Docs](https://github.com/jish-44/Magna-Docs)** | Hierarchical documentation with Markdown editor, collections, multi-language, REST API | `v1.0.0` ✅ |
+| **[Magna Docs](https://github.com/Magna-CMS/Magna-Docs)** | Hierarchical documentation with Markdown editor, collections, multi-language, REST API | `v1.0.0` ✅ |
 | **Magna Pages** | Block editor, themes, live preview — turns Magna into a full website | Coming soon |
 | **Magna Blog** | Posts, categories, tags, RSS, SEO | Coming soon |
 | **Magna Forms** | Form builder, submission storage, email notifications | Coming soon |
@@ -309,7 +309,7 @@ plugins-dev/vendor/my-plugin/
 ### Step 1 — Get the code running
 
 ```bash
-git clone https://github.com/jish-44/Magna.git my-cms
+git clone https://github.com/Magna-CMS/Magna.git my-cms
 cd my-cms
 composer install
 npm install && npm run build
@@ -654,7 +654,7 @@ Found a vulnerability? **Do not open a public issue.** See [SECURITY.md](SECURIT
 ## ❓ FAQ
 
 **Q: Is Magna production-ready?**  
-A: Magna is in public beta (v1.0.0-beta). The kernel, auth, RBAC, and plugin system are solid. The content engine and delivery API are in active development. We recommend waiting for stable 1.0 for production, or running beta on low-risk projects and contributing feedback.
+A: Magna is in public beta (v1.3.0-beta). The kernel, auth, RBAC, and plugin system are solid. The content engine and delivery API are in active development. We recommend waiting for stable 1.0 for production, or running beta on low-risk projects and contributing feedback.
 
 **Q: What database does Magna use?**  
 A: MySQL 8+ and PostgreSQL 14+ are the primary targets. SQLite is fully supported for development and testing. Each content type gets a real table with real columns — no EAV, so your queries stay fast even at scale.
@@ -747,8 +747,8 @@ The "Magna" name and logo are trademarks. The [store plan](docs/store-plan.md) d
 </p>
 
 <p align="center">
-  <a href="https://github.com/jish-44/Magna">GitHub</a> •
-  <a href="https://github.com/jish-44/Magna-Docs">Magna Docs Plugin</a> •
+  <a href="https://github.com/Magna-CMS/Magna">GitHub</a> •
+  <a href="https://github.com/Magna-CMS/Magna-Docs">Magna Docs Plugin</a> •
   <a href="SECURITY.md">Security</a> •
   <a href="docs/build-plan.md">Build Plan</a>
 </p>

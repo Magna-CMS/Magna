@@ -36,6 +36,15 @@ it('redirects to the connect flow for an allowlisted provider', function (): voi
     expect($response->headers->get('Location'))->toContain('/account/connect/github');
 });
 
+it('redirects to the connect flow for Microsoft', function (): void {
+    $this->actingAs(accountCentreSuperAdmin());
+
+    $response = $this->get(route('account-centre.connect', 'microsoft'));
+
+    $response->assertRedirect();
+    expect($response->headers->get('Location'))->toContain('/account/connect/microsoft');
+});
+
 it('rejects a provider that is not on the allowlist', function (): void {
     $this->actingAs(accountCentreSuperAdmin());
 

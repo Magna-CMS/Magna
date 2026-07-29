@@ -208,6 +208,15 @@
                                             Version {{ $p['update_version'] }} is available.
                                             <button wire:click="update('{{ $p['name'] }}')" class="font-semibold underline hover:no-underline transition-all">Update now</button>
                                         </div>
+                                    @elseif ($p['license_blocked_version'] ?? null)
+                                        {{-- A newer version exists that this site's licence does not
+                                             cover. Deliberately not an Update button: the download
+                                             would be refused. Say the true thing instead. --}}
+                                        <div class="mt-2.5 inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-[12.5px] text-primary-800 dark:border-primary-700/50 dark:bg-primary-500/10 dark:text-primary-300">
+                                            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                                            Version {{ $p['license_blocked_version'] }} is available — your licence no longer covers updates.
+                                            <a href="{{ \Magna\Admin\Pages\AccountCentrePage::getUrl() }}" class="font-semibold underline transition-all hover:no-underline">Renew</a>
+                                        </div>
                                     @endif
                                 </div>
                             </div>
@@ -358,6 +367,15 @@
                                 : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400' }}">
                             {{ $p['source'] }}
                         </span>
+                        @if ($p['is_paid'] ?? false)
+                            <span
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-400"
+                                title="Bought here and delivered by your licence — {{ $p['seat_limit'] ?? 1 }} domain(s) per licence."
+                            >
+                                <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                                Licensed
+                            </span>
+                        @endif
                         @if (! empty($p['rating']))
                             <span class="inline-flex items-center gap-1 text-amber-500" title="{{ $p['ratings_count'] }} rating(s)">
                                 <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.28 3.94a1 1 0 00.95.69h4.15c.97 0 1.37 1.24.59 1.81l-3.36 2.44a1 1 0 00-.36 1.12l1.28 3.94c.3.92-.75 1.69-1.54 1.12l-3.36-2.44a1 1 0 00-1.18 0l-3.36 2.44c-.79.57-1.84-.2-1.54-1.12l1.28-3.94a1 1 0 00-.36-1.12L2.83 9.37c-.78-.57-.38-1.81.59-1.81h4.15a1 1 0 00.95-.69l1.28-3.94z"/></svg>
@@ -383,13 +401,40 @@
                                 Report
                             </button>
                         </div>
-                        <button
-                            wire:click="requestInstall('{{ $p['name'] }}')"
-                            class="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors
-                                {{ $isThirdParty
-                                    ? 'bg-warning-500 text-white hover:bg-warning-600'
-                                    : 'bg-primary-600 text-white hover:bg-primary-700' }}"
-                        >Install</button>
+                        @if ($p['is_paid'] ?? false)
+                            {{-- Paid products are bought, not pulled from Composer:
+                                 the licence is what fetches the bytes. --}}
+                            @php
+                                $symbol = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£'][$p['currency'] ?? 'INR'] ?? (($p['currency'] ?? '').' ');
+                            @endphp
+                            <div class="flex items-center gap-2">
+                                @if ($p['trial_enabled'] ?? false)
+                                    <button
+                                        wire:click="startTrial('{{ $p['name'] }}')"
+                                        wire:loading.attr="disabled"
+                                        class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
+                                    >Try {{ $p['trial_days'] ?? 14 }} days</button>
+                                @endif
+                                @foreach ($p['prices'] ?? [] as $term => $price)
+                                    <button
+                                        wire:click="buy('{{ $p['name'] }}', '{{ $term }}')"
+                                        wire:loading.attr="disabled"
+                                        title="{{ $term === 'annual' ? 'Yearly licence — renews once a year' : 'One-time payment, updates for life' }}"
+                                        class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-60"
+                                    >
+                                        {{ $symbol }}{{ number_format(((int) $price) / 100, ((int) $price) % 100 === 0 ? 0 : 2) }}{{ $term === 'annual' ? '/yr' : '' }}
+                                    </button>
+                                @endforeach
+                            </div>
+                        @else
+                            <button
+                                wire:click="requestInstall('{{ $p['name'] }}')"
+                                class="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors
+                                    {{ $isThirdParty
+                                        ? 'bg-warning-500 text-white hover:bg-warning-600'
+                                        : 'bg-primary-600 text-white hover:bg-primary-700' }}"
+                            >Install</button>
+                        @endif
                     </div>
                 </div>
             @endforeach
@@ -422,6 +467,8 @@
     @endif
 
 @endif
+
+@include('magna::admin.partials.checkout')
 
 <x-filament-actions::modals />
 

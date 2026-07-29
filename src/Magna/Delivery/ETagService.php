@@ -5,19 +5,22 @@ declare(strict_types=1);
 namespace Magna\Delivery;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Manages ETag generation, caching, and conditional-request 304 detection.
  *
- * ETags are SHA-256 hashes of the response JSON, stored in the tagged cache.
- * The cache tag 'magna.delivery.type.{handle}' is flushed on content changes,
- * automatically invalidating all ETags for that type.
+ * ETags are SHA-256 hashes of the response JSON, stored via TagAwareCache so
+ * they work on the default (non-taggable) database cache store as well as
+ * taggable stores. The cache tag 'magna.delivery.type.{handle}' is flushed on
+ * content changes, automatically invalidating all ETags for that type.
  */
 final class ETagService
 {
+    public function __construct(private readonly TagAwareCache $cache) {}
+
     /**
-     * Build a stable cache key for a given request (path + sorted query params).
+     * Build a stable cache key for a given request (path + sorted query params
+     * + the caller's authorisation scope).
      */
     public function cacheKey(Request $request): string
     {
@@ -25,7 +28,43 @@ final class ETagService
         $params = $request->query();
         ksort($params);
 
-        return 'magna.delivery.etag.'.hash('sha256', $request->path().'?'.http_build_query($params));
+        return 'magna.delivery.etag.'.hash(
+            'sha256',
+            $request->path().'?'.http_build_query($params).'|'.self::scopeSignature($request),
+        );
+    }
+
+    /**
+     * What the caller is allowed to see, folded into the cache key.
+     *
+     * Today every delivery token carries the same flat `delivery` ability, so
+     * this collapses to a single bucket and costs nothing. It is here because
+     * of what happens the day it doesn't: the moment a token is scoped to a
+     * locale, a subset of types, or a tenant, a key built from path+query
+     * alone starts serving one caller's response to another — a cross-tenant
+     * content leak introduced by a change in a completely different file, with
+     * nothing in Delivery to notice it. Cheap now, unfixable-in-hindsight
+     * later.
+     */
+    public static function scopeSignature(Request $request): string
+    {
+        $user = $request->user();
+
+        // The user resolver is typed across every guard's model, and only the
+        // token-bearing ones expose currentAccessToken().
+        $token = $user !== null && method_exists($user, 'currentAccessToken')
+            ? $user->currentAccessToken()
+            : null;
+
+        if ($token === null) {
+            return 'anonymous';
+        }
+
+        /** @var list<string> $abilities */
+        $abilities = is_array($token->abilities ?? null) ? $token->abilities : [];
+        sort($abilities);
+
+        return hash('sha256', implode(',', $abilities));
     }
 
     /**
@@ -42,8 +81,8 @@ final class ETagService
             return null;
         }
 
-        $cached = Cache::tags(['magna.delivery', 'magna.delivery.type.'.$typeHandle])->get($cacheKey);
-        if (! is_string($cached)) {
+        $cached = $this->cache->get($cacheKey, ['magna.delivery', 'magna.delivery.type.'.$typeHandle]);
+        if ($cached === null) {
             return null;
         }
 
@@ -55,8 +94,7 @@ final class ETagService
      */
     public function store(string $cacheKey, string $etag, string $typeHandle): void
     {
-        Cache::tags(['magna.delivery', 'magna.delivery.type.'.$typeHandle])
-            ->put($cacheKey, $etag, 3600);
+        $this->cache->put($cacheKey, $etag, 3600, ['magna.delivery', 'magna.delivery.type.'.$typeHandle]);
     }
 
     /**
@@ -64,7 +102,7 @@ final class ETagService
      */
     public function invalidateType(string $typeHandle): void
     {
-        Cache::tags(['magna.delivery.type.'.$typeHandle])->flush();
+        $this->cache->flushTag('magna.delivery.type.'.$typeHandle);
     }
 
     /**
@@ -73,7 +111,7 @@ final class ETagService
      */
     public function invalidateAllMedia(): void
     {
-        Cache::tags(['magna.delivery'])->flush();
+        $this->cache->flushTag('magna.delivery');
     }
 
     /**

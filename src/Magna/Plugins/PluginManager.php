@@ -4,30 +4,21 @@ declare(strict_types=1);
 
 namespace Magna\Plugins;
 
-use Illuminate\Auth\Events\Failed;
-use Illuminate\Auth\Events\Login;
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Routing\Router;
-use Illuminate\Support\Arr;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
-use Magna\Audit\Listeners\RecordLoginFailure;
-use Magna\Audit\Listeners\RecordLoginSuccess;
-use Magna\Auth\PermissionRegistry;
 use Magna\Blocks\BlockRegistry;
-use Magna\Content\Models\ContentTypeRecord;
 use Magna\Content\SchemaRegistry;
-use Magna\Content\SchemaSyncer;
 use Magna\Contracts\DecoratesDeliveryResponse;
 use Magna\Contracts\ExtendsEntryForm;
 use Magna\Contracts\RegistersAdminNavigation;
 use Magna\Contracts\RegistersBlocks;
+use Magna\Licensing\LicenseGate;
 use Magna\MagnaServiceProvider;
+use Magna\Plugins\Exceptions\DependencyException;
 use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\Exceptions\PluginNotFoundException;
 use Throwable;
@@ -40,62 +31,58 @@ class PluginManager
     public function __construct(
         private readonly Application $app,
         private readonly PluginDiscovery $discovery,
+        private readonly PluginSecurityGuard $security,
+        private readonly PluginContentTypeSyncer $contentTypes,
+        private readonly PluginRouteRegistrar $routes,
+        private readonly DependencyResolver $dependencies,
+        private readonly PluginCommandRegistrar $commandRegistrar,
     ) {}
 
     /**
      * Called from PluginsServiceProvider::boot(). Loads all enabled plugins and
-     * runs register() then boot() on each, registering their routes and permissions.
+     * runs register() then boot() on each, registering their routes and
+     * permissions. A plugin's register()/boot() can tamper with
+     * security-critical middleware/singletons/listeners; PluginSecurityGuard
+     * snapshots those before the boot pass and reverts any tampering after —
+     * see that class for the full threat model.
      */
-    /**
-     * Stage 13 (S1-07): a plugin's register()/boot() runs with the full
-     * Application container and Router in scope — nothing in PHP or
-     * Laravel stops it from re-aliasing a security-critical middleware
-     * name (e.g. `magna.api` → a no-op class, defanging every Management
-     * API route) or rebinding a security-critical singleton (e.g.
-     * PermissionRegistry, making every permission check pass). This can't
-     * be prevented outright without a real sandbox, which PHP doesn't have
-     * — but it CAN be detected and reverted every time plugins boot,
-     * closing the "silently persists for the rest of the request/process"
-     * window even though it can't close the instant-of-tampering window
-     * itself. Any detected tamper is logged as critical so it surfaces in
-     * monitoring rather than silently taking effect.
-     *
-     * Stage 13 (S1-09): the same window applies to the login audit trail —
-     * a plugin's boot() can call `Event::forget(Login::class)` (or
-     * `Failed::class`) to silently unregister RecordLoginSuccess /
-     * RecordLoginFailure, so every subsequent login on every guard (the
-     * Filament admin panel's own built-in Login page included — it's a
-     * separate call site from Magna\Auth\Http\Controllers\LoginController
-     * that dispatches the same core Illuminate\Auth\Events\Login/Failed
-     * events) goes unaudited with no error or trace. Converting the two
-     * listeners into inline calls at "the" login call site doesn't close
-     * this for Filament's own login page, which isn't Magna code. Instead
-     * this integrity check verifies the listeners are still attached after
-     * every plugin-boot pass and re-registers them if not.
-     *
-     * @var list<string>
-     */
-    private const PROTECTED_MIDDLEWARE_ALIASES = [
-        'magna.api', 'magna.api.key', 'magna.security-headers',
-        'magna.admin-csp', 'magna.two-factor', 'magna.two-factor-enrolled',
-        'magna.force-https',
-    ];
-
     public function bootEnabledPlugins(): void
     {
         if (! Schema::hasTable('plugins')) {
             return;
         }
 
-        $integritySnapshot = $this->captureSecurityIntegritySnapshot();
+        $integritySnapshot = $this->security->capture();
 
-        /** @var Collection<int, PluginRecord> $records */
-        $records = PluginRecord::query()->where('enabled', true)->get();
+        /** @var Collection<string, PluginRecord> $records */
+        $records = PluginRecord::query()->where('enabled', true)->get()->keyBy('name');
+
+        // A paid plugin whose licence has ended must not run, even if the
+        // plugins table still says enabled. LicenseEnforcer normally disables
+        // it at the next verify, but this check closes the window in between
+        // — and the window that opens if someone flips `enabled` back on by
+        // hand. Cache-only and offline-safe by contract (see LicenseGate);
+        // a plugin with no licence entry, which is every free plugin, is
+        // never affected.
+        $records = $records->reject(
+            fn (PluginRecord $record): bool => app(LicenseGate::class)->isLocked($record->name)
+        );
+
+        // Register/boot in dependency order (a plugin's dependencies boot first).
+        // enable() already validates the graph, so a failure here means on-disk
+        // state drifted (e.g. a dependency was disabled) — fall back to a stable
+        // name order rather than bricking the panel, and let the per-plugin
+        // guards below auto-disable anything that then fails to boot.
+        $order = $this->resolveBootOrder($records);
 
         // First pass — register() on every plugin (so container bindings are in place for boot()).
         // A plugin whose files were deleted after installation must not crash the entire CMS.
         // Auto-disable any plugin that fails here so the admin panel remains accessible.
-        foreach ($records as $record) {
+        foreach ($order as $name) {
+            $record = $records->get($name);
+            if ($record === null) {
+                continue;
+            }
             try {
                 $plugin = $this->instantiate($record->manifest, $record->base_path);
                 $plugin->register();
@@ -110,8 +97,8 @@ class PluginManager
         foreach ($this->booted as $name => $plugin) {
             try {
                 $plugin->boot();
-                $this->loadRoutes($plugin);
-                $this->registerPermissions($plugin->getManifest());
+                $this->routes->loadRoutes($plugin);
+                $this->routes->registerPermissions($plugin->getManifest());
             } catch (Throwable $e) {
                 unset($this->booted[$name]);
                 logger()->error("Plugin [{$name}] auto-disabled during boot: {$e->getMessage()}");
@@ -121,64 +108,7 @@ class PluginManager
         // Dispatch typed contracts.
         $this->dispatchContracts();
 
-        $this->verifySecurityIntegrity($integritySnapshot);
-    }
-
-    /**
-     * @return array{middleware: array<string, string>, permissionRegistry: PermissionRegistry, loginListenerActive: bool, failedListenerActive: bool}
-     */
-    private function captureSecurityIntegritySnapshot(): array
-    {
-        /** @var Router $router */
-        $router = $this->app->make('router');
-        $currentAliases = $router->getMiddleware();
-
-        $middleware = [];
-        foreach (self::PROTECTED_MIDDLEWARE_ALIASES as $alias) {
-            if (isset($currentAliases[$alias])) {
-                $middleware[$alias] = $currentAliases[$alias];
-            }
-        }
-
-        return [
-            'middleware' => $middleware,
-            'permissionRegistry' => $this->app->make(PermissionRegistry::class),
-            'loginListenerActive' => Event::hasListeners(Login::class),
-            'failedListenerActive' => Event::hasListeners(Failed::class),
-        ];
-    }
-
-    /**
-     * @param  array{middleware: array<string, string>, permissionRegistry: PermissionRegistry, loginListenerActive: bool, failedListenerActive: bool}  $snapshot
-     */
-    private function verifySecurityIntegrity(array $snapshot): void
-    {
-        /** @var Router $router */
-        $router = $this->app->make('router');
-        $currentAliases = $router->getMiddleware();
-
-        foreach ($snapshot['middleware'] as $alias => $expectedClass) {
-            $actualClass = $currentAliases[$alias] ?? null;
-            if ($actualClass !== $expectedClass) {
-                Log::critical("A plugin changed the protected middleware alias \"{$alias}\" from {$expectedClass} to ".($actualClass ?? '(removed)').' — reverted.');
-                $router->aliasMiddleware($alias, $expectedClass);
-            }
-        }
-
-        if ($this->app->make(PermissionRegistry::class) !== $snapshot['permissionRegistry']) {
-            Log::critical('A plugin rebound the PermissionRegistry singleton — reverted. Every permission check would otherwise have run against the plugin-supplied replacement for the rest of this process.');
-            $this->app->instance(PermissionRegistry::class, $snapshot['permissionRegistry']);
-        }
-
-        if ($snapshot['loginListenerActive'] && ! Event::hasListeners(Login::class)) {
-            Log::critical('A plugin unregistered all Login event listeners (Event::forget) — the login audit trail re-registered. Every successful login between the unregister and this check went unaudited.');
-            Event::listen(Login::class, RecordLoginSuccess::class);
-        }
-
-        if ($snapshot['failedListenerActive'] && ! Event::hasListeners(Failed::class)) {
-            Log::critical('A plugin unregistered all Failed (login) event listeners (Event::forget) — the login audit trail re-registered. Every failed login between the unregister and this check went unaudited.');
-            Event::listen(Failed::class, RecordLoginFailure::class);
-        }
+        $this->security->verify($integritySnapshot);
     }
 
     /**
@@ -200,6 +130,11 @@ class PluginManager
                 .'but the installed core is '.MagnaServiceProvider::VERSION.'.'
             );
         }
+
+        // Required plugins must be enabled and version-compatible, and nothing
+        // enabled may conflict with this one. Throws DependencyException with a
+        // developer-facing message the admin UI surfaces.
+        $this->dependencies->assertCanEnable($info->manifest, $this->enabledManifests($name));
 
         $this->runMigrations($info->basePath);
 
@@ -238,6 +173,8 @@ class PluginManager
         // Enabling a plugin adds resources/pages/widgets to the admin panel. If the
         // Filament component cache is warm it would hide them, so invalidate it.
         $this->invalidateAdminPanelCache();
+
+        $this->commandRegistrar->register($plugin);
     }
 
     /**
@@ -253,6 +190,17 @@ class PluginManager
             throw new PluginNotFoundException($name);
         }
 
+        // Refuse to disable a plugin another enabled plugin still requires —
+        // otherwise the dependent would boot with a missing dependency.
+        foreach ($this->enabledManifests($name) as $dependent) {
+            if (isset($dependent->requires[$name])) {
+                throw new DependencyException(
+                    "Cannot disable \"{$name}\": \"{$dependent->name}\" requires it. "
+                    ."Disable \"{$dependent->name}\" first."
+                );
+            }
+        }
+
         if (isset($this->booted[$name])) {
             $this->booted[$name]->disable();
             unset($this->booted[$name]);
@@ -265,7 +213,7 @@ class PluginManager
         // SchemaRegistry::loadFromDatabase() keeps re-registering them and their
         // admin navigation lingers. Data tables are preserved (disable never
         // destroys data); re-enable restores the content_types records.
-        $this->deregisterContentTypes($record, dropTables: false);
+        $this->contentTypes->deregister($record, dropTables: false);
 
         $record->update(['enabled' => false, 'disabled_at' => now()]);
 
@@ -299,10 +247,18 @@ class PluginManager
         // on MySQL either way), the PluginRecord would otherwise survive
         // pointing at tables that no longer exist.
         DB::transaction(function () use ($record, $purge): void {
-            $this->deregisterContentTypes($record, dropTables: $purge);
+            $this->contentTypes->deregister($record, dropTables: $purge);
 
             if ($purge) {
-                $this->purge($record);
+                $this->contentTypes->purge($record);
+                // Dropping a plugin's tables while leaving its rows in the
+                // migrations ledger makes the purge irreversible in the worst
+                // way: enable() re-runs migrate, every migration is already
+                // recorded so none of them rebuild the dropped tables, and the
+                // plugin can never be installed again on this database. Forget
+                // the ledger entries too, so a purge really does return the
+                // plugin to "never installed".
+                $this->forgetMigrations($record->base_path);
             }
 
             $record->delete();
@@ -323,11 +279,11 @@ class PluginManager
         $plugin->register();
         $plugin->enable();
         $plugin->boot();
-        $this->loadRoutes($plugin);
-        $this->registerPermissions($manifest);
+        $this->routes->loadRoutes($plugin);
+        $this->routes->registerPermissions($manifest);
         $this->dispatchContractsFor($plugin);
-        $this->syncPluginSchemas($plugin);
-        $this->persistPluginContentTypes($plugin);
+        $this->contentTypes->syncSchemas($plugin);
+        $this->contentTypes->persist($plugin);
     }
 
     /**
@@ -372,7 +328,7 @@ class PluginManager
     /**
      * Ensure every discovered plugin has a row in the `plugins` table so it
      * shows up in the admin plugin list. Plugins that ship pre-bundled in
-     * vendor/ (e.g. a marketplace/hub build) are discoverable but never went
+     * vendor/ (installed as Composer dependencies) are discoverable but never went
      * through the install flow that writes a PluginRecord, so without this
      * they are invisible and can never be enabled. New rows are created
      * DISABLED — a bundled plugin still requires an explicit, deliberate
@@ -393,15 +349,89 @@ class PluginManager
                 continue;
             }
 
-            PluginRecord::create([
-                'name' => $info->manifest->name,
-                'display_name' => $info->manifest->displayName,
-                'version' => $info->manifest->version,
-                'enabled' => false,
-                'base_path' => $info->basePath,
-                'manifest' => $info->manifest->toArray(),
-            ]);
+            // firstOrCreate + swallowing a duplicate-key race keeps this safe
+            // when two admin page loads hit it concurrently (the `name` column
+            // is unique): the loser simply no-ops instead of 500ing. Existing
+            // rows are never touched, so an enabled plugin is never re-disabled.
+            try {
+                PluginRecord::firstOrCreate(
+                    ['name' => $info->manifest->name],
+                    [
+                        'display_name' => $info->manifest->displayName,
+                        'version' => $info->manifest->version,
+                        'enabled' => false,
+                        'base_path' => $info->basePath,
+                        'manifest' => $info->manifest->toArray(),
+                    ],
+                );
+            } catch (UniqueConstraintViolationException) {
+                // Created concurrently by another request — nothing to do.
+            }
         }
+    }
+
+    /**
+     * Build the Manifest map for currently-enabled plugins (optionally excluding
+     * one, e.g. the plugin being enabled/disabled). Records with an unparseable
+     * stored manifest are skipped — they can't participate in the graph.
+     *
+     * @return array<string, Manifest>
+     */
+    private function enabledManifests(?string $exclude = null): array
+    {
+        $map = [];
+
+        foreach (PluginRecord::query()->where('enabled', true)->get() as $record) {
+            if ($record->name === $exclude) {
+                continue;
+            }
+
+            try {
+                $map[$record->name] = Manifest::fromArray($record->manifest);
+            } catch (Throwable) {
+                // Unparseable stored manifest — ignore for graph purposes.
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Determine the deterministic boot order for the enabled records. Falls back
+     * to a stable name order (and logs) if the on-disk graph can't be resolved,
+     * so a drifted dependency never prevents the panel from booting.
+     *
+     * @param  Collection<string, PluginRecord>  $records
+     * @return list<string>
+     */
+    private function resolveBootOrder(Collection $records): array
+    {
+        $manifests = [];
+        foreach ($records as $name => $record) {
+            try {
+                $manifests[$name] = Manifest::fromArray($record->manifest);
+            } catch (Throwable) {
+                // Skip — the register() pass will auto-disable it below.
+            }
+        }
+
+        try {
+            $order = $this->dependencies->resolveBootOrder($manifests);
+        } catch (DependencyException $e) {
+            logger()->error('Plugin dependency resolution failed; booting in name order. '.$e->getMessage());
+            $order = array_keys($manifests);
+            sort($order);
+        }
+
+        // Append any record whose manifest failed to parse so the register()
+        // pass still runs (and auto-disables it).
+        foreach ($records as $name => $record) {
+            if (! in_array($name, $order, true)) {
+                $order[] = $name;
+            }
+        }
+
+        return $order;
     }
 
     /**
@@ -430,60 +460,35 @@ class PluginManager
     }
 
     /**
-     * S1-07: core module route slugs, reserved at manifest-validation time
-     * by ManifestValidator — re-checked here too as defense in depth, since
-     * a plugin installed by an older SDK version (before that check
-     * existed) could still be sitting in the `plugins` table with a
-     * reserved slug. Registering its routes under that slug would let it
-     * permanently shadow the matching core module's `api/v1/{slug}/*`
-     * routes (Laravel's route table is a plain overwritable array keyed by
-     * method+URI, and this module boots after every reserved core module —
-     * see MagnaServiceProvider::register()).
+     * Remove a purged plugin's migrations from the ledger.
      *
-     * @var list<string>
+     * Names come from the plugin's own migrations directory, so only files
+     * that physically belong to it can be forgotten — core's ledger rows are
+     * never touched, even if the plugin's tables happen to share a prefix.
+     *
+     * Laravel records migrations by bare filename, so two plugins shipping an
+     * identically-named migration file would collide here. Timestamp prefixes
+     * make that vanishingly unlikely, and the alternative (recording paths)
+     * would mean diverging from the framework's own schema.
      */
-    private const RESERVED_ROUTE_SLUGS = [
-        'admin', 'audit', 'auth', 'blocks', 'content', 'delivery', 'install',
-        'management', 'media', 'plugins', 'privacy', 'settings', 'users', 'webhooks',
-    ];
-
-    private function loadRoutes(Plugin $plugin): void
+    private function forgetMigrations(string $basePath): void
     {
-        $slug = Arr::last(explode('/', $plugin->getManifest()->name));
+        $migrationsPath = $basePath.'/database/migrations';
 
-        if (in_array($slug, self::RESERVED_ROUTE_SLUGS, true)) {
-            Log::warning(
-                "Plugin \"{$plugin->getManifest()->name}\" uses a reserved route slug \"{$slug}\" — refusing to register its routes to avoid shadowing a core module.",
-            );
-
+        if (! is_dir($migrationsPath) || ! Schema::hasTable('migrations')) {
             return;
         }
 
-        $apiRoutesFile = $plugin->getBasePath().'/routes/api.php';
-        if (file_exists($apiRoutesFile)) {
-            Route::middleware('api')
-                ->prefix('api/v1/'.$slug)
-                ->group($apiRoutesFile);
-        }
+        $names = array_map(
+            static fn (string $file): string => basename($file, '.php'),
+            glob($migrationsPath.'/*.php') ?: [],
+        );
 
-        $webRoutesFile = $plugin->getBasePath().'/routes/web.php';
-        if (file_exists($webRoutesFile)) {
-            Route::middleware('web')
-                ->group($webRoutesFile);
-        }
-    }
-
-    private function registerPermissions(Manifest $manifest): void
-    {
-        if ($manifest->permissions === []) {
+        if ($names === []) {
             return;
         }
 
-        /** @var PermissionRegistry $registry */
-        $registry = $this->app->make(PermissionRegistry::class);
-        foreach ($manifest->permissions as $permission) {
-            $registry->register($permission);
-        }
+        DB::table('migrations')->whereIn('migration', $names)->delete();
     }
 
     private function runMigrations(string $basePath): void
@@ -498,176 +503,6 @@ class PluginManager
             '--realpath' => true,
             '--force' => true,
         ]);
-    }
-
-    private function purge(PluginRecord $record): void
-    {
-        /** @var array<string, mixed> $manifest */
-        $manifest = $record->manifest;
-        $uninstall = $manifest['uninstall'] ?? null;
-        if (! is_array($uninstall)) {
-            return;
-        }
-
-        $tables = $uninstall['tables'] ?? [];
-        if (is_array($tables)) {
-            foreach ($tables as $table) {
-                if (is_string($table) && ! $this->isCoreTable($table)) {
-                    Schema::dropIfExists($table);
-                }
-            }
-        }
-    }
-
-    /**
-     * Prevent a tampered plugin manifest from dropping core Magna tables.
-     * A compromised manifest could otherwise wipe users, payments, etc.
-     */
-    private function isCoreTable(string $table): bool
-    {
-        static $coreTables = [
-            'users', 'personal_access_tokens', 'plugins', 'content_types',
-            'media', 'media_conversions', 'media_folders', 'revisions',
-            'webhook_subscriptions', 'webhook_deliveries', 'admin_action_logs',
-            'cache', 'cache_locks', 'jobs', 'job_batches', 'failed_jobs',
-            'sessions', 'password_reset_tokens',
-        ];
-
-        return in_array($table, $coreTables, true);
-    }
-
-    /**
-     * Remove the content types a plugin owns from the registry and the
-     * content_types table so their navigation and resources disappear.
-     * When $dropTables is true, the physical magna_entries_* tables are
-     * dropped too (destructive — purge only).
-     */
-    private function deregisterContentTypes(PluginRecord $record, bool $dropTables): void
-    {
-        if (! Schema::hasTable('content_types')) {
-            return;
-        }
-
-        $registry = $this->app->bound(SchemaRegistry::class)
-            ? $this->app->make(SchemaRegistry::class)
-            : null;
-
-        foreach ($this->ownedContentTypeHandles($record) as $handle) {
-            ContentTypeRecord::query()->where('handle', $handle)->delete();
-            $registry?->forget($handle);
-
-            if ($dropTables) {
-                Schema::dropIfExists('magna_entries_'.$handle);
-            }
-        }
-    }
-
-    /**
-     * Re-assert content_types records for a plugin's types on enable. Needed
-     * because SchemaSyncer skips the upsert when the physical table already
-     * exists (e.g. re-enabling after a non-purge uninstall), which would
-     * otherwise leave the record missing.
-     */
-    private function persistPluginContentTypes(Plugin $plugin): void
-    {
-        if (! Schema::hasTable('content_types') || ! $this->app->bound(SchemaRegistry::class)) {
-            return;
-        }
-
-        /** @var SchemaRegistry $registry */
-        $registry = $this->app->make(SchemaRegistry::class);
-
-        $handles = $this->ownedContentTypeHandles(
-            $plugin->getBasePath(),
-            $plugin->getManifest()->toArray(),
-        );
-
-        foreach ($handles as $handle) {
-            $type = $registry->get($handle);
-            if ($type === null) {
-                continue;
-            }
-
-            ContentTypeRecord::updateOrCreate(
-                ['handle' => $type->handle],
-                [
-                    'display_name' => $type->displayName,
-                    'is_database_defined' => false,
-                    'schema' => $type->toArray(),
-                ],
-            );
-        }
-    }
-
-    /**
-     * The content type handles a plugin owns. Authoritative source is the
-     * plugin's schemas/ directory; the manifest's provides.contentTypes and
-     * uninstall.contentTypes are merged in as a fallback so a plugin can list
-     * types it registers programmatically rather than via schema files.
-     *
-     * @param  array<string, mixed>|null  $manifest
-     * @return list<string>
-     */
-    private function ownedContentTypeHandles(PluginRecord|string $recordOrBasePath, ?array $manifest = null): array
-    {
-        if ($recordOrBasePath instanceof PluginRecord) {
-            $basePath = $recordOrBasePath->base_path;
-            $manifest = $recordOrBasePath->manifest;
-        } else {
-            $basePath = $recordOrBasePath;
-        }
-
-        $handles = [];
-
-        foreach (glob($basePath.'/schemas/*.json') ?: [] as $file) {
-            $decoded = json_decode((string) file_get_contents($file), true);
-            if (is_array($decoded) && isset($decoded['handle']) && is_string($decoded['handle'])) {
-                $handles[] = $decoded['handle'];
-            }
-        }
-
-        $manifest ??= [];
-        $provides = $manifest['provides'] ?? [];
-        if (is_array($provides) && is_array($provides['contentTypes'] ?? null)) {
-            foreach ($provides['contentTypes'] as $handle) {
-                if (is_string($handle)) {
-                    $handles[] = $handle;
-                }
-            }
-        }
-
-        $uninstall = $manifest['uninstall'] ?? [];
-        if (is_array($uninstall) && is_array($uninstall['contentTypes'] ?? null)) {
-            foreach ($uninstall['contentTypes'] as $handle) {
-                if (is_string($handle)) {
-                    $handles[] = $handle;
-                }
-            }
-        }
-
-        return array_values(array_unique($handles));
-    }
-
-    /**
-     * Create (or update) the magna_entries_* table for every content type that
-     * the plugin declares in its schemas/ directory. Called after enable() loads
-     * those schemas into the SchemaRegistry so SchemaSyncer sees them.
-     */
-    private function syncPluginSchemas(Plugin $plugin): void
-    {
-        if (! is_dir($plugin->getBasePath().'/schemas')) {
-            return;
-        }
-
-        if (! $this->app->bound(SchemaSyncer::class)) {
-            return;
-        }
-
-        /** @var SchemaRegistry $registry */
-        $registry = $this->app->make(SchemaRegistry::class);
-        /** @var SchemaSyncer $syncer */
-        $syncer = $this->app->make(SchemaSyncer::class);
-        $syncer->syncAll($registry, allowDestructive: false);
     }
 
     private function dispatchContracts(): void
@@ -709,7 +544,9 @@ class PluginManager
             }
         }
 
-        // Wire ExtendsEntryForm: accumulate plugins in the container so EntryResource can merge their components.
+        // Wire ExtendsEntryForm: accumulate plugins in the container so the
+        // Filament admin EntryResource (Magna\Admin\Resources\EntryResource)
+        // can merge their form components.
         if ($plugin instanceof ExtendsEntryForm) {
             /** @var list<ExtendsEntryForm> $current */
             $current = $this->app->bound('magna.entry_form_plugins')
@@ -730,10 +567,12 @@ class PluginManager
             $this->app->instance('magna.delivery_decorators', $current);
         }
 
-        // TODO Stage 10: RegistersDashboardWidgets
-        // TODO Stage 10: RegistersSettingsPages
-        // FiltersApiQuery: deferred to Phase 3 — none of the Stage 14 first-party
-        // plugins require query scoping, so wiring it now would be unused infrastructure.
-        // TODO Stage 9:  RegistersWebhookEvents
+        // The remaining capability contracts are dispatched where their target
+        // surface is actually built, not here:
+        //   - RegistersDashboardWidgets / RegistersSettingsPages → the Filament
+        //     panel in AdminServiceProvider + AdminPanelProvider.
+        //   - RegistersWebhookEvents → WebhookServiceProvider (event registry).
+        // dispatchContractsFor() only wires the container-backed contracts
+        // (navigation, blocks, entry-form extensions, delivery decorators).
     }
 }

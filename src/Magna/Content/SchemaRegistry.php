@@ -17,6 +17,9 @@ class SchemaRegistry
     /** @var array<string, ContentType> */
     private array $types = [];
 
+    /** @var list<string> Handles registered from the database on the last load. */
+    private array $databaseHandles = [];
+
     /** @var list<callable(ContentType): void> */
     private array $onRegisterCallbacks = [];
 
@@ -88,10 +91,40 @@ class SchemaRegistry
             ])->all();
         });
 
+        $loaded = [];
         foreach ($rows as $row) {
             $type = ContentType::fromArray($row['schema'], $this->fieldTypes);
             $this->register($type);
+            $loaded[] = $type->handle;
         }
+        $this->databaseHandles = $loaded;
+    }
+
+    /**
+     * Re-sync the database-defined content types into the registry: forget any
+     * previously DB-loaded type that no longer exists, then reload the current
+     * set (cache-backed via loadFromDatabase()).
+     *
+     * Under a long-lived Octane worker this registry is a persistent singleton,
+     * so the content types loaded at worker boot would otherwise be frozen — a
+     * type created, edited, or deleted through the admin builder OR by enabling/
+     * disabling a plugin (both write the content_types table) would stay
+     * invisible on that worker until it recycles. Calling this at the start of
+     * each request keeps every worker consistent with the shared cache/DB. It
+     * is cheap: the row set is served from the same cache the delivery API uses
+     * and is only rebuilt when a content type actually changes.
+     *
+     * Under php-fpm the application boots fresh per request, so the registry is
+     * already current and callers simply need not invoke this.
+     */
+    public function refreshDatabaseTypes(): void
+    {
+        foreach ($this->databaseHandles as $handle) {
+            unset($this->types[$handle]);
+        }
+        $this->databaseHandles = [];
+
+        $this->loadFromDatabase();
     }
 
     /**

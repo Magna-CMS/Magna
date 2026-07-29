@@ -63,7 +63,7 @@ class TwoFactorSetupController extends Controller
 
         $user->forceFill([
             'two_factor_confirmed_at' => now(),
-            'two_factor_recovery_codes' => json_encode($codes),
+            'two_factor_recovery_codes' => $codes,
         ])->save();
 
         $request->session()->regenerate();
@@ -113,7 +113,7 @@ class TwoFactorSetupController extends Controller
 
         $user->forceFill([
             'two_factor_confirmed_at' => now(),
-            'two_factor_recovery_codes' => json_encode($codes),
+            'two_factor_recovery_codes' => $codes,
         ])->save();
 
         return response()->json(['recovery_codes' => $codes]);
@@ -162,7 +162,7 @@ class TwoFactorSetupController extends Controller
 
         $codes = $this->twoFactor->generateRecoveryCodes();
 
-        $user->forceFill(['two_factor_recovery_codes' => json_encode($codes)])->save();
+        $user->forceFill(['two_factor_recovery_codes' => $codes])->save();
 
         return response()->json(['recovery_codes' => $codes]);
     }
@@ -177,9 +177,6 @@ class TwoFactorSetupController extends Controller
             return response()->json(['message' => '2FA is not confirmed.'], 422);
         }
 
-        /** @var list<string> $codes */
-        $codes = json_decode((string) $user->two_factor_recovery_codes, true) ?? [];
-
-        return response()->json(['recovery_codes' => $codes]);
+        return response()->json(['recovery_codes' => $user->two_factor_recovery_codes ?? []]);
     }
 }

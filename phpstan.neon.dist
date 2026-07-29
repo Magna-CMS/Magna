@@ -22,6 +22,10 @@ parameters:
         # structurally reads as "unused" here even though it is part of the public
         # extension API — the same modelling limitation as the Filament exclusion.
         - src/Magna/Media/Concerns/IngestsMedia.php
+        # Checkout trait whose only consumers are the Filament pages excluded
+        # above (Plugins, Themes, Magna Account), so it likewise reads as
+        # structurally unused here.
+        - src/Magna/Licensing/Concerns/ChecksOutWithRazorpay.php
         # Livewire component with deeply nested dynamic `public array $sections`
         # that Livewire hydrates and mutates at runtime. PHPStan cannot narrow the
         # nested mixed types through reference-based mutations and array_splice calls

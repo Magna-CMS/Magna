@@ -14,6 +14,7 @@ use Magna\Blocks\BlocksServiceProvider;
 use Magna\Content\ContentServiceProvider;
 use Magna\Delivery\DeliveryServiceProvider;
 use Magna\Install\InstallServiceProvider;
+use Magna\Licensing\LicensingServiceProvider;
 use Magna\Management\ManagementServiceProvider;
 use Magna\Media\MediaServiceProvider;
 use Magna\Notices\NoticesServiceProvider;
@@ -32,7 +33,7 @@ use Magna\Webhooks\WebhookServiceProvider;
  */
 class MagnaServiceProvider extends ServiceProvider
 {
-    public const VERSION = '1.0.0-dev';
+    public const VERSION = '1.3.0-beta';
 
     public function register(): void
     {
@@ -49,6 +50,10 @@ class MagnaServiceProvider extends ServiceProvider
         $this->app->register(PluginsServiceProvider::class);
         $this->app->register(UpdaterServiceProvider::class);
         $this->app->register(AccountCentreServiceProvider::class);
+        // After Account Centre: licensing reads the account connection this
+        // site holds, and is core for the same reason the updater is — the
+        // component keeping paid products working can't be disableable.
+        $this->app->register(LicensingServiceProvider::class);
         $this->app->register(NoticesServiceProvider::class);
         $this->app->register(WebhookServiceProvider::class);
         $this->app->register(ManagementServiceProvider::class);

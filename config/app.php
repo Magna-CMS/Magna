@@ -30,6 +30,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Reverse proxies / load balancers / CDNs whose X-Forwarded-* headers may
+    | be trusted so the real client IP is used for login throttling and audit
+    | logs. Blank trusts nothing (headers are spoofable). Use "*" for a single
+    | trusted hop, or a comma-separated CIDR/IP list.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Debug Mode
     |--------------------------------------------------------------------------
     |

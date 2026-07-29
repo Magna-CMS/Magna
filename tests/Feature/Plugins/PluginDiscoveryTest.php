@@ -53,6 +53,7 @@ it('never discovers plugins-dev plugins in production, even if wired', function 
         expect(array_map(fn ($i) => $i->manifest->name, $discovery->discover()))->toContain('acme/widget');
 
         app()->detectEnvironment(fn () => 'production');
+        $discovery->reset(); // new "request": env changed, so re-scan (prod caches per-request too)
         $namesInProduction = array_map(fn ($i) => $i->manifest->name, $discovery->discover());
         app()->detectEnvironment(fn () => 'testing');
 

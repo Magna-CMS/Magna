@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.3', '8.4']
-        db: [sqlite, pgsql]
+        db: [sqlite, pgsql, mysql]
 
     services:
       postgres:
@@ -29,6 +29,20 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_DATABASE: magna_test
+          MYSQL_USER: magna
+          MYSQL_PASSWORD: secret
+          MYSQL_ROOT_PASSWORD: secret
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -umagna -psecret"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +51,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, intl, pdo_sqlite, pdo_pgsql, redis
+          extensions: mbstring, intl, pdo_sqlite, pdo_pgsql, pdo_mysql, redis
           coverage: none
 
       - name: Install dependencies
@@ -48,6 +62,12 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
+      # DB connection is exported to the PROCESS environment ($GITHUB_ENV), not
+      # .env. phpunit.xml pins DB_CONNECTION=sqlite/:memory: with a non-forced
+      # <env>, which only applies when the variable is absent from the process
+      # environment (and Laravel's immutable Dotenv won't override a process
+      # var either). Writing to .env is therefore ignored under `artisan test`;
+      # exporting here is what actually switches the driver the tests run on.
       - name: Configure SQLite
         if: matrix.db == 'sqlite'
         run: touch database/database.sqlite
@@ -62,7 +82,19 @@ jobs:
             echo "DB_DATABASE=magna_test"
             echo "DB_USERNAME=magna"
             echo "DB_PASSWORD=secret"
-          } >> .env
+          } >> "$GITHUB_ENV"
+
+      - name: Configure MySQL
+        if: matrix.db == 'mysql'
+        run: |
+          {
+            echo "DB_CONNECTION=mysql"
+            echo "DB_HOST=127.0.0.1"
+            echo "DB_PORT=3306"
+            echo "DB_DATABASE=magna_test"
+            echo "DB_USERNAME=magna"
+            echo "DB_PASSWORD=secret"
+          } >> "$GITHUB_ENV"
 
       - name: Code style (Pint)
         run: php vendor/bin/pint --test

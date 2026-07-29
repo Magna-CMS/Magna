@@ -163,6 +163,47 @@ it('filter[field][eq] narrows results correctly', function (): void {
     expect($response->json('data.0.slug'))->toBe('alpha');
 });
 
+// ── Filter: like (literal contains, escaped wildcards) ────────────────────────
+
+it('filter[field][like] matches a literal substring', function (): void {
+    registerArticleType();
+    publishedArticle(['title' => 'Hello World', 'slug' => 'hello-world']);
+    publishedArticle(['title' => 'Goodbye', 'slug' => 'goodbye']);
+    $token = deliveryToken();
+
+    $response = $this->getJson('/api/v1/content/article?filter[title][like]=ello', [
+        'Authorization' => 'Bearer '.$token,
+    ]);
+
+    $response->assertStatus(200)->assertJsonCount(1, 'data');
+    expect($response->json('data.0.slug'))->toBe('hello-world');
+});
+
+it('filter[field][like] neutralises injected wildcards', function (): void {
+    registerArticleType();
+    publishedArticle(['title' => 'Fifty', 'slug' => 'fifty']);
+    publishedArticle(['title' => 'Regular price', 'slug' => 'regular']);
+    $token = deliveryToken();
+
+    // 'F_fty' — if the underscore leaked through as a single-char wildcard,
+    // LIKE '%F_fty%' would match 'Fifty'. Stripped to 'Ffty', it matches
+    // nothing, proving the wildcard was neutralised.
+    $response = $this->getJson('/api/v1/content/article?filter[title][like]=F_fty', [
+        'Authorization' => 'Bearer '.$token,
+    ]);
+
+    $response->assertStatus(200)->assertJsonCount(0, 'data');
+});
+
+it('rejects an over-long like filter value', function (): void {
+    registerArticleType();
+    $token = deliveryToken();
+
+    $this->getJson('/api/v1/content/article?filter[title][like]='.str_repeat('a', 300), [
+        'Authorization' => 'Bearer '.$token,
+    ])->assertStatus(400);
+});
+
 // ── Filter: injection rejected ────────────────────────────────────────────────
 
 it('rejects an unknown filter operator', function (): void {

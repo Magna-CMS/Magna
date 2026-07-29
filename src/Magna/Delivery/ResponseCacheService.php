@@ -11,9 +11,18 @@ use Illuminate\Support\Facades\Cache;
  * Full-response body cache for the delivery API with stampede protection.
  *
  * Stores the serialised JSON string keyed by the canonical request signature
- * and tagged with every surrogate key the response carries. Flushing a
- * surrogate-key tag (e.g. 'magna.delivery.type.article') invalidates all
- * cached responses that include data from that type.
+ * and tagged with the global delivery tag plus the content type's tag.
+ * Flushing 'magna.delivery.type.{handle}' invalidates every cached response
+ * for that type; flushing 'magna.delivery' invalidates all of them. Tagging is
+ * done through TagAwareCache so it works on the default (non-taggable) database
+ * store as well as taggable ones.
+ *
+ * The tag set is fixed (global + type) and identical at read and write —
+ * previously the write path passed the full per-response surrogate-key set
+ * (entry/media/locale) while the read path passed only the type, so on a
+ * taggable store the two namespaces never matched and the body cache always
+ * missed. Type-level invalidation matches ETagService and the invalidation
+ * events (DeliveryCacheInvalidator only ever flushes per-type or globally).
  *
  * Stampede protection: on a cache miss the caller can acquire a rebuild lock
  * (tryLock). Concurrent requests that don't win the lock are served STALE
@@ -32,6 +41,8 @@ final class ResponseCacheService
     /** Lock hold time — the rebuild window before the lock auto-releases. */
     private const LOCK_TTL = 10;
 
+    public function __construct(private readonly TagAwareCache $cache) {}
+
     /**
      * Build a stable cache key from the request path + sorted query params.
      * Identical to ETagService::cacheKey() so the two caches are co-located.
@@ -42,19 +53,23 @@ final class ResponseCacheService
         $params = $request->query();
         ksort($params);
 
-        return 'magna.delivery.body.'.hash('sha256', $request->path().'?'.http_build_query($params));
+        // Scope included for the same reason ETagService includes it — a cache
+        // key that ignores who is asking is a content leak waiting for the
+        // first scoped token.
+        return 'magna.delivery.body.'.hash(
+            'sha256',
+            $request->path().'?'.http_build_query($params).'|'.ETagService::scopeSignature($request),
+        );
     }
 
     /**
-     * Retrieve a cached response body using the surrogate-key collector's tag set.
+     * Retrieve a cached response body for the given content type.
      * Returns null on miss; the caller should call tryLock() and, if it wins,
      * rebuild + put(). If it loses the lock, call getStale() for a grace copy.
      */
-    public function get(string $cacheKey, SurrogateKeyCollector $keys): ?string
+    public function get(string $cacheKey, string $typeHandle): ?string
     {
-        $value = Cache::tags($keys->cacheTagKeys())->get($cacheKey);
-
-        return is_string($value) ? $value : null;
+        return $this->cache->get($cacheKey, $this->tagsFor($typeHandle));
     }
 
     /**
@@ -86,21 +101,21 @@ final class ResponseCacheService
     }
 
     /**
-     * Store a response body tagged with the collector's full key set.
+     * Store a response body tagged with the global + type tags.
      * Also writes a separate untagged grace copy for stampede serving.
      */
-    public function put(string $cacheKey, string $body, SurrogateKeyCollector $keys): void
+    public function put(string $cacheKey, string $body, string $typeHandle): void
     {
-        Cache::tags($keys->cacheTagKeys())->put($cacheKey, $body, self::TTL);
+        $this->cache->put($cacheKey, $body, self::TTL, $this->tagsFor($typeHandle));
         Cache::put($cacheKey.':grace', $body, self::GRACE_TTL);
     }
 
     /**
-     * Flush all cached responses that carry the given type's surrogate key.
+     * Flush all cached responses that carry the given type's tag.
      */
     public function invalidateType(string $typeHandle): void
     {
-        Cache::tags(['magna.delivery.type.'.$typeHandle])->flush();
+        $this->cache->flushTag('magna.delivery.type.'.$typeHandle);
     }
 
     /**
@@ -108,6 +123,17 @@ final class ResponseCacheService
      */
     public function invalidateAll(): void
     {
-        Cache::tags(['magna.delivery'])->flush();
+        $this->cache->flushTag('magna.delivery');
+    }
+
+    /**
+     * The fixed tag set for a type's cached responses: the global delivery tag
+     * plus the type tag. Identical at read and write.
+     *
+     * @return list<string>
+     */
+    private function tagsFor(string $typeHandle): array
+    {
+        return ['magna.delivery', 'magna.delivery.type.'.$typeHandle];
     }
 }

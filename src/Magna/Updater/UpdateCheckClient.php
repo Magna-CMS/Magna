@@ -68,6 +68,8 @@ class UpdateCheckClient
                     'latest_version' => $result->core->latestVersion,
                     'changelog_url' => $result->core->changelogUrl,
                     'download_url' => $result->core->downloadUrl,
+                    'download_sha256' => $result->core->downloadSha256,
+                    'download_sha256_signature' => $result->core->downloadSha256Signature,
                     'update_available' => $result->core->updateAvailable,
                     'checked_at' => $now,
                 ]
@@ -91,6 +93,7 @@ class UpdateCheckClient
                     'latest_version' => $plugin->latestVersion,
                     'changelog_url' => $plugin->changelogUrl,
                     'update_available' => $plugin->updateAvailable,
+                    'license_required' => $plugin->licenseRequired,
                     'checked_at' => $now,
                 ]
             );

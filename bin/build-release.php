@@ -21,7 +21,6 @@ declare(strict_types=1);
  *
  * Requires PHP 8.3+ with the zip extension and a reachable Composer binary.
  */
-
 const C_RESET = "\033[0m";
 const C_GREEN = "\033[32m";
 const C_YELLOW = "\033[33m";
@@ -48,33 +47,14 @@ if (! extension_loaded('zip')) {
 // ---------------------------------------------------------------------------
 // Resolve version.
 // ---------------------------------------------------------------------------
-// Parse arguments: first non-flag token is the version; flags start with --.
-$flags = [];
+// Parse arguments: the first token is the version. There is a single build
+// profile — the core archive — so no flags are accepted.
 $version = null;
 foreach (array_slice($argv, 1) as $arg) {
     if (str_starts_with($arg, '--')) {
-        $flags[] = $arg;
-    } elseif ($version === null) {
-        $version = $arg;
+        fail("Unknown option '{$arg}'. Usage: php bin/build-release.php [version]");
     }
-}
-
-// Build profiles. A profile bundles extra first-party plugins (composer
-// package + version constraint) on top of the base release and tags the output
-// filename with a suffix so it never overwrites the base archive.
-//
-//   --hub  : the deployment that runs the marketplace and manages other Magna
-//            installs (e.g. managemagna). Ships the Core Plugin Manager and the
-//            Marketplace, which are require-dev (so excluded from a normal
-//            --no-dev build) and therefore must be added explicitly here.
-$extraPlugins = [];
-$suffix = '';
-if (in_array('--hub', $flags, true)) {
-    $extraPlugins = [
-        'magna-cms/marketplace:@dev',
-        'magna/plugin-manager:dev-Development',
-    ];
-    $suffix = '-hub';
+    $version ??= $arg;
 }
 
 if ($version === null) {
@@ -86,12 +66,25 @@ if ($version === null) {
     }
 }
 
-// Strip a leading v and any pre-release suffix (e.g. 1.0.0-dev -> 1.0.0).
+// Strip a leading v and any pre-release suffix (e.g. 1.3.0-beta -> 1.3.0).
 $version = ltrim($version, 'vV');
 $version = preg_replace('/-.*$/', '', $version) ?? $version;
 
 if (! preg_match('/^\d+\.\d+\.\d+$/', $version)) {
     fail("Refusing to build: '{$version}' is not a clean semver (x.y.z). Pass one explicitly.");
+}
+
+// Version consistency: the archive's version must match the version the code
+// actually reports at runtime. MagnaServiceProvider::VERSION drives the
+// updater's compatibility checks, plugin `compat.magna` resolution, and the
+// admin System Info page — shipping an archive whose filename disagrees with
+// that constant would mislabel every one of them. Refuse rather than mislabel.
+$providerSource = @file_get_contents($root.'/src/Magna/MagnaServiceProvider.php') ?: '';
+if (preg_match('/const\s+VERSION\s*=\s*[\'"]([^\'"]+)[\'"]/', $providerSource, $vm)) {
+    $codeVersion = preg_replace('/-.*$/', '', ltrim($vm[1], 'vV')) ?? $vm[1];
+    if ($codeVersion !== $version) {
+        fail("Version mismatch: building '{$version}' but MagnaServiceProvider::VERSION is '{$vm[1]}' (normalises to '{$codeVersion}'). Bump the constant first, or pass the matching version.");
+    }
 }
 
 say("Building Magna release v{$version}", C_GREEN);
@@ -143,6 +136,7 @@ foreach ($copyDirs as $dir) {
     $src = $root.'/'.$dir;
     if (! is_dir($src)) {
         say("  skip (missing): {$dir}", C_YELLOW);
+
         continue;
     }
     say("  copy {$dir}/");
@@ -168,9 +162,40 @@ if (! is_array($composerJson)) {
     fail('Could not parse staged composer.json.');
 }
 
-// Rewrite every path repository (the sibling plugin-sdk plus the plugins-dev/*
-// first-party packages) to an absolute path in copy mode. PLUGIN_SDK_PATH can
-// override the sibling location; everything else resolves relative to $root.
+// Strip bundled plugins from the release. The public core template ships with
+// NO plugins — they are distributed separately (own repos / marketplace / local
+// ZIP upload). magna-cms/plugin-sdk is deliberately kept: it is the SDK library
+// the core plugin system depends on, not a plugin.
+$stripPlugins = [
+    'magna-cms/docs',
+    'magna-cms/marketplace',
+    'magna/plugin-manager',
+    'roya/dms',
+    'roya/erp',
+];
+foreach ($stripPlugins as $pkg) {
+    foreach (['require', 'require-dev'] as $section) {
+        if (isset($composerJson[$section][$pkg])) {
+            unset($composerJson[$section][$pkg]);
+            say("  stripped plugin from release: {$pkg}");
+        }
+    }
+}
+
+// A local working copy wires those plugins in through `type: path` repositories
+// pointing at plugins-dev/. With the packages themselves stripped above, the
+// repositories have nothing left to resolve, so drop them too rather than let
+// the rewrite below demand sources the release does not need.
+$composerJson['repositories'] = array_values(array_filter(
+    $composerJson['repositories'] ?? [],
+    static fn ($repo): bool => ! is_array($repo) || ! str_contains((string) ($repo['url'] ?? ''), 'plugins-dev'),
+));
+
+// Rewrite every remaining path repository to an absolute path in copy mode.
+// PLUGIN_SDK_PATH can override the sibling SDK location; everything else
+// resolves relative to $root. The committed composer.json carries no path
+// repositories (every public package resolves from Packagist), so this loop
+// only does work when a local working copy has wired some in.
 $sdkOverride = getenv('PLUGIN_SDK_PATH') ?: null;
 foreach (($composerJson['repositories'] ?? []) as $i => $repo) {
     if (($repo['type'] ?? null) !== 'path' || ! isset($repo['url'])) {
@@ -190,19 +215,6 @@ foreach (($composerJson['repositories'] ?? []) as $i => $repo) {
     $composerJson['repositories'][$i]['url'] = str_replace('\\', '/', $abs);
     $composerJson['repositories'][$i]['options']['symlink'] = false;
     say('  rewired path repo -> '.str_replace('\\', '/', $abs));
-}
-
-// Strip bundled plugins from the release. The public core template ships with
-// NO plugins — they are distributed separately (own repos / marketplace / local
-// ZIP upload). magna-cms/plugin-sdk is deliberately kept: it is the SDK library
-// the core plugin system depends on, not a plugin. The --hub profile adds its
-// own plugins back explicitly later via composer require.
-$stripPlugins = ['magna-cms/docs'];
-foreach ($stripPlugins as $pkg) {
-    if (isset($composerJson['require'][$pkg])) {
-        unset($composerJson['require'][$pkg]);
-        say("  stripped plugin from release: {$pkg}");
-    }
 }
 
 file_put_contents(
@@ -271,29 +283,6 @@ if ($code !== 0) {
 }
 
 // ---------------------------------------------------------------------------
-// Profile plugins: pull the extra first-party packages (require-dev, so absent
-// from the --no-dev set above) into the release from their rewritten path
-// repositories. They are copied, not symlinked, exactly like docs/plugin-sdk.
-// ---------------------------------------------------------------------------
-if ($extraPlugins !== []) {
-    say('Bundling profile plugins: '.implode(', ', $extraPlugins), C_GREEN);
-    // --update-no-dev: adding a package re-enables dev requirements by default;
-    // this keeps root require-dev (pest, collision, pail, …) out of the release.
-    $cmd = sprintf(
-        '%s %s require %s --update-no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --working-dir=%s 2>&1',
-        escapeshellarg($phpBin),
-        escapeshellarg($composer),
-        implode(' ', array_map('escapeshellarg', $extraPlugins)),
-        escapeshellarg($stage)
-    );
-    passthru($cmd, $code);
-    if ($code !== 0) {
-        rrmdir($stage);
-        fail('composer require for profile plugins failed. See output above.');
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Root forwarder — the piece that makes "extract to the domain root" work.
 // ---------------------------------------------------------------------------
 say('Writing root forwarder (index.php + .htaccess)', C_GREEN);
@@ -302,17 +291,17 @@ file_put_contents($stage.'/.htaccess', root_htaccess());
 file_put_contents($stage.'/web.config', root_web_config());
 
 // A short readme so a human opening the archive knows what to do.
-file_put_contents($stage.'/INSTALL.txt', install_readme($version, $extraPlugins));
+file_put_contents($stage.'/INSTALL.txt', install_readme($version));
 
 // ---------------------------------------------------------------------------
 // Zip it.
 // ---------------------------------------------------------------------------
 @mkdir($root.'/downloads', 0755, true);
-$zipPath = $root.'/downloads/magna-cms-v'.$version.$suffix.'.zip';
+$zipPath = $root.'/downloads/magna-cms-v'.$version.'.zip';
 @unlink($zipPath);
 
 say("Creating {$zipPath}", C_GREEN);
-$zip = new ZipArchive();
+$zip = new ZipArchive;
 if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
     rrmdir($stage);
     fail("Could not open {$zipPath} for writing.");
@@ -352,10 +341,21 @@ rrmdir($stage);
 // permission bits and a host extracted them unreadable. Fail the build loudly
 // here rather than shipping a broken zip.
 // ---------------------------------------------------------------------------
-verify_release($zipPath, $extraPlugins);
+verify_release($zipPath);
+
+// Publish a SHA-256 sidecar (sha256sum format: "<hash>  <filename>"). This is
+// the value the update feed's `zip_sha256` must carry — CoreUpdater refuses to
+// apply an update whose downloaded archive doesn't hash to it — and it lets a
+// human verify integrity with `sha256sum -c magna-cms-v<version>.zip.sha256`.
+$sha = hash_file('sha256', $zipPath);
+if ($sha === false) {
+    fail('Could not compute the SHA-256 checksum for the archive.');
+}
+file_put_contents($zipPath.'.sha256', $sha.'  '.basename($zipPath)."\n");
+say('  SHA-256: '.$sha, C_GREEN);
 
 $sizeMb = round(filesize($zipPath) / 1048576, 1);
-say("Done. {$count} files, {$sizeMb} MB -> downloads/magna-cms-v{$version}{$suffix}.zip", C_GREEN);
+say("Done. {$count} files, {$sizeMb} MB -> downloads/magna-cms-v{$version}.zip", C_GREEN);
 
 // ===========================================================================
 // Helpers.
@@ -365,13 +365,12 @@ say("Done. {$count} files, {$sizeMb} MB -> downloads/magna-cms-v{$version}{$suff
  * Open the finished archive and assert it is actually installable: the files
  * the app cannot boot without are present, and every entry carries readable
  * POSIX permissions (never mode 0, which some hosts extract as unreadable).
- * The set of required files grows when a profile bundles extra plugins.
  */
-function verify_release(string $zipPath, array $extraPlugins): void
+function verify_release(string $zipPath): void
 {
     say('Verifying archive', C_GREEN);
 
-    $zip = new ZipArchive();
+    $zip = new ZipArchive;
     if ($zip->open($zipPath) !== true) {
         fail("Verification could not reopen {$zipPath}.");
     }
@@ -383,11 +382,6 @@ function verify_release(string $zipPath, array $extraPlugins): void
         'vendor/autoload.php', 'vendor/composer/autoload_real.php',
         'vendor/symfony/deprecation-contracts/function.php',
     ];
-    // Bundled plugins must actually be in vendor/ (package name = vendor path).
-    foreach ($extraPlugins as $spec) {
-        $pkg = explode(':', $spec, 2)[0];
-        $required[] = 'vendor/'.$pkg.'/composer.json';
-    }
 
     $missing = [];
     foreach ($required as $name) {
@@ -421,7 +415,7 @@ function verify_release(string $zipPath, array $extraPlugins): void
         fail("{$badPerms} archive entries have no permission bits (e.g. {$firstBad}). Hosts may extract them unreadable.");
     }
 
-    say("  OK — required files present, permissions set on all entries", C_GREEN);
+    say('  OK — required files present, permissions set on all entries', C_GREEN);
 }
 
 function copy_tree(string $src, string $dst, array $excludeNames, array $excludeExt): void
@@ -541,27 +535,8 @@ function root_web_config(): string
 XML;
 }
 
-function install_readme(string $version, array $extraPlugins = []): string
+function install_readme(string $version): string
 {
-    $hub = '';
-    if ($extraPlugins !== []) {
-        $hub = <<<'TXT'
-
-
-Bundled core plugins (hub build)
---------------------------------
-This build ships the Core Plugin Manager and the Marketplace. After the
-installer finishes, sign in and:
-
-  1. Open  System  ->  Plugins, and enable "Core Plugin Manager" and
-     "Marketplace". (Enabling runs their database migrations.)
-  2. The Core Plugin Manager (System -> Core Plugin Manager) then lets you
-     install and update plugins — including these two — by uploading a plugin
-     ZIP directly from your computer. No marketplace connection required.
-
-TXT;
-    }
-
     return <<<TXT
 Magna CMS v{$version} — installation
 ====================================
@@ -582,7 +557,7 @@ Magna CMS v{$version} — installation
 
 That's it — no command line, no Composer needed. The installer disables
 itself once setup is complete.
-{$hub}
+
 Advanced (server you control): for the tightest security, point your web
 server's document root directly at the public/ directory. The bundled root
 forwarder is only there so the "extract to the domain root" flow works on

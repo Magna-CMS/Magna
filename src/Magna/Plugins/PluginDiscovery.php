@@ -14,6 +14,18 @@ use Magna\Plugins\Exceptions\InvalidManifestException;
  */
 final class PluginDiscovery
 {
+    /**
+     * Per-request memoized result. Discovery reads vendor/composer/installed.json
+     * and globs plugins-dev/, and is called several times per request (plugin
+     * boot, the Plugins page, the Core Plugin Manager page). Since the resolver
+     * is bound as a singleton, caching here collapses that repeated filesystem
+     * I/O to one scan per request — important as the plugin count grows. Reset()
+     * busts it after an install/uninstall that changes what is on disk.
+     *
+     * @var list<PluginInfo>|null
+     */
+    private ?array $cache = null;
+
     public function __construct(private readonly string $basePath) {}
 
     /**
@@ -21,6 +33,10 @@ final class PluginDiscovery
      */
     public function discover(): array
     {
+        if ($this->cache !== null) {
+            return $this->cache;
+        }
+
         $vendor = $this->discoverFromVendor();
         $dev = $this->discoverFromDev();
 
@@ -30,7 +46,16 @@ final class PluginDiscovery
             $byName[$info->manifest->name] = $info;
         }
 
-        return array_values($byName);
+        return $this->cache = array_values($byName);
+    }
+
+    /**
+     * Forget the memoized scan — call after an install/uninstall so a later
+     * discover() in the same request reflects what is now on disk.
+     */
+    public function reset(): void
+    {
+        $this->cache = null;
     }
 
     public function find(string $name): ?PluginInfo

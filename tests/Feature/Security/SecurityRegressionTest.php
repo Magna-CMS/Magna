@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Magna\Auth\Role;
@@ -18,6 +19,8 @@ use Magna\Content\SchemaRegistry;
 use Magna\Content\SchemaSyncer;
 use Magna\Users\User;
 use Magna\Webhooks\Jobs\DispatchWebhookJob;
+use Magna\Webhooks\Support\WebhookSender;
+use Magna\Webhooks\Support\WebhookUrlBlockedException;
 use Magna\Webhooks\Support\WebhookUrlGuard;
 use Magna\Webhooks\WebhookDelivery;
 use Magna\Webhooks\WebhookSubscription;
@@ -660,4 +663,42 @@ it('WebhookUrlGuard blocks private/reserved ranges and allows public addresses',
         ->and(WebhookUrlGuard::isSafe('http://[::1]/'))->toBeFalse()
         ->and(WebhookUrlGuard::isSafe('ftp://8.8.8.8/'))->toBeFalse()
         ->and(WebhookUrlGuard::isSafe('http://8.8.8.8/'))->toBeTrue();
+});
+
+// ── S1-04b: DNS-rebinding pin ──────────────────────────────────────────────────
+
+it('resolvePinnedTarget returns the validated IP, host and port to pin the connection to', function (): void {
+    expect(WebhookUrlGuard::resolvePinnedTarget('http://8.8.8.8/webhook'))
+        ->toBe(['host' => '8.8.8.8', 'port' => 80, 'ip' => '8.8.8.8']);
+
+    expect(WebhookUrlGuard::resolvePinnedTarget('https://1.1.1.1/hook'))
+        ->toBe(['host' => '1.1.1.1', 'port' => 443, 'ip' => '1.1.1.1']);
+
+    expect(WebhookUrlGuard::resolvePinnedTarget('https://1.1.1.1:9443/hook'))
+        ->toBe(['host' => '1.1.1.1', 'port' => 9443, 'ip' => '1.1.1.1']);
+});
+
+it('resolvePinnedTarget can never yield an internal or reserved address (throws instead)', function (): void {
+    foreach ([
+        'http://169.254.169.254/',   // cloud metadata
+        'http://127.0.0.1/',         // loopback
+        'http://10.0.0.5/',          // private
+        'http://192.168.1.5/',       // private
+        'http://[::1]/',             // IPv6 loopback
+        'ftp://8.8.8.8/',            // disallowed scheme
+    ] as $url) {
+        expect(fn () => WebhookUrlGuard::resolvePinnedTarget($url))
+            ->toThrow(WebhookUrlBlockedException::class);
+    }
+});
+
+it('WebhookSender pins the request to the validated target and disables redirects', function (): void {
+    Http::fake(['*' => Http::response('ok', 200)]);
+
+    $pin = WebhookUrlGuard::resolvePinnedTarget('http://8.8.8.8/webhook');
+    $result = app(WebhookSender::class)->send('http://8.8.8.8/webhook', '{}', 'sig', time(), $pin);
+
+    expect($result->success)->toBeTrue();
+    Http::assertSent(fn ($request) => $request->url() === 'http://8.8.8.8/webhook'
+        && $request->hasHeader('X-Magna-Signature-256'));
 });

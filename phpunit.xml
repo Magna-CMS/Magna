@@ -11,6 +11,15 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <!--
+            First-party plugins ship their own tests, and until this entry
+            existed none of them ran in CI: `php artisan test` reads these
+            testsuites, and the marketplace's licence, payment and console
+            tests sat outside all of them. A test nobody runs is a comment.
+        -->
+        <testsuite name="Plugins">
+            <directory>plugins-dev/*/*/tests</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
@@ -45,5 +54,9 @@
         <env name="MARKETPLACE_GOOGLE_CLIENT_SECRET" value=""/>
         <env name="MARKETPLACE_GITHUB_CLIENT_ID" value=""/>
         <env name="MARKETPLACE_GITHUB_CLIENT_SECRET" value=""/>
+        <!-- Password strength is validated locally in tests; the
+             have-i-been-pwned lookup would make every password assertion a
+             live network call. -->
+        <env name="MAGNA_PASSWORD_CHECK_COMPROMISED" value="false"/>
     </php>
 </phpunit>

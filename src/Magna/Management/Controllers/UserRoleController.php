@@ -17,10 +17,7 @@ class UserRoleController extends ManagementController
     {
         Gate::authorize('roles.manage');
 
-        $record = $this->findOrNotFound(User::query(), $user, 'User');
-        if ($record instanceof JsonResponse) {
-            return $record;
-        }
+        $record = $this->findOrFail(User::query(), $user, 'User');
 
         $validated = $request->validate([
             'role' => ['required', 'string'],

@@ -34,10 +34,7 @@ class EntryManager
      */
     public function create(string $typeHandle, array $data, ?string $authorId = null): Entry
     {
-        $type = $this->registry->get($typeHandle);
-        if ($type === null) {
-            throw new SchemaException("Unknown content type: \"{$typeHandle}\".");
-        }
+        $type = $this->resolveType($typeHandle);
 
         $data = $this->applyAutoSlugs($type, $data);
         $validated = $this->validator->validate($type, $data);
@@ -218,10 +215,7 @@ class EntryManager
             throw new SchemaException('Entry is not bound to a content type.');
         }
 
-        $type = $this->registry->get($handle);
-        if ($type === null) {
-            throw new SchemaException("Unknown content type: \"{$handle}\".");
-        }
+        $type = $this->resolveType($handle);
 
         $attrs = [];
         foreach ($type->columnFields() as $field) {
@@ -258,10 +252,7 @@ class EntryManager
         $revision = Revision::query()->findOrFail($revisionId);
 
         $handle = $revision->entry_type;
-        $type = $this->registry->get($handle);
-        if ($type === null) {
-            throw new SchemaException("Unknown content type: \"{$handle}\".");
-        }
+        $type = $this->resolveType($handle);
 
         /** @var Entry $entry */
         $entry = Entry::type($handle)->findOrFail($revision->entry_id);
@@ -301,10 +292,7 @@ class EntryManager
             throw new SchemaException('Source entry is not bound to a content type.');
         }
 
-        $type = $this->registry->get($handle);
-        if ($type === null) {
-            throw new SchemaException("Unknown content type: \"{$handle}\".");
-        }
+        $type = $this->resolveType($handle);
 
         if (! $type->localizable) {
             throw new SchemaException("Content type \"{$handle}\" is not localizable.");
@@ -414,10 +402,7 @@ class EntryManager
             throw new SchemaException('Draft entry is not bound to a content type.');
         }
 
-        $type = $this->registry->get($handle);
-        if ($type === null) {
-            throw new SchemaException("Unknown content type: \"{$handle}\".");
-        }
+        $type = $this->resolveType($handle);
 
         $draftOf = $draft->draft_of;
         if (! is_string($draftOf)) {
@@ -481,6 +466,20 @@ class EntryManager
             throw new SchemaException('Entry is not bound to a content type.');
         }
 
+        return $this->resolveType($handle);
+    }
+
+    /**
+     * Resolve a registered content type by handle, or fail.
+     *
+     * The single place the "unknown content type" guard lives — every
+     * lifecycle method that starts from a type handle routes through here
+     * instead of repeating the registry lookup + null check.
+     *
+     * @throws SchemaException
+     */
+    private function resolveType(string $handle): ContentType
+    {
         $type = $this->registry->get($handle);
         if ($type === null) {
             throw new SchemaException("Unknown content type: \"{$handle}\".");

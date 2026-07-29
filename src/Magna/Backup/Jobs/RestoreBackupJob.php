@@ -115,87 +115,91 @@ class RestoreBackupJob implements ShouldQueue
             return;
         }
 
-        $run = $this->backupRunId !== null ? BackupRun::find($this->backupRunId) : null;
-
-        if ($this->backupRunId !== null && $run === null) {
-            $this->setProgress('failed', 'The selected backup run no longer exists.');
-            $lock->release();
-
-            return;
-        }
-
-        $databaseTouched = false;
-        $auditAfter = $run !== null ? ['used_secondary' => $this->useSecondary] : ['imported' => true, 'import_path' => $this->importPath];
-
+        // Outer try/finally guarantees the lock is released on every exit path
+        // below — the not-found early return, the setup steps (BackupRun::find,
+        // setProgress) that run before the main try, and the main restore.
         try {
-            $this->setProgress('running', 'Extracting archive…');
+            $run = $this->backupRunId !== null ? BackupRun::find($this->backupRunId) : null;
 
-            if ($run !== null) {
-                $service->prepare($run, $this->useSecondary);
-            } else {
-                $service->prepareFromDiskPath(
-                    (string) $this->importDisk,
-                    (string) $this->importPath,
-                    self::resolveImportPassword($this->importPasswordToken),
-                );
+            if ($this->backupRunId !== null && $run === null) {
+                $this->setProgress('failed', 'The selected backup run no longer exists.');
+
+                return;
             }
 
-            $this->setProgress('running', 'Entering maintenance mode…');
-            Artisan::call('down', ['--retry' => 60]);
+            $databaseTouched = false;
+            $auditAfter = $run !== null ? ['used_secondary' => $this->useSecondary] : ['imported' => true, 'import_path' => $this->importPath];
 
-            $this->setProgress('running', 'Restoring database…');
-            $databaseTouched = true;
-            $service->restoreDatabase();
+            try {
+                $this->setProgress('running', 'Extracting archive…');
 
-            $this->setProgress('running', 'Restoring files…');
-            $service->restoreFiles();
+                if ($run !== null) {
+                    $service->prepare($run, $this->useSecondary);
+                } else {
+                    $service->prepareFromDiskPath(
+                        (string) $this->importDisk,
+                        (string) $this->importPath,
+                        self::resolveImportPassword($this->importPasswordToken),
+                    );
+                }
 
-            Artisan::call('up');
+                $this->setProgress('running', 'Entering maintenance mode…');
+                Artisan::call('down', ['--retry' => 60]);
 
-            $this->setProgress('completed', 'Restore completed. The instance is back online.');
+                $this->setProgress('running', 'Restoring database…');
+                $databaseTouched = true;
+                $service->restoreDatabase();
 
-            AuditLog::record(
-                action: 'backup.restored',
-                actorId: $this->triggeredBy,
-                actorType: $this->triggeredBy !== null ? 'user' : 'system',
-                subject: $run,
-                after: $auditAfter,
-            );
+                $this->setProgress('running', 'Restoring files…');
+                $service->restoreFiles();
 
-            $this->notifyTrigger('Restore completed', 'The instance is back online.', success: true);
-        } catch (Throwable $e) {
-            if ($databaseTouched) {
-                $message = 'Restore failed after the database was touched — the instance is deliberately left in maintenance mode until this is manually resolved. '.$e->getMessage();
-                $this->setProgress('failed', $message);
-            } else {
                 Artisan::call('up');
-                $message = 'Restore failed before anything was changed — the instance was never touched. '.$e->getMessage();
-                $this->setProgress('failed', $message);
-            }
 
-            AuditLog::record(
-                action: 'backup.restore_failed',
-                actorId: $this->triggeredBy,
-                actorType: $this->triggeredBy !== null ? 'user' : 'system',
-                subject: $run,
-                after: [...$auditAfter, 'error' => $e->getMessage(), 'database_touched' => $databaseTouched],
-            );
+                $this->setProgress('completed', 'Restore completed. The instance is back online.');
 
-            $this->notifyTrigger("Restore didn't complete", $message, success: false);
-        } finally {
-            $service->cleanup();
+                AuditLog::record(
+                    action: 'backup.restored',
+                    actorId: $this->triggeredBy,
+                    actorType: $this->triggeredBy !== null ? 'user' : 'system',
+                    subject: $run,
+                    after: $auditAfter,
+                );
 
-            // The uploaded source archive itself (distinct from the
-            // service's own temp extraction, already cleaned above) —
-            // never leave an uploaded DB dump sitting on disk longer than
-            // the restore attempt that used it.
-            if ($this->importDisk !== null && $this->importPath !== null) {
-                try {
-                    Storage::disk($this->importDisk)->delete($this->importPath);
-                } catch (Throwable) {
+                $this->notifyTrigger('Restore completed', 'The instance is back online.', success: true);
+            } catch (Throwable $e) {
+                if ($databaseTouched) {
+                    $message = 'Restore failed after the database was touched — the instance is deliberately left in maintenance mode until this is manually resolved. '.$e->getMessage();
+                    $this->setProgress('failed', $message);
+                } else {
+                    Artisan::call('up');
+                    $message = 'Restore failed before anything was changed — the instance was never touched. '.$e->getMessage();
+                    $this->setProgress('failed', $message);
+                }
+
+                AuditLog::record(
+                    action: 'backup.restore_failed',
+                    actorId: $this->triggeredBy,
+                    actorType: $this->triggeredBy !== null ? 'user' : 'system',
+                    subject: $run,
+                    after: [...$auditAfter, 'error' => $e->getMessage(), 'database_touched' => $databaseTouched],
+                );
+
+                $this->notifyTrigger("Restore didn't complete", $message, success: false);
+            } finally {
+                $service->cleanup();
+
+                // The uploaded source archive itself (distinct from the
+                // service's own temp extraction, already cleaned above) —
+                // never leave an uploaded DB dump sitting on disk longer than
+                // the restore attempt that used it.
+                if ($this->importDisk !== null && $this->importPath !== null) {
+                    try {
+                        Storage::disk($this->importDisk)->delete($this->importPath);
+                    } catch (Throwable) {
+                    }
                 }
             }
-
+        } finally {
             $lock->release();
         }
     }

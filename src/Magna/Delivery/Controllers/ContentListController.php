@@ -6,6 +6,7 @@ namespace Magna\Delivery\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Magna\Content\ContentType;
 use Magna\Content\Field;
 use Magna\Content\FieldTypes\RelationField;
 use Magna\Content\SchemaRegistry;
@@ -16,6 +17,7 @@ use Magna\Delivery\ETagService;
 use Magna\Delivery\Exceptions\DeliveryException;
 use Magna\Delivery\RelationLoader;
 use Magna\Delivery\ResponseCacheService;
+use Magna\Delivery\SurrogateKeyCollector;
 use Magna\Media\Media;
 use Magna\Settings\ApiSettings;
 use Symfony\Component\HttpFoundation\Response;
@@ -41,7 +43,7 @@ final class ContentListController extends DeliveryController
         [$contentType, $keys, $cacheKey] = [$outcome->contentType, $outcome->keys, $outcome->cacheKey];
 
         $bodyCacheKey = $this->responseCache->cacheKey($request);
-        $cachedBody = $this->responseCache->get($bodyCacheKey, $keys);
+        $cachedBody = $this->responseCache->get($bodyCacheKey, $contentType->handle);
         if ($cachedBody !== null) {
             return $this->cachedResponse($cachedBody, $keys);
         }
@@ -56,6 +58,30 @@ final class ContentListController extends DeliveryController
             // No stale copy — fall through to a fresh DB query.
         }
 
+        // try/finally guarantees the rebuild lock is released on every exit
+        // path below (early-return 400s, DeliveryException, serialization 500,
+        // and the success path) — not only after a successful put().
+        try {
+            return $this->buildFreshResponse($request, $contentType, $type, $keys, $cacheKey, $bodyCacheKey);
+        } finally {
+            if ($wonLock) {
+                $this->responseCache->releaseLock($bodyCacheKey);
+            }
+        }
+    }
+
+    /**
+     * Build a fresh (uncached) list response: parse query params, run the
+     * query, transform, cache the body, and return it.
+     */
+    private function buildFreshResponse(
+        Request $request,
+        ContentType $contentType,
+        string $type,
+        SurrogateKeyCollector $keys,
+        string $cacheKey,
+        string $bodyCacheKey,
+    ): Response {
         // Parse ?with= relation handles
         $withParam = $request->string('with')->value();
         /** @var list<string> $relationHandles */
@@ -147,10 +173,7 @@ final class ContentListController extends DeliveryController
 
         $etagValue = '"'.hash('sha256', $json).'"';
         $this->etag->store($cacheKey, $etagValue, $type);
-        $this->responseCache->put($bodyCacheKey, $json, $keys);
-        if ($wonLock) {
-            $this->responseCache->releaseLock($bodyCacheKey);
-        }
+        $this->responseCache->put($bodyCacheKey, $json, $contentType->handle);
 
         return $this->deliveryResponse($json, $etagValue, $keys, 'MISS');
     }

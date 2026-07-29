@@ -13,16 +13,15 @@ use Magna\Media\Events\MediaCreated;
 use Magna\Media\Events\MediaDeleted;
 use Magna\Media\Exceptions\MediaIngestException;
 use Magna\Media\Exceptions\MimeTypeNotAllowedException;
+use Magna\Media\Http\Resources\MediaResource;
 use Magna\Media\Media;
 use Magna\Media\MediaIngestor;
-use Magna\Media\MediaUrlResolver;
 use Symfony\Component\HttpFoundation\Response;
 
 class MediaController extends ManagementController
 {
     public function __construct(
         private readonly MediaIngestor $ingestor,
-        private readonly MediaUrlResolver $urlResolver,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -69,29 +68,23 @@ class MediaController extends ManagementController
             after: ['id' => $media->id, 'filename' => $media->original_filename],
         );
 
-        return response()->json(['data' => $this->mediaToArray($media)], 201);
+        return response()->json(['data' => MediaResource::make($media)], 201);
     }
 
     public function show(Request $request, string $media): JsonResponse
     {
         Gate::authorize('media.view');
 
-        $record = $this->findOrNotFound(Media::query(), $media, 'Media');
-        if ($record instanceof JsonResponse) {
-            return $record;
-        }
+        $record = $this->findOrFail(Media::query(), $media, 'Media');
 
-        return response()->json(['data' => $this->mediaToArray($record)]);
+        return response()->json(['data' => MediaResource::make($record)]);
     }
 
     public function destroy(Request $request, string $media): Response
     {
         Gate::authorize('media.delete');
 
-        $record = $this->findOrNotFound(Media::query(), $media, 'Media');
-        if ($record instanceof JsonResponse) {
-            return $record;
-        }
+        $record = $this->findOrFail(Media::query(), $media, 'Media');
 
         $before = ['id' => $record->id, 'filename' => $record->original_filename];
 
@@ -108,27 +101,5 @@ class MediaController extends ManagementController
         );
 
         return response()->noContent();
-    }
-
-    /** @return array<string, mixed> */
-    private function mediaToArray(Media $media): array
-    {
-        return [
-            'id' => $media->id,
-            'disk' => $media->disk,
-            'path' => $media->path,
-            'original_filename' => $media->original_filename,
-            'mime_type' => $media->mime_type,
-            'size' => $media->size,
-            'width' => $media->width,
-            'height' => $media->height,
-            'alt' => $media->alt,
-            'title' => $media->title,
-            'url' => $this->urlResolver->publicUrl($media),
-            'srcset' => $this->urlResolver->srcset($media),
-            'folder_id' => $media->folder_id,
-            'created_at' => $media->created_at?->toIso8601String(),
-            'updated_at' => $media->updated_at?->toIso8601String(),
-        ];
     }
 }

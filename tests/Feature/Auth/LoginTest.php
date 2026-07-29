@@ -2,47 +2,56 @@
 
 declare(strict_types=1);
 
+use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
+use Magna\Auth\Filament\Login;
 use Magna\Auth\LoginThrottle;
 use Magna\Auth\Role;
 use Magna\Users\User;
 
-it('shows the login form', function (): void {
-    $this->get(route('auth.login'))->assertOk();
+beforeEach(function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('magna'));
 });
+
+/** Drive the single Filament sign-in page. */
+function attemptLogin(string $email, string $password)
+{
+    return Livewire::test(Login::class)
+        ->fillForm(['email' => $email, 'password' => $password])
+        ->call('authenticate');
+}
 
 it('logs in with correct credentials', function (): void {
     $user = User::factory()->create(['password' => Hash::make('secret')]);
+    $user->assignRole(Role::factory()->create());
 
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'secret',
-    ])->assertRedirect(route('dashboard'));
+    attemptLogin($user->email, 'secret')->assertHasNoFormErrors();
 
     $this->assertAuthenticatedAs($user);
 });
 
 it('rejects wrong password', function (): void {
     $user = User::factory()->create(['password' => Hash::make('secret')]);
+    $user->assignRole(Role::factory()->create());
 
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'wrong',
-    ])->assertRedirect()->assertSessionHasErrors('email');
+    attemptLogin($user->email, 'wrong')->assertHasFormErrors(['email']);
 
     $this->assertGuest();
 });
 
 it('rejects suspended accounts', function (): void {
     $user = User::factory()->suspended()->create(['password' => Hash::make('secret')]);
+    $user->assignRole(Role::factory()->create());
 
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'secret',
-    ])->assertRedirect()->assertSessionHasErrors('email');
+    attemptLogin($user->email, 'secret')->assertHasFormErrors(['email']);
 
     $this->assertGuest();
+});
+
+it('redirects the legacy login route to the single Filament sign-in page', function (): void {
+    $this->get(route('auth.login'))->assertRedirect(route('filament.magna.auth.login'));
 });
 
 it('logs out and clears session', function (): void {
@@ -50,7 +59,7 @@ it('logs out and clears session', function (): void {
 
     $this->actingAs($user)
         ->post(route('auth.logout'))
-        ->assertRedirect(route('auth.login'));
+        ->assertRedirect(route('filament.magna.auth.login'));
 
     $this->assertGuest();
 });
@@ -59,21 +68,18 @@ it('brute-force lockout kicks in after max_attempts consecutive failures', funct
     Cache::flush();
     config(['magna.login.max_attempts' => 3, 'magna.login.base_lockout_seconds' => 30]);
 
-    $user = User::factory()->create();
-    $payload = ['email' => $user->email, 'password' => 'wrong'];
+    $user = User::factory()->create(['password' => Hash::make('secret')]);
+    $user->assignRole(Role::factory()->create());
 
-    // 3 failures — no lockout yet
-    $this->post(route('auth.login.attempt'), $payload);
-    $this->post(route('auth.login.attempt'), $payload);
-    $this->post(route('auth.login.attempt'), $payload);
+    // 3 failures reach the lockout threshold.
+    attemptLogin($user->email, 'wrong');
+    attemptLogin($user->email, 'wrong');
+    attemptLogin($user->email, 'wrong');
 
-    // 4th attempt — now locked
-    $this->post(route('auth.login.attempt'), $payload)
-        ->assertRedirect()
-        ->assertSessionHasErrors('email');
+    expect(app(LoginThrottle::class)->isLocked($user->email))->toBeTrue();
 
-    // Verify throttle considers it locked
-    expect(app(LoginThrottle::class)->isLocked(request()))->toBeTrue();
+    // A further attempt is refused with the lockout message.
+    attemptLogin($user->email, 'wrong')->assertHasFormErrors(['email']);
 });
 
 it('returns 404 for registration when disabled', function (): void {
@@ -86,39 +92,4 @@ it('returns 404 for registration when disabled', function (): void {
         'password' => 'password',
         'password_confirmation' => 'password',
     ])->assertNotFound();
-});
-
-it('redirects to 2FA challenge when role requires it and user has 2FA enrolled', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => true]);
-    $user = User::factory()->create([
-        'password' => Hash::make('secret'),
-        'two_factor_secret' => 'JBSWY3DPEHPK3PXP',
-        'two_factor_confirmed_at' => now(),
-    ]);
-    $user->assignRole($role);
-
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'secret',
-    ])->assertRedirect(route('auth.two-factor.challenge'));
-
-    $this->assertGuest();
-    expect(session('auth.two_factor_user_id'))->toBe($user->getKey());
-});
-
-it('logs in without 2FA challenge when role does not require it, even if user has 2FA', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => false]);
-    $user = User::factory()->create([
-        'password' => Hash::make('secret'),
-        'two_factor_secret' => 'JBSWY3DPEHPK3PXP',
-        'two_factor_confirmed_at' => now(),
-    ]);
-    $user->assignRole($role);
-
-    $this->post(route('auth.login.attempt'), [
-        'email' => $user->email,
-        'password' => 'secret',
-    ])->assertRedirect(route('dashboard'));
-
-    $this->assertAuthenticatedAs($user);
 });

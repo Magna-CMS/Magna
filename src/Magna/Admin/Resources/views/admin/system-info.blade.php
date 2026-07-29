@@ -38,6 +38,24 @@
     </div>
     @endif
 
+    {{-- ── Security warnings (all environments) ───────────────────────────────── --}}
+    @if(! empty($security_warnings))
+    <div class="rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="msri text-red-500 text-xl">gpp_maybe</span>
+            <h3 class="text-sm font-extrabold text-red-700 dark:text-red-400">A security control on this instance is not doing what you think it is</h3>
+        </div>
+        <ul class="space-y-3">
+            @foreach($security_warnings as $warning)
+            <li class="text-sm">
+                <p class="font-semibold text-gray-900 dark:text-white">{{ $warning['label'] }}</p>
+                <p class="text-gray-500 dark:text-gray-400 mt-0.5">{{ $warning['help'] }}</p>
+            </li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+
     {{-- ── Proactive performance warnings (production only) ───────────────────── --}}
     @if(! empty($performance_warnings))
     <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
@@ -570,6 +588,27 @@
                         <span class="text-[11px] text-slate-400 mt-1 block">
                             {{ $queue_pending !== null ? 'job(s) waiting to run' : 'not available for "'.$queue_connection.'" driver' }}
                         </span>
+
+                        {{-- A count alone cannot tell a busy queue from a dead
+                             one. Fifteen minutes of waiting can: no worker is
+                             consuming this queue, and nothing queued will run
+                             until one does. --}}
+                        @if (($queue_oldest_minutes ?? null) !== null && $queue_oldest_minutes >= 15)
+                            @php
+                                $waited = $queue_oldest_minutes >= 2880
+                                    ? floor($queue_oldest_minutes / 1440).' day(s)'
+                                    : ($queue_oldest_minutes >= 120
+                                        ? floor($queue_oldest_minutes / 60).' hour(s)'
+                                        : $queue_oldest_minutes.' minutes');
+                            @endphp
+                            <div class="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                                <p class="text-[11px] font-semibold text-amber-700 dark:text-amber-300">No queue worker is running</p>
+                                <p class="mt-1 text-[11px] leading-relaxed text-amber-700/80 dark:text-amber-300/80">
+                                    The oldest job has waited {{ $waited }}. Nothing queued runs until a worker consumes it —
+                                    start one with <code class="font-mono">php artisan queue:work</code>.
+                                </p>
+                            </div>
+                        @endif
                     </div>
 
                     {{-- Failed --}}

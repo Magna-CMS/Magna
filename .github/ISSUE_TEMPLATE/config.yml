@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & ideas
+    url: https://github.com/Magna-CMS/Magna/discussions
+    about: Ask questions, share ideas, and discuss usage in Discussions.
+  - name: Documentation
+    url: https://github.com/Magna-CMS/Magna/discussions/categories/q-a
+    about: Read the developer manual before filing — most answers are there.
+  - name: Report a security vulnerability
+    url: https://github.com/Magna-CMS/Magna/security/advisories/new
+    about: Report privately via GitHub Security Advisories — never a public issue.
+  - name: Plugin issues
+    url: https://github.com/Magna-CMS
+    about: Plugins live in their own repositories — open plugin issues there.
