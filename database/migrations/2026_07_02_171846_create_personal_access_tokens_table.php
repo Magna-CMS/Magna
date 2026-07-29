@@ -13,7 +13,10 @@ return new class extends Migration
     {
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
-            $table->morphs('tokenable');
+            // ulidMorphs, not morphs: every authenticatable in Magna keys on a ULID,
+            // and a bigint morph column cannot store one. SQLite accepts it anyway;
+            // MySQL and PostgreSQL reject the insert outright.
+            $table->ulidMorphs('tokenable');
             $table->text('name');
             $table->string('token', 64)->unique();
             $table->text('abilities')->nullable();

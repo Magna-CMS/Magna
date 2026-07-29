@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Development is where work lands; main does not exist in this repository,
+    # so branch pushes were running no checks at all and portability breaks
+    # only surfaced when a release was cut.
+    branches: [main, Development]
   pull_request:
 
 jobs:
