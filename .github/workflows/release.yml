@@ -87,9 +87,12 @@ jobs:
       - name: Prepare environment
         run: |
           set -o pipefail
-          php artisan key:generate
-          if ! php artisan package:discover --ansi 2>&1 | tee package-discover.log; then
-            echo "::error::package:discover failed -- $(tail -n 8 package-discover.log | tr '\n' ' ' | cut -c1-1500)"
+          if ! php artisan key:generate 2>&1 | tee artisan.log; then
+            echo "::error::key:generate failed -- $(tail -n 12 artisan.log | tr '\n' ' ' | cut -c1-1500)"
+            exit 1
+          fi
+          if ! php artisan package:discover --ansi 2>&1 | tee -a artisan.log; then
+            echo "::error::package:discover failed -- $(tail -n 12 artisan.log | tr '\n' ' ' | cut -c1-1500)"
             exit 1
           fi
         env:
