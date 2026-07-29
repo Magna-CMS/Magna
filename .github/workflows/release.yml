@@ -108,7 +108,12 @@ jobs:
       # filesystem and registry state, and parallel workers fail each other
       # non-deterministically. A release must not hinge on that coin flip.
       - name: Run test suite (Postgres)
-        run: php artisan test
+        run: |
+          set -o pipefail
+          if ! php artisan test 2>&1 | tee test.log; then
+            echo "::error::suite failed -- $(grep -E '⨯|FAILED|Tests:|Error' test.log | tail -n 12 | tr '\n' ' ' | cut -c1-1800)"
+            exit 1
+          fi
         env:
           APP_ENV: testing
           DB_CONNECTION: pgsql
