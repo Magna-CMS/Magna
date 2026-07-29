@@ -54,7 +54,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo_pgsql, pgsql, redis, gd, mbstring, openssl, fileinfo, bcmath, pcntl, sodium
+          extensions: pdo_pgsql, pgsql, redis, gd, intl, zip, mbstring, openssl, fileinfo, bcmath, pcntl, sodium
           coverage: none
 
       - name: Cache Composer packages
@@ -124,7 +124,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
-          extensions: pdo_pgsql, pgsql, redis, gd, mbstring, openssl, fileinfo, bcmath, pcntl, sodium, zip
+          extensions: pdo_pgsql, pgsql, redis, gd, intl, zip, mbstring, openssl, fileinfo, bcmath, pcntl, sodium
           coverage: none
 
       - name: Install production dependencies
