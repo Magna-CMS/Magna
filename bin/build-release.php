@@ -282,22 +282,22 @@ if ($code !== 0) {
     fail('composer install failed. See output above.');
 }
 
-// A few upstream packages ship editor/assistant instruction files next to their
-// source. They are development notes for that package's own contributors, carry
-// no runtime meaning, and only add noise to a distributed archive.
-$strays = 0;
+// Dependencies ship their own documentation — readmes, changelogs, upgrade
+// guides, contributor notes. None of it is read at runtime, and it is all a
+// click away on Packagist, so keep the archive to code.
+$docs = 0;
 $tree = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($stage, FilesystemIterator::SKIP_DOTS)
+    new RecursiveDirectoryIterator($stage.'/vendor', FilesystemIterator::SKIP_DOTS)
 );
 foreach ($tree as $file) {
     /** @var SplFileInfo $file */
-    if ($file->isFile() && in_array($file->getFilename(), ['CLAUDE.md', 'AGENTS.md', '.cursorrules'], true)) {
+    if ($file->isFile() && strtolower($file->getExtension()) === 'md') {
         @unlink($file->getPathname());
-        $strays++;
+        $docs++;
     }
 }
-if ($strays > 0) {
-    say("  removed {$strays} vendor instruction files");
+if ($docs > 0) {
+    say("  removed {$docs} vendor documentation files");
 }
 
 // ---------------------------------------------------------------------------

@@ -77,8 +77,11 @@ jobs:
           DB_USERNAME: magna
           DB_PASSWORD: secret
 
+      # Serial, not --parallel: the backup and content-type suites share
+      # filesystem and registry state, and parallel workers fail each other
+      # non-deterministically. A release must not hinge on that coin flip.
       - name: Run test suite (Postgres)
-        run: php artisan test --parallel
+        run: php artisan test
         env:
           APP_ENV: testing
           DB_CONNECTION: pgsql
@@ -148,7 +151,9 @@ jobs:
             awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > release_notes.md
           fi
           if [ ! -s release_notes.md ]; then
-            echo "Magna CMS ${GITHUB_REF_NAME}. Download the archive below, extract it to your domain root, and open the site to run the installer." > release_notes.md
+            cat > release_notes.md <<'NOTES'
+          One-click, extract-and-run installer build. Install: upload and extract this ZIP to the root of your domain or subdomain, then open the site. The web installer runs automatically. No SSH, no Composer, and no document-root changes required. The archive bundles production dependencies (vendor/), compiled assets, and a root forwarder so it serves correctly straight from the extraction root.
+          NOTES
           fi
 
       - name: Create GitHub release
