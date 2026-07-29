@@ -282,6 +282,24 @@ if ($code !== 0) {
     fail('composer install failed. See output above.');
 }
 
+// A few upstream packages ship editor/assistant instruction files next to their
+// source. They are development notes for that package's own contributors, carry
+// no runtime meaning, and only add noise to a distributed archive.
+$strays = 0;
+$tree = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator($stage, FilesystemIterator::SKIP_DOTS)
+);
+foreach ($tree as $file) {
+    /** @var SplFileInfo $file */
+    if ($file->isFile() && in_array($file->getFilename(), ['CLAUDE.md', 'AGENTS.md', '.cursorrules'], true)) {
+        @unlink($file->getPathname());
+        $strays++;
+    }
+}
+if ($strays > 0) {
+    say("  removed {$strays} vendor instruction files");
+}
+
 // ---------------------------------------------------------------------------
 // Root forwarder — the piece that makes "extract to the domain root" work.
 // ---------------------------------------------------------------------------
