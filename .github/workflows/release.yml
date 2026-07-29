@@ -104,6 +104,19 @@ jobs:
           DB_USERNAME: magna
           DB_PASSWORD: secret
 
+      # The panel renders its theme through @vite; panel pages 500 without a
+      # built manifest, and the suite requests them.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+
       # Serial, not --parallel: the backup and content-type suites share
       # filesystem and registry state, and parallel workers fail each other
       # non-deterministically. A release must not hinge on that coin flip.

@@ -104,6 +104,19 @@ jobs:
             echo "DB_PASSWORD=secret"
           } >> "$GITHUB_ENV"
 
+      # The panel renders its theme through @vite, so a request to any panel
+      # page 500s without a built manifest. The suite covers those pages.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+
       - name: Code style (Pint)
         run: php vendor/bin/pint --test
 
