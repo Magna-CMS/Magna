@@ -60,11 +60,12 @@ jobs:
         run: cp .env.example .env
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
 
       - name: Prepare environment
         run: |
           php artisan key:generate
+          php artisan package:discover --ansi
 
       # DB connection is exported to the PROCESS environment ($GITHUB_ENV), not
       # .env. phpunit.xml pins DB_CONNECTION=sqlite/:memory: with a non-forced
@@ -151,7 +152,7 @@ jobs:
         run: cp .env.example .env
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
 
       - name: Install Octane
         run: composer require laravel/octane --no-interaction --no-progress
@@ -159,6 +160,7 @@ jobs:
       - name: Prepare environment
         run: |
           php artisan key:generate
+          php artisan package:discover --ansi
           {
             echo "DB_CONNECTION=pgsql"
             echo "DB_HOST=127.0.0.1"
@@ -207,7 +209,7 @@ jobs:
           php-version: '8.4'
           coverage: none
       - run: cp .env.example .env
-      - run: composer install --prefer-dist --no-interaction --no-progress
+      - run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
       - run: composer audit
 
   psalm:
@@ -220,6 +222,6 @@ jobs:
           php-version: '8.4'
           coverage: none
       - run: cp .env.example .env
-      - run: composer install --prefer-dist --no-interaction --no-progress
+      - run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
       - name: Run Psalm taint analysis on auth + delivery + management paths
         run: vendor/bin/psalm --taint-analysis --no-progress --output-format=github

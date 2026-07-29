@@ -73,16 +73,25 @@ jobs:
       - name: Create the environment file
         run: cp .env.example .env
 
+      # --no-scripts: post-autoload-dump boots Laravel through
+      # `artisan package:discover`, which needs an application key that only
+      # exists after the next step. Discovery runs there instead.
       - name: Install dependencies
         run: |
           set -o pipefail
-          if ! composer install --no-interaction --prefer-dist --no-progress 2>&1 | tee composer-install.log; then
-            echo "::error::composer install failed -- $(tail -n 30 composer-install.log | tr '\n' ' ' | cut -c1-1200)"
+          if ! composer install --no-interaction --prefer-dist --no-progress --no-scripts 2>&1 | tee composer-install.log; then
+            echo "::error::composer install failed -- $(grep -iE 'error|exception|fatal|failed|not satisfied|requires' composer-install.log | tail -n 8 | tr '\n' ' ' | cut -c1-1500)"
             exit 1
           fi
 
       - name: Prepare environment
-        run: php artisan key:generate
+        run: |
+          set -o pipefail
+          php artisan key:generate
+          if ! php artisan package:discover --ansi 2>&1 | tee package-discover.log; then
+            echo "::error::package:discover failed -- $(tail -n 8 package-discover.log | tr '\n' ' ' | cut -c1-1500)"
+            exit 1
+          fi
         env:
           APP_ENV: testing
           DB_CONNECTION: pgsql
@@ -142,8 +151,11 @@ jobs:
       - name: Create the environment file
         run: cp .env.example .env
 
+      # --no-scripts for the same reason as the test job: package discovery
+      # needs a booted application, and the archive regenerates its own caches
+      # on the target's first request anyway.
       - name: Install production dependencies
-        run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+        run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --no-scripts
 
       - name: Set up Node
         uses: actions/setup-node@v4
