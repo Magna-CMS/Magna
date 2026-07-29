@@ -74,7 +74,12 @@ jobs:
         run: cp .env.example .env
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
+        run: |
+          set -o pipefail
+          if ! composer install --no-interaction --prefer-dist --no-progress 2>&1 | tee composer-install.log; then
+            echo "::error::composer install failed -- $(tail -n 30 composer-install.log | tr '\n' ' ' | cut -c1-1200)"
+            exit 1
+          fi
 
       - name: Prepare environment
         run: php artisan key:generate
