@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Delivery;
 
 use Illuminate\Http\Request;
+use Magna\Users\User;
 
 /**
  * Manages ETag generation, caching, and conditional-request 304 detection.
@@ -50,11 +51,11 @@ final class ETagService
     {
         $user = $request->user();
 
-        // The user resolver is typed across every guard's model, and only the
-        // token-bearing ones expose currentAccessToken().
-        $token = $user !== null && method_exists($user, 'currentAccessToken')
-            ? $user->currentAccessToken()
-            : null;
+        // Narrowed to the model rather than probed with method_exists(): an
+        // installed plugin can add its own guard model, so the resolver's type
+        // is a union in one install and a single class in another — and only
+        // this one carries a Sanctum token.
+        $token = $user instanceof User ? $user->currentAccessToken() : null;
 
         if ($token === null) {
             return 'anonymous';
