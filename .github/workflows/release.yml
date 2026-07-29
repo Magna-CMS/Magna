@@ -57,20 +57,27 @@ jobs:
           extensions: pdo_pgsql, pgsql, redis, gd, intl, zip, mbstring, openssl, fileinfo, bcmath, pcntl, sodium
           coverage: none
 
-      - name: Cache Composer packages
+      # Cache Composer's download cache, never vendor/ itself: a restored
+      # vendor/ from an older lock can carry packages this lock no longer has
+      # (including path-repo symlinks to directories that do not exist in a
+      # clone), and composer then trips over them before installing anything.
+      - name: Cache Composer downloads
         uses: actions/cache@v4
         with:
-          path: vendor
-          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-${{ matrix.php }}-
+          path: ~/.cache/composer
+          key: composer-cache-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-cache-${{ matrix.php }}-
+
+      # Composer's post-autoload-dump script boots Laravel to discover
+      # packages, so the environment file has to exist before install runs.
+      - name: Create the environment file
+        run: cp .env.example .env
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Prepare environment
-        run: |
-          cp .env.example .env
-          php artisan key:generate
+        run: php artisan key:generate
         env:
           APP_ENV: testing
           DB_CONNECTION: pgsql
@@ -126,6 +133,9 @@ jobs:
           php-version: "8.4"
           extensions: pdo_pgsql, pgsql, redis, gd, intl, zip, mbstring, openssl, fileinfo, bcmath, pcntl, sodium
           coverage: none
+
+      - name: Create the environment file
+        run: cp .env.example .env
 
       - name: Install production dependencies
         run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader

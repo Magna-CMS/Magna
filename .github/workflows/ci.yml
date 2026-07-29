@@ -54,12 +54,16 @@ jobs:
           extensions: mbstring, intl, zip, gd, pdo_sqlite, pdo_pgsql, pdo_mysql, redis
           coverage: none
 
+      # composer's post-autoload-dump script boots Laravel to discover
+      # packages, so the environment file has to exist before install runs.
+      - name: Create the environment file
+        run: cp .env.example .env
+
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Prepare environment
         run: |
-          cp .env.example .env
           php artisan key:generate
 
       # DB connection is exported to the PROCESS environment ($GITHUB_ENV), not
@@ -141,6 +145,11 @@ jobs:
           extensions: mbstring, intl, zip, gd, pdo_pgsql, redis, pcntl
           coverage: none
 
+      # composer's post-autoload-dump script boots Laravel to discover
+      # packages, so the environment file has to exist before install runs.
+      - name: Create the environment file
+        run: cp .env.example .env
+
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
@@ -149,7 +158,6 @@ jobs:
 
       - name: Prepare environment
         run: |
-          cp .env.example .env
           php artisan key:generate
           {
             echo "DB_CONNECTION=pgsql"
@@ -198,6 +206,7 @@ jobs:
         with:
           php-version: '8.4'
           coverage: none
+      - run: cp .env.example .env
       - run: composer install --prefer-dist --no-interaction --no-progress
       - run: composer audit
 
@@ -210,6 +219,7 @@ jobs:
         with:
           php-version: '8.4'
           coverage: none
+      - run: cp .env.example .env
       - run: composer install --prefer-dist --no-interaction --no-progress
       - name: Run Psalm taint analysis on auth + delivery + management paths
         run: vendor/bin/psalm --taint-analysis --no-progress --output-format=github
