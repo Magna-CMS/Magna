@@ -111,7 +111,17 @@ jobs:
         run: php vendor/bin/phpstan analyse --memory-limit=1G --no-progress
 
       - name: Tests (Pest)
-        run: php artisan test
+        run: |
+          set -o pipefail
+          if ! php artisan test 2>&1 | tee test.log; then
+            {
+              echo "### Failures — PHP ${{ matrix.php }} / ${{ matrix.db }}"
+              echo '```'
+              grep -aE 'FAILED|Tests:|SQLSTATE|Error' test.log | tail -n 25
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
   octane-smoke:
     name: Octane / FrankenPHP smoke test
