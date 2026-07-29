@@ -11,6 +11,7 @@ uses(PluginTestCase::class);
 // by reading Laravel's migration repository (no guessing).
 
 it('warns about an unapplied plugin migration', function (): void {
+    skipWithoutDevPlugin('magna/docs');
     $this->enablePlugin('magna/docs');
 
     // Simulate drift: a migration file exists on disk but its repository row is
@@ -25,6 +26,7 @@ it('warns about an unapplied plugin migration', function (): void {
 });
 
 it('reports a clean bill of health when everything is applied', function (): void {
+    skipWithoutDevPlugin('magna/docs');
     $this->enablePlugin('magna/docs');
 
     $this->artisan('magna:plugin:doctor')->assertSuccessful();

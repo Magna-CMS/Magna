@@ -22,6 +22,8 @@ it('does not discover a dev plugin that is not wired into root composer.json', f
 });
 
 it('still discovers dev plugins that are wired into root composer.json', function (): void {
+    skipWithoutDevPlugin('magna/docs');
+
     $discovery = new PluginDiscovery(base_path());
 
     $names = array_map(fn ($info) => $info->manifest->name, $discovery->discover());

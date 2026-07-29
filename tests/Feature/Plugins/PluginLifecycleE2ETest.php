@@ -15,6 +15,8 @@ uses(PluginTestCase::class);
 
 function lifecycleManager(): PluginManager
 {
+    skipWithoutDevPlugin('magna/docs');
+
     return app(PluginManager::class);
 }
 

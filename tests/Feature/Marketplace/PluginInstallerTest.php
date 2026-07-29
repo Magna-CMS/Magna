@@ -34,6 +34,9 @@ beforeEach(function (): void {
 });
 
 it('installs and enables an approved plugin', function (): void {
+    // enable() resolves the real discovered plugin, so this one needs it present.
+    skipWithoutDevPlugin('magna/docs');
+
     fakeMarket([['package' => 'magna/docs', 'name' => 'Magna Docs', 'version' => '1.0.0', 'compat' => '^1.0']]);
     $runner = fakeRunner();
 

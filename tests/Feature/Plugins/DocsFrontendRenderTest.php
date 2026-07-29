@@ -19,6 +19,7 @@ use Magna\Users\User;
 uses(PluginTestCase::class);
 
 beforeEach(function (): void {
+    skipWithoutDevPlugin('magna/docs');
     $this->enablePlugin('magna/docs');
     // Plugin routes are registered after app boot in tests, so the URL
     // generator's name map needs refreshing (not needed in production).
