@@ -20,7 +20,7 @@ it('sends an enrolled user to the 2FA challenge instead of logging them straight
         'two_factor_secret' => 'JBSWY3DPEHPK3PXP',
         'two_factor_confirmed_at' => now(),
     ]);
-    $user->assignRole(Role::factory()->create());
+    $user->assignRole(Role::factory()->withPanelAccess()->create());
 
     Livewire::test(Login::class)
         ->fillForm(['email' => $user->email, 'password' => 'secret'])
@@ -38,7 +38,7 @@ it('sends an enrolled user to the 2FA challenge instead of logging them straight
 
 it('logs a user without 2FA straight into the panel', function (): void {
     $user = User::factory()->create(['password' => Hash::make('secret')]);
-    $user->assignRole(Role::factory()->create());
+    $user->assignRole(Role::factory()->withPanelAccess()->create());
 
     Livewire::test(Login::class)
         ->fillForm(['email' => $user->email, 'password' => 'secret'])

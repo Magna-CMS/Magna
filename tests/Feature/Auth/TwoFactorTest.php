@@ -137,7 +137,7 @@ it('rejects 2FA disable with wrong password', function (): void {
 it('completes login via TOTP challenge', function (): void {
     $twoFactor = app(TwoFactorService::class);
     $secret = $twoFactor->generateSecret();
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create([
         'password' => Hash::make('secret'),
         'two_factor_secret' => $secret,
@@ -193,7 +193,7 @@ it('completes challenge with a recovery code and removes it', function (): void 
 });
 
 it('role-required 2FA blocks login until challenge is passed', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create([
         'password' => Hash::make('secret'),
         'two_factor_secret' => 'JBSWY3DPEHPK3PXP',
@@ -214,7 +214,7 @@ it('role-required 2FA blocks login until challenge is passed', function (): void
 // ── S1-06: 2FA enrollment must actually be forced, not just optional ─────────
 
 it('forces an un-enrolled user with a 2FA-required role to the setup page on every authenticated request', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create([
         'password' => Hash::make('secret'),
         'two_factor_secret' => null,
@@ -240,7 +240,7 @@ it('forces an un-enrolled user with a 2FA-required role to the setup page on eve
 });
 
 it('lets an un-enrolled user with a required role reach and complete the setup page', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create(['two_factor_secret' => null, 'two_factor_confirmed_at' => null]);
     $user->assignRole($role);
 
@@ -265,7 +265,7 @@ it('lets an un-enrolled user with a required role reach and complete the setup p
 });
 
 it('rejects an invalid code on the setup page without confirming enrollment', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create(['two_factor_secret' => null, 'two_factor_confirmed_at' => null]);
     $user->assignRole($role);
 
@@ -287,7 +287,7 @@ it('does not force setup on a user whose role does not require 2FA', function ()
 
 it('does not force setup on a user who has already completed enrollment', function (): void {
     $twoFactor = app(TwoFactorService::class);
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create([
         'two_factor_secret' => $twoFactor->generateSecret(),
         'two_factor_confirmed_at' => now(),
@@ -298,7 +298,7 @@ it('does not force setup on a user who has already completed enrollment', functi
 });
 
 it('lets the setup page and store routes through without redirecting', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create(['two_factor_secret' => null, 'two_factor_confirmed_at' => null]);
     $user->assignRole($role);
 
@@ -308,7 +308,7 @@ it('lets the setup page and store routes through without redirecting', function 
 });
 
 it('still allows logging out while enrollment is pending', function (): void {
-    $role = Role::factory()->create(['requires_two_factor' => true]);
+    $role = Role::factory()->withPanelAccess()->create(['requires_two_factor' => true]);
     $user = User::factory()->create(['two_factor_secret' => null, 'two_factor_confirmed_at' => null]);
     $user->assignRole($role);
 

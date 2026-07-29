@@ -37,7 +37,7 @@ it('prevents deleting an audit log entry', function (): void {
 it('records an audit entry on successful login', function (): void {
     Filament::setCurrentPanel(Filament::getPanel('magna'));
     $user = User::factory()->create(['password' => Hash::make('secret')]);
-    $user->assignRole(Role::factory()->create());
+    $user->assignRole(Role::factory()->withPanelAccess()->create());
 
     Livewire::test(Magna\Auth\Filament\Login::class)
         ->fillForm(['email' => $user->email, 'password' => 'secret'])
@@ -83,7 +83,7 @@ it('records the audit entry when the Login event matches the real authenticated 
 
 it('records an audit entry when a role is assigned', function (): void {
     $user = User::factory()->create();
-    $role = Role::factory()->create(['handle' => 'editor']);
+    $role = Role::factory()->withPanelAccess()->create(['handle' => 'editor']);
 
     $user->assignRole($role);
 

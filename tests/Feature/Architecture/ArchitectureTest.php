@@ -125,3 +125,87 @@ it('has no god classes beyond the documented ceiling', function (): void {
 
     expect($offenders)->toBe([]);
 });
+
+/**
+ * Every admin page and resource must decide who may open it.
+ *
+ * Filament defaults `canAccess()` to true, and a page with no gate is
+ * reachable by URL whatever the navigation shows — hiding a nav item proves
+ * nothing. That default is how a plugin's settings screen, holding the OAuth
+ * client secrets and the licence signing key, ended up open to anyone who
+ * could reach the panel at all.
+ *
+ * The rule is: state the audience, in the class itself. Two pages are exempt
+ * and named individually, because "anyone admitted to the panel" is genuinely
+ * their audience — a dashboard nobody may open is not a dashboard, and a
+ * profile page is about the person opening it.
+ */
+it('gives every admin page and resource an access gate', function (): void {
+    $exempt = [
+        // The panel's landing page. Admission is `panel.access`; each widget
+        // on it states its own audience.
+        'Magna\Admin\Pages\Dashboard',
+        // Your own account. Everyone admitted has one.
+        'Magna\Admin\Pages\ProfilePage',
+    ];
+
+    $roots = [
+        dirname(__DIR__, 3).'/src/Magna',
+        dirname(__DIR__, 3).'/plugins-dev',
+    ];
+
+    $offenders = [];
+
+    foreach ($roots as $root) {
+        if (! is_dir($root)) {
+            continue;
+        }
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $path = str_replace('\\', '/', $file->getPathname());
+
+            // Filament pages and resources only. Their own sub-pages (ListX,
+            // EditX) inherit the resource's gate, so they are not counted.
+            $isPage = str_contains($path, '/Filament/Pages/') || str_contains($path, '/Admin/Pages/');
+            $isResource = preg_match('#/(Filament|Admin)/Resources/[^/]+Resource\.php$#', $path) === 1;
+
+            if (! $isPage && ! $isResource) {
+                continue;
+            }
+
+            $source = (string) file_get_contents($file->getPathname());
+
+            if (preg_match('/namespace\s+([^;]+);/', $source, $matches) !== 1) {
+                continue;
+            }
+
+            $class = trim($matches[1]).'\\'.$file->getBasename('.php');
+
+            if (in_array($class, $exempt, true)) {
+                continue;
+            }
+
+            // Abstract bases are gated by whatever extends them.
+            if (preg_match('/\babstract\s+class\b/', $source) === 1) {
+                continue;
+            }
+
+            $gated = str_contains($source, 'function canAccess(')
+                || str_contains($source, 'function canViewAny(');
+
+            if (! $gated) {
+                $offenders[] = $class;
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});

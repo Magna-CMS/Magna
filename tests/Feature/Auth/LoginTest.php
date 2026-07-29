@@ -25,7 +25,7 @@ function attemptLogin(string $email, string $password)
 
 it('logs in with correct credentials', function (): void {
     $user = User::factory()->create(['password' => Hash::make('secret')]);
-    $user->assignRole(Role::factory()->create());
+    $user->assignRole(Role::factory()->withPanelAccess()->create());
 
     attemptLogin($user->email, 'secret')->assertHasNoFormErrors();
 
@@ -34,7 +34,7 @@ it('logs in with correct credentials', function (): void {
 
 it('rejects wrong password', function (): void {
     $user = User::factory()->create(['password' => Hash::make('secret')]);
-    $user->assignRole(Role::factory()->create());
+    $user->assignRole(Role::factory()->withPanelAccess()->create());
 
     attemptLogin($user->email, 'wrong')->assertHasFormErrors(['email']);
 
@@ -43,7 +43,7 @@ it('rejects wrong password', function (): void {
 
 it('rejects suspended accounts', function (): void {
     $user = User::factory()->suspended()->create(['password' => Hash::make('secret')]);
-    $user->assignRole(Role::factory()->create());
+    $user->assignRole(Role::factory()->withPanelAccess()->create());
 
     attemptLogin($user->email, 'secret')->assertHasFormErrors(['email']);
 
@@ -69,7 +69,7 @@ it('brute-force lockout kicks in after max_attempts consecutive failures', funct
     config(['magna.login.max_attempts' => 3, 'magna.login.base_lockout_seconds' => 30]);
 
     $user = User::factory()->create(['password' => Hash::make('secret')]);
-    $user->assignRole(Role::factory()->create());
+    $user->assignRole(Role::factory()->withPanelAccess()->create());
 
     // 3 failures reach the lockout threshold.
     attemptLogin($user->email, 'wrong');

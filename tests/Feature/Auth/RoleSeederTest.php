@@ -22,8 +22,9 @@ it('is idempotent', function (): void {
     $this->seed(RoleSeeder::class);
 
     expect(Role::query()->count())->toBe(4)
-        // users.*, roles.*, settings.*, plugins.*, audit.*, blocks.preview, blocks.raw_html
-        ->and(Role::query()->where('handle', 'admin')->firstOrFail()->permissions()->count())->toBe(7);
+        // panel.access, users.*, roles.*, settings.*, plugins.*, audit.*,
+        // blocks.preview, blocks.raw_html
+        ->and(Role::query()->where('handle', 'admin')->firstOrFail()->permissions()->count())->toBe(8);
 });
 
 it('gives seeded roles working permissions through the gate', function (): void {

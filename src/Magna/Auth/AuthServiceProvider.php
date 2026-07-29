@@ -92,6 +92,13 @@ class AuthServiceProvider extends ServiceProvider
         $registry = $this->app->make(PermissionRegistry::class);
 
         $registry->registerMany([
+            // The admin panel's front door. Holding a role is not the same as
+            // having business in the CMS back end: a plugin that seeds roles
+            // for its own users — a client portal, a storefront — would
+            // otherwise hand every one of them the panel. Every major CMS gates
+            // this explicitly (Craft's accessCp, Statamic's `access cp`,
+            // Drupal's `access administration pages`) for exactly that reason.
+            'panel.access' => 'Sign in to the Magna admin panel',
             'users.view' => 'View users',
             'users.manage' => 'Create, update, suspend, and delete users',
             'roles.view' => 'View roles and their granted permissions',

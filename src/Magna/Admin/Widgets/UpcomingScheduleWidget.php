@@ -23,6 +23,16 @@ class UpcomingScheduleWidget extends Widget
 
     protected string $view = 'magna::admin.widgets.upcoming-schedule';
 
+    /**
+     * What is queued to publish, and when, is editorial information. Same rule
+     * as EntryCounts: the dashboard admits anyone with panel access, so the
+     * widget decides for itself.
+     */
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('content.view') ?? false;
+    }
+
     /** @return array<string, mixed> */
     public function getViewData(): array
     {

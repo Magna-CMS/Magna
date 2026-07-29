@@ -10,6 +10,10 @@ use Magna\Auth\Role;
 /**
  * Default roles. Idempotent — safe to re-run on existing installations;
  * grants are only added, never removed, so admin customisations survive.
+ *
+ * All three operator roles carry `panel.access`, which is what admits them to
+ * the admin panel at all. Roles seeded by plugins for their own users must not
+ * have it: holding a role is not a reason to be in the CMS back end.
  */
 class RoleSeeder extends Seeder
 {
@@ -29,18 +33,18 @@ class RoleSeeder extends Seeder
         // PageTreeValidator::RAW_HTML_BLOCK_HANDLES: it's a distinct,
         // escalated-trust permission from ordinary content editing, since
         // the html/text block types render content unescaped.
-        $admin->grant('users.*', 'roles.*', 'settings.*', 'plugins.*', 'audit.*', 'blocks.preview', 'blocks.raw_html');
+        $admin->grant('panel.access', 'users.*', 'roles.*', 'settings.*', 'plugins.*', 'audit.*', 'blocks.preview', 'blocks.raw_html');
 
         $editor = Role::query()->updateOrCreate(['handle' => 'editor'], [
             'name' => 'Editor',
             'description' => 'Creates, edits, and publishes content and media.',
         ]);
-        $editor->grant('content.*', 'media.*', 'blocks.preview');
+        $editor->grant('panel.access', 'content.*', 'media.*', 'blocks.preview');
 
         $viewer = Role::query()->updateOrCreate(['handle' => 'viewer'], [
             'name' => 'Viewer',
             'description' => 'Read-only access to content.',
         ]);
-        $viewer->grant('content.*.view');
+        $viewer->grant('panel.access', 'content.*.view');
     }
 }

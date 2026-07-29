@@ -22,6 +22,17 @@ class EntryCounts extends StatsOverviewWidget
     // the dashboard shell appears instantly rather than blocking on queries.
     protected static bool $isLazy = true;
 
+    /**
+     * The dashboard itself is open to anyone who may reach the panel, so each
+     * widget states its own audience. Content totals are content data: somebody
+     * who cannot open a single entry has no business being told how many there
+     * are.
+     */
+    public static function canView(): bool
+    {
+        return auth()->user()?->can('content.view') ?? false;
+    }
+
     /** @return array<int, Stat> */
     protected function getStats(): array
     {

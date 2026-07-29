@@ -70,17 +70,25 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, MustVerif
     }
 
     /**
-     * Stage 10 (A-1): without this, Filament defaults to allowing ANY
-     * authenticated 'web'-guard user into the panel, including a
-     * self-registered account with zero roles (reachable whenever
-     * GeneralSettings::registration_enabled is on) or a suspended one. A
-     * user needs at least one role to have any legitimate business in the
-     * panel at all — everything they'd see is gated behind role-derived
-     * permissions anyway, so a roleless account has nothing to do here.
+     * Filament otherwise lets any authenticated 'web'-guard user into the
+     * panel, including a self-registered account (reachable whenever
+     * GeneralSettings::registration_enabled is on) or a suspended one.
+     *
+     * This used to read "active and holds any role", on the reasoning that
+     * everything inside is gated anyway. That reasoning does not survive
+     * plugins. A plugin that seeds roles for its own users — a client portal,
+     * a storefront — was handing every one of those users the door to the CMS
+     * back end, where they reached whatever page happened to be missing a gate
+     * of its own. Being a document administrator for one company is not a
+     * reason to be in the CMS at all.
+     *
+     * So the door has its own permission, as it does in every comparable CMS.
+     * Grant `panel.access` to the roles that operate this installation and to
+     * nothing else.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->isActive() && $this->roles()->exists();
+        return $this->isActive() && $this->can('panel.access');
     }
 
     /**
