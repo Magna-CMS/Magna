@@ -110,8 +110,10 @@ jobs:
       - name: Run test suite (Postgres)
         run: |
           set -o pipefail
+          php artisan migrate:status 2>&1 | tail -n 5 || true
           if ! php artisan test 2>&1 | tee test.log; then
-            echo "::error::suite failed -- $(grep -E '⨯|FAILED|Tests:|Error' test.log | tail -n 12 | tr '\n' ' ' | cut -c1-1800)"
+            echo "::error::suite failed -- $(grep -aoE 'SQLSTATE\[[^]]+\][^|]{0,220}' test.log | sort -u | head -n 4 | tr '\n' ' ' | cut -c1-1500)"
+            echo "::error::counts -- $(grep -aoE 'Tests: .*' test.log | tail -n 1 | cut -c1-200)"
             exit 1
           fi
         env:
