@@ -114,12 +114,9 @@ jobs:
         run: |
           set -o pipefail
           if ! php artisan test 2>&1 | tee test.log; then
-            {
-              echo "### Failures — PHP ${{ matrix.php }} / ${{ matrix.db }}"
-              echo '```'
-              grep -aE 'FAILED|Tests:|SQLSTATE|Error' test.log | tail -n 25
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::${{ matrix.db }} failures -- $(grep -aoE '(FAILED|⨯) [^│]{0,90}' test.log | tail -n 8 | tr '\n' ' ' | cut -c1-1200)"
+            echo "::error::${{ matrix.db }} reason -- $(grep -aoE '(SQLSTATE\[[^]]+\][^|]{0,140}|Failed asserting[^|]{0,140}|Undefined [a-z ]+ "[^"]+")' test.log | sort -u | head -n 4 | tr '\n' ' ' | cut -c1-1200)"
+            echo "::error::${{ matrix.db }} counts -- $(grep -aoE 'Tests:.*' test.log | tail -n 1 | cut -c1-160)"
             exit 1
           fi
 
