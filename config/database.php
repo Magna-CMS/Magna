@@ -38,9 +38,26 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
+
+            /*
+             * SQLite locks the whole database for a write, and a browser that
+             * fires several requests at once makes writers of all of them —
+             * the API rate limiter alone increments a counter on every call.
+             * With the defaults, the loser of that race fails immediately with
+             * "database is locked" and the request 500s.
+             *
+             * busy_timeout makes it wait and retry for five seconds instead of
+             * giving up, and WAL lets readers carry on while one writer works,
+             * which is what turns a burst of parallel requests from a race
+             * into a queue. NORMAL is the synchronous level WAL is designed
+             * for: a crash can cost the last transaction, never the file.
+             *
+             * All three are no-ops on MySQL, so a production install ignores
+             * them.
+             */
+            'busy_timeout' => env('DB_BUSY_TIMEOUT', 5000),
+            'journal_mode' => env('DB_JOURNAL_MODE', 'WAL'),
+            'synchronous' => env('DB_SYNCHRONOUS', 'NORMAL'),
             'transaction_mode' => 'DEFERRED',
         ],
 
