@@ -58,7 +58,25 @@ return [
             'busy_timeout' => env('DB_BUSY_TIMEOUT', 5000),
             'journal_mode' => env('DB_JOURNAL_MODE', 'WAL'),
             'synchronous' => env('DB_SYNCHRONOUS', 'NORMAL'),
-            'transaction_mode' => 'DEFERRED',
+
+            /*
+             * IMMEDIATE, not the DEFERRED default, and this is the setting that
+             * actually fixes "database is locked".
+             *
+             * A deferred transaction starts as a reader and asks for the write
+             * lock only when it reaches its first UPDATE. If another writer
+             * holds it by then, SQLite cannot make it wait — backing off would
+             * mean releasing a read snapshot the transaction has already used —
+             * so it returns SQLITE_BUSY at once and busy_timeout is ignored.
+             * That is exactly the shape of the cache store's increment: SELECT
+             * the counter, then UPDATE it, inside one transaction, on every
+             * rate-limited request.
+             *
+             * IMMEDIATE takes the write lock at BEGIN, before any read has
+             * happened, so there is nothing to roll back and busy_timeout can
+             * do its job: the second writer waits its turn instead of failing.
+             */
+            'transaction_mode' => env('DB_TRANSACTION_MODE', 'IMMEDIATE'),
         ],
 
         'mysql' => [
