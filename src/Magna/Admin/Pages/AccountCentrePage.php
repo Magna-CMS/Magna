@@ -104,6 +104,36 @@ class AccountCentrePage extends Page
     }
 
     /**
+     * Stop an auto-debit mandate at the end of its paid period (§22 buyer
+     * choice). Same gate as renew(): this changes what the account is
+     * charged, so reading the page is not enough to reach it.
+     */
+    public function cancelAutoRenew(int $subscriptionId): void
+    {
+        abort_unless(auth()->user()?->can('licensing.manage') ?? false, 403);
+
+        $result = app(LicenseClient::class)->cancelAutoRenew($subscriptionId);
+
+        if (($result['ok'] ?? false) !== true) {
+            Notification::make()
+                ->title('Auto-renew could not be cancelled')
+                ->body(is_string($result['message'] ?? null) ? $result['message'] : 'The marketplace refused the request. Try again shortly.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        app(LicenseClient::class)->forgetCache();
+
+        Notification::make()
+            ->title('Auto-renew cancelled')
+            ->body(is_string($result['message'] ?? null) ? $result['message'] : 'Your licence keeps working until the paid period ends.')
+            ->success()
+            ->send();
+    }
+
+    /**
      * The renewal went through. Nothing to install — the plugin is already
      * on the site — so this just drops the cached wallet and reloads, which
      * is what makes the new expiry date appear.

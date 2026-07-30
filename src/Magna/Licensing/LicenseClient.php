@@ -280,9 +280,14 @@ class LicenseClient
      *
      * @return array<string, mixed> the marketplace's order block plus `ok`, `error` and `message`
      */
-    public function checkout(string $productSlug, string $term): array
+    public function checkout(string $productSlug, string $term, bool $autoRenew = false): array
     {
-        return $this->postAccountPassthrough('/checkout/'.$productSlug, ['term' => $term]);
+        return $this->postAccountPassthrough('/checkout/'.$productSlug, [
+            'term' => $term,
+            // Buyer-choice auto-debit (annual only). True = the marketplace
+            // opens a gateway subscription instead of a one-off order.
+            'auto_renew' => $autoRenew,
+        ]);
     }
 
     /**
@@ -331,6 +336,51 @@ class LicenseClient
             'status' => $json['status'],
             'license_id' => is_numeric($json['license_id'] ?? null) ? (int) $json['license_id'] : null,
         ];
+    }
+
+    /**
+     * Report what the widget handed back after a SUBSCRIPTION checkout. Same
+     * courtesy-only semantics as confirmCheckout(); the first charge webhook
+     * mints the licence.
+     *
+     * @return array<string, mixed> the marketplace's reply plus `ok`, `error` and `message`
+     */
+    public function confirmSubscriptionCheckout(int $subscriptionId, string $paymentId, string $signature): array
+    {
+        return $this->postAccountPassthrough('/checkout/subscription/'.$subscriptionId.'/confirm', [
+            'razorpay_payment_id' => $paymentId,
+            'razorpay_signature' => $signature,
+        ]);
+    }
+
+    /**
+     * Poll an auto-debit subscription while its first charge mints.
+     *
+     * @return array{status: string, license_id: ?int}|null null when unreachable
+     */
+    public function subscriptionStatus(int $subscriptionId): ?array
+    {
+        $json = $this->json($this->accountRequest()?->get(Marketplace::API_BASE.'/checkout/subscription/'.$subscriptionId));
+
+        if (! is_string($json['status'] ?? null)) {
+            return null;
+        }
+
+        return [
+            'status' => $json['status'],
+            'license_id' => is_numeric($json['license_id'] ?? null) ? (int) $json['license_id'] : null,
+        ];
+    }
+
+    /**
+     * Stop an auto-debit mandate at the end of its paid period. The licence
+     * keeps working until then; the manual Renew path takes over after.
+     *
+     * @return array<string, mixed> the marketplace's reply plus `ok`, `error` and `message`
+     */
+    public function cancelAutoRenew(int $subscriptionId): array
+    {
+        return $this->postAccountPassthrough('/account/subscriptions/'.$subscriptionId.'/cancel', []);
     }
 
     /**

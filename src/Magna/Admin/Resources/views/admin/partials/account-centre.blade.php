@@ -146,12 +146,27 @@
                                     $isTheme = ($license['licensable_type'] ?? 'plugin') === 'theme';
                                     $activeHere = (bool) ($license['active_on_this_site'] ?? false);
 
+                                    // A live auto-debit mandate replaces the manual
+                                    // Renew button entirely — the gateway charges on
+                                    // its own, so offering Renew beside it would
+                                    // double-bill. Once the mandate is cancelled or
+                                    // dies, the manual path takes back over.
+                                    $subscription = is_array($license['subscription'] ?? null) ? $license['subscription'] : null;
+                                    $autoRenews = $subscription !== null
+                                        && ($subscription['collection_method'] ?? '') === 'gateway'
+                                        && in_array($subscription['status'] ?? '', ['active', 'past_due'], true)
+                                        && ($subscription['cancelled_at'] ?? null) === null;
+                                    $autoRenewsOn = $autoRenews && ($subscription['current_period_end'] ?? null)
+                                        ? \Illuminate\Support\Carbon::parse($subscription['current_period_end'])->format('d M Y')
+                                        : null;
+
                                     // Renewing is offered once a term licence is
                                     // inside its last month, and stays offered after
                                     // it lapses — an expired licence is precisely the
                                     // one someone came here to fix. Lifetime, revoked
                                     // and suspended keys are never renewable.
-                                    $renewable = $expiresAt !== null
+                                    $renewable = ! $autoRenews
+                                        && $expiresAt !== null
                                         && ! in_array($status, ['revoked', 'suspended', 'trial'], true)
                                         && ($daysLeft === null || $daysLeft <= 30);
                                 @endphp
@@ -172,6 +187,18 @@
                                     <td class="py-4">
                                         <div class="flex items-center justify-end gap-3">
                                             @can('licensing.manage')
+                                            @if ($autoRenews)
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                                    Auto-renews{{ $autoRenewsOn !== null ? ' on '.$autoRenewsOn : '' }}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    wire:click="cancelAutoRenew({{ (int) ($subscription['id'] ?? 0) }})"
+                                                    wire:confirm="Stop auto-renew for this licence? It keeps working until the paid period ends, then renews manually."
+                                                    wire:loading.attr="disabled"
+                                                    class="text-xs font-semibold text-gray-500 transition-colors hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400"
+                                                >Cancel auto-renew</button>
+                                            @endif
                                             @if ($renewable)
                                                 <button
                                                     type="button"
@@ -208,6 +235,13 @@
                         </tbody>
                     </table>
                 </div>
+            @endif
+
+            @if (is_string($panel['refund_terms'] ?? null) && ($panel['refund_terms'] ?? '') !== '')
+                <p class="mt-3 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+                    <span class="font-medium text-gray-600 dark:text-gray-300">Refund policy:</span>
+                    {{ $panel['refund_terms'] }}
+                </p>
             @endif
         </div>
 

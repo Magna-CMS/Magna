@@ -455,7 +455,7 @@ class PluginsPage extends Page
      * it, and the amount that comes back is only used to render the gateway
      * window. This page never handles card data.
      */
-    public function buy(string $package, string $term): void
+    public function buy(string $package, string $term, bool $autoRenew = false): void
     {
         if (! $this->requireConnectedAccount('Buying a plugin needs a Magna Account — that is who the licence belongs to.')) {
             return;
@@ -465,7 +465,13 @@ class PluginsPage extends Page
             return;
         }
 
-        $this->beginCheckout(app(LicenseClient::class)->checkout($package, $term), $package);
+        // Auto-renew is a property of the annual term only; the flag is
+        // simply dropped for lifetime rather than refused, since the UI
+        // never offers it there.
+        $this->beginCheckout(
+            app(LicenseClient::class)->checkout($package, $term, $autoRenew && $term === 'annual'),
+            $package,
+        );
     }
 
     /**

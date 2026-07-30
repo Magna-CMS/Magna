@@ -20,15 +20,24 @@
             const d = $event.detail.payload ?? $event.detail;
             const open = () => {
                 if (! window.Razorpay) { $wire.checkoutUnavailable(); return; }
+                // A one-off sale carries gateway_order_id; an auto-renew
+                // mandate carries gateway_subscription_id. The widget takes
+                // exactly one of the two keys.
+                const gateway = d.gateway_order_id
+                    ? { order_id: d.gateway_order_id }
+                    : { subscription_id: d.gateway_subscription_id };
+                const handler = d.gateway_order_id
+                    ? (r) => $wire.confirmPayment(d.order_id, r.razorpay_payment_id, r.razorpay_signature)
+                    : (r) => $wire.confirmSubscriptionPayment(d.subscription_id, r.razorpay_payment_id, r.razorpay_signature);
                 new window.Razorpay({
                     key: d.key_id,
-                    order_id: d.gateway_order_id,
+                    ...gateway,
                     amount: d.amount,
                     currency: d.currency,
                     name: 'Magna',
                     description: d.product,
                     prefill: { name: d.buyer_name, email: d.buyer_email },
-                    handler: (r) => $wire.confirmPayment(d.order_id, r.razorpay_payment_id, r.razorpay_signature),
+                    handler: handler,
                     modal: { ondismiss: () => $wire.cancelCheckout() },
                 }).open();
             };
@@ -42,18 +51,26 @@
     "
 ></div>
 
-@if ($this->pendingOrderId !== null)
+@if ($this->checkoutInFlight())
     <div
         wire:poll.2s="pollOrder"
-        class="fixed bottom-6 right-6 z-30 flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-4 py-3 shadow-lg"
+        class="fixed bottom-6 right-6 z-30 max-w-sm rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-900 px-4 py-3 shadow-lg"
     >
-        <svg class="w-4 h-4 animate-spin text-primary-600 dark:text-primary-400" viewBox="0 0 24 24" fill="none">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
-            <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"/>
-        </svg>
-        <div class="text-xs">
-            <p class="font-semibold text-gray-900 dark:text-white">Confirming your payment…</p>
-            <p class="text-gray-500 dark:text-gray-400">{{ $this->pendingOrderProduct }} — this finishes on its own.</p>
+        <div class="flex items-center gap-3">
+            <svg class="w-4 h-4 animate-spin text-primary-600 dark:text-primary-400" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+                <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"/>
+            </svg>
+            <div class="text-xs">
+                <p class="font-semibold text-gray-900 dark:text-white">Confirming your payment…</p>
+                <p class="text-gray-500 dark:text-gray-400">{{ $this->pendingOrderProduct }} — this finishes on its own.</p>
+            </div>
         </div>
+        @if ($this->pendingRefundTerms !== '')
+            <p class="mt-2 border-t border-gray-100 dark:border-white/5 pt-2 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+                <span class="font-medium text-gray-600 dark:text-gray-300">Refund policy:</span>
+                {{ $this->pendingRefundTerms }}
+            </p>
+        @endif
     </div>
 @endif

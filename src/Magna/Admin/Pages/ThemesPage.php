@@ -165,7 +165,7 @@ class ThemesPage extends Page
     }
 
     /** Buy a theme. Same order → gateway → webhook path as a plugin. */
-    public function buy(string $package, string $term): void
+    public function buy(string $package, string $term, bool $autoRenew = false): void
     {
         if (! $this->requireConnectedAccount()) {
             return;
@@ -175,7 +175,10 @@ class ThemesPage extends Page
             return;
         }
 
-        $this->beginCheckout(app(LicenseClient::class)->checkout($package, $term), $package);
+        $this->beginCheckout(
+            app(LicenseClient::class)->checkout($package, $term, $autoRenew && $term === 'annual'),
+            $package,
+        );
     }
 
     public function startTrial(string $package): void
