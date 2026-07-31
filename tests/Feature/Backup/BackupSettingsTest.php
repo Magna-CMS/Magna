@@ -7,7 +7,7 @@ use Magna\Settings\BackupSettings;
 use Magna\Settings\StorageSettings;
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
 });
 
 it('does not collide when disks are different local roots', function (): void {

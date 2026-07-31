@@ -11,7 +11,7 @@ use Magna\Settings\MailSettings;
 // tests (which RefreshDatabase rolls back in the DB but NOT in memory) can't
 // bleed through.
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
 });
 
 it('returns class defaults when nothing is stored', function (): void {

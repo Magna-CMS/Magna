@@ -15,7 +15,7 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
 });
 
 // Database dumping needs a real sqlite3/mysqldump binary on PATH, which

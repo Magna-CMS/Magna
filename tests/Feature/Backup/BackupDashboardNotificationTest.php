@@ -33,7 +33,7 @@ uses(TestCase::class, RefreshDatabase::class);
 //    (fixed identically) even though it predates this session's change.
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
     Cache::forget('magna.backup.run.lock');
     Cache::forget('magna.backup.run.progress');
 });

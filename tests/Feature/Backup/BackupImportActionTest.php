@@ -24,7 +24,7 @@ uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
     Filament::setCurrentPanel(Filament::getPanel('magna'));
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
 });
 
 function importSuperAdmin(): User

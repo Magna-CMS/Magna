@@ -18,7 +18,7 @@ uses(TestCase::class, RefreshDatabase::class);
 // environment either way).
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
 });
 
 afterEach(function (): void {

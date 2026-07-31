@@ -14,7 +14,7 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
     Storage::fake('public');
     Carbon::setTestNow('2026-07-20 12:00:00');
 });

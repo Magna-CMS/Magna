@@ -24,7 +24,7 @@ uses(TestCase::class, RefreshDatabase::class);
 // ":memory:" per phpunit.xml), which is itself one of the things verified.
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
 });
 
 afterEach(function (): void {

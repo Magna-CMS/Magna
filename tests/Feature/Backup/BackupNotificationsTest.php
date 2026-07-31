@@ -19,7 +19,7 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
     Cache::forget('magna.backup.run.lock');
     Cache::forget('magna.backup.run.progress');
     Notification::fake();

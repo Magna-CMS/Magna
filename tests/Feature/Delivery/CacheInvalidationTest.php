@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -25,6 +24,7 @@ use Magna\Delivery\ETagService;
 use Magna\Delivery\Listeners\DeliveryCacheInvalidator;
 use Magna\Delivery\ResponseCacheService;
 use Magna\Delivery\SurrogateKeyCollector;
+use Magna\Delivery\TagAwareCache;
 use Magna\Media\Events\MediaDeleted;
 use Magna\Media\Media;
 use Magna\Users\User;
@@ -142,7 +142,10 @@ it('EntryPublished flushes ETag cache for the type and queues edge purge', funct
     Event::dispatch(new EntryPublished($entry, null));
 
     // ETag for the type should be flushed (store should return null now)
-    $cached = Cache::tags(['magna.delivery', 'magna.delivery.type.cache_article'])->get('magna.delivery.etag.somekey');
+    // Read back through TagAwareCache, the same abstraction ETagService writes
+    // with. Cache::tags() here only worked on a taggable store, so it threw on
+    // the shipped default (`database`) and never exercised the fallback path.
+    $cached = (new TagAwareCache)->get('magna.delivery.etag.somekey', ['magna.delivery', 'magna.delivery.type.cache_article']);
     expect($cached)->toBeNull();
 
     // Edge purge job must have been queued
@@ -176,13 +179,13 @@ it('EntryDeleted and EntryUnpublished both flush the type cache', function (): v
     $etag->store('magna.delivery.etag.k1', '"del"', 'cache_article');
 
     Event::dispatch(new EntryDeleted($entry, null));
-    $after = Cache::tags(['magna.delivery', 'magna.delivery.type.cache_article'])->get('magna.delivery.etag.k1');
+    $after = (new TagAwareCache)->get('magna.delivery.etag.k1', ['magna.delivery', 'magna.delivery.type.cache_article']);
     expect($after)->toBeNull();
 
     // Re-prime for EntryUnpublished
     $etag->store('magna.delivery.etag.k2', '"unpub"', 'cache_article');
     Event::dispatch(new EntryUnpublished($entry, null));
-    $after2 = Cache::tags(['magna.delivery', 'magna.delivery.type.cache_article'])->get('magna.delivery.etag.k2');
+    $after2 = (new TagAwareCache)->get('magna.delivery.etag.k2', ['magna.delivery', 'magna.delivery.type.cache_article']);
     expect($after2)->toBeNull();
 });
 
@@ -206,7 +209,7 @@ it('MediaDeleted flushes the entire delivery cache and queues an edge purge', fu
     Event::dispatch(new MediaDeleted($media));
 
     // Entire delivery cache flushed (all tags under magna.delivery)
-    $val = Cache::tags(['magna.delivery', 'magna.delivery.type.cache_article'])->get('magna.delivery.etag.mediakey');
+    $val = (new TagAwareCache)->get('magna.delivery.etag.mediakey', ['magna.delivery', 'magna.delivery.type.cache_article']);
     expect($val)->toBeNull();
     Queue::assertPushed(PurgeEdgeCacheJob::class);
 });
@@ -266,10 +269,10 @@ it('publish purges ONLY the affected type tag and not unrelated types', function
     Event::dispatch(new EntryPublished($entryA, null));
 
     // type_a ETag flushed
-    $a = Cache::tags(['magna.delivery', 'magna.delivery.type.type_a'])->get('magna.delivery.etag.type_a_key');
+    $a = (new TagAwareCache)->get('magna.delivery.etag.type_a_key', ['magna.delivery', 'magna.delivery.type.type_a']);
     expect($a)->toBeNull();
 
     // type_b ETag NOT flushed (different type)
-    $b = Cache::tags(['magna.delivery', 'magna.delivery.type.type_b'])->get('magna.delivery.etag.type_b_key');
+    $b = (new TagAwareCache)->get('magna.delivery.etag.type_b_key', ['magna.delivery', 'magna.delivery.type.type_b']);
     expect($b)->toBe('"b"');
 });

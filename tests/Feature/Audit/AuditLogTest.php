@@ -15,7 +15,7 @@ use Magna\Settings\GeneralSettings;
 use Magna\Users\User;
 
 beforeEach(function (): void {
-    Cache::tags(['magna-settings'])->flush();
+    Cache::flush();
 });
 
 // ── Immutability ──────────────────────────────────────────────────────────────
