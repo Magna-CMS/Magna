@@ -137,10 +137,36 @@ class TableGenerator
             return;
         }
 
+        // Postgres has no default GIN operator class for `json` — only for
+        // `jsonb`. Indexing a json column raises "data type json has no
+        // default operator class for access method gin" and takes the whole
+        // content-type creation down with it, which is why creating a type
+        // with a blocks/json/richtext field never worked on Postgres. New
+        // columns are jsonb (see JsonField::addColumn()); a column left as
+        // json by an older install simply goes unindexed rather than making
+        // the table impossible to create.
+        if ($this->postgresColumnType($tableName, $column) !== 'jsonb') {
+            return;
+        }
+
         $indexName = 'idx_'.$typeHandle.'_'.$column.'_gin';
         $quotedIndex = '"'.$indexName.'"';
         $quotedTable = '"'.$tableName.'"';
         $quotedColumn = '"'.$column.'"';
         DB::statement("CREATE INDEX IF NOT EXISTS {$quotedIndex} ON {$quotedTable} USING gin ({$quotedColumn})");
+    }
+
+    /** The live Postgres data type of a column, or null if it cannot be read. */
+    private function postgresColumnType(string $tableName, string $column): ?string
+    {
+        $row = DB::selectOne(
+            'select data_type from information_schema.columns
+             where table_schema = current_schema() and table_name = ? and column_name = ?',
+            [$tableName, $column]
+        );
+
+        $type = is_object($row) ? ($row->data_type ?? null) : null;
+
+        return is_string($type) ? $type : null;
     }
 }

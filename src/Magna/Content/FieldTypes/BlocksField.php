@@ -29,7 +29,8 @@ class BlocksField extends FieldType
 
     public function addColumn(Blueprint $table, string $column): void
     {
-        $table->json($column)->nullable();
+        // jsonb — see JsonField::addColumn() for why.
+        $table->jsonb($column)->nullable();
     }
 
     /** @return list<string> */

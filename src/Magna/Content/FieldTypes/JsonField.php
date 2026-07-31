@@ -28,7 +28,11 @@ class JsonField extends FieldType
 
     public function addColumn(Blueprint $table, string $column): void
     {
-        $table->json($column)->nullable();
+        // jsonb, not json: Postgres only ships GIN operator classes for jsonb,
+        // and TableGenerator puts a GIN index on every JSON column. On MySQL
+        // and SQLite the two are the same column type, so this is a
+        // Postgres-only change.
+        $table->jsonb($column)->nullable();
     }
 
     /** @return list<string> */
