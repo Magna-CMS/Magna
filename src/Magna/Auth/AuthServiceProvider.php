@@ -20,7 +20,6 @@ use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
 use Magna\Auth\Http\Middleware\ForceHttpsMiddleware;
 use Magna\Auth\Http\Middleware\MagnaApiMiddleware;
 use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
-use Magna\Install\Installer;
 use Magna\Settings\SecuritySettings;
 use Magna\Users\User;
 
@@ -65,13 +64,22 @@ class AuthServiceProvider extends ServiceProvider
         // legally be sent over a plaintext HTTP connection. Not gated on
         // runningInConsole() since it doesn't touch the DB.
         //
-        // Relaxed only for a genuine pre-install HTTP request: a fresh unzip
-        // defaults APP_ENV to production, but the installer may run over plain
-        // HTTP before TLS exists — forcing Secure there makes the session
-        // cookie never return and every installer POST 419s. On HTTPS (or once
-        // installed) production always enforces Secure, so an install performed
-        // over TLS keeps a Secure cookie throughout.
-        if ($this->app->environment('production') && (Installer::isInstalled() || request()->isSecure())) {
+        // Gated on the request actually being over TLS, not on install state.
+        // The old condition also forced Secure once Installer::isInstalled()
+        // returned true, which meant a production install served over plain
+        // HTTP finished installing and then became impossible to sign in to:
+        // the browser silently discards a Secure cookie from an http:// origin,
+        // so every login wrote an authenticated session row, lost the cookie,
+        // and bounced back to the form with nothing in the log. Only the
+        // pre-install window was ever exempt, so the failure appeared the
+        // moment installation succeeded.
+        //
+        // A TLS deployment is unaffected — every request is secure, so the flag
+        // is still always set. An operator who terminates TLS upstream can
+        // force it regardless with SESSION_SECURE_COOKIE=true, which
+        // config/session.php already honours, and force_https keeps plaintext
+        // requests from reaching session issuance at all.
+        if ($this->app->environment('production') && request()->isSecure()) {
             config(['session.secure' => true]);
         }
 

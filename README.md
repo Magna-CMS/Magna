@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.3.1-orange?style=for-the-badge" alt="v1.3.1">
+  <img src="https://img.shields.io/badge/version-v1.3.2-orange?style=for-the-badge" alt="v1.3.2">
   <img src="https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP 8.3+">
   <img src="https://img.shields.io/badge/Laravel-13-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel 13">
   <img src="https://img.shields.io/badge/Filament-5-purple?style=for-the-badge" alt="Filament 5">
@@ -86,7 +86,7 @@
 
 ## 🚧 Status
 
-**Magna is in active development — currently in public beta (v1.3.1).** We are building in public, spec-first: every subsystem is fully specified *before* it is coded, and the specifications live in this repository. Star the repo to follow the road to stable 1.0.
+**Magna is in active development — currently in public beta (v1.3.2).** We are building in public, spec-first: every subsystem is fully specified *before* it is coded, and the specifications live in this repository. Star the repo to follow the road to stable 1.0.
 
 **Working today:**  You Can install & try Magna CMS in your sever using Web Installer or CLI .
 
@@ -94,9 +94,9 @@
 
 Ready to try Magna CMS? Grab the latest release — download it, run the installer, and you're ready to go.
 
-[![Download Magna CMS](https://img.shields.io/badge/Download-Magna%20CMS%20v1.3.1-7c3aed?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Magna-CMS/Magna/releases)
+[![Download Magna CMS](https://img.shields.io/badge/Download-Magna%20CMS%20v1.3.2-7c3aed?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Magna-CMS/Magna/releases)
 
-**[⬇ Download Magna CMS v1.3.1](https://github.com/Magna-CMS/Magna/releases)**
+**[⬇ Download Magna CMS v1.3.2](https://github.com/Magna-CMS/Magna/releases)**
 
 
 ---
@@ -654,7 +654,7 @@ Found a vulnerability? **Do not open a public issue.** See [SECURITY.md](SECURIT
 ## ❓ FAQ
 
 **Q: Is Magna production-ready?**  
-A: Magna is in public beta (v1.3.1). The kernel, auth, RBAC, and plugin system are solid. The content engine and delivery API are in active development. We recommend waiting for stable 1.0 for production, or running beta on low-risk projects and contributing feedback.
+A: Magna is in public beta (v1.3.2). The kernel, auth, RBAC, and plugin system are solid. The content engine and delivery API are in active development. We recommend waiting for stable 1.0 for production, or running beta on low-risk projects and contributing feedback.
 
 **Q: What database does Magna use?**  
 A: MySQL 8+ and PostgreSQL 14+ are the primary targets. SQLite is fully supported for development and testing. Each content type gets a real table with real columns — no EAV, so your queries stay fast even at scale.
