@@ -361,9 +361,20 @@ class SettingsPage extends Page implements HasForms
         $performance = PerformanceSettings::get();
         $performance->cache_driver = $str($data['cache_driver'] ?? 'database');
         $performance->queue_connection = $str($data['queue_connection'] ?? 'database');
-        $performance->redis_host = $str($data['redis_host'] ?? '127.0.0.1') ?: '127.0.0.1';
-        $performance->redis_port = $int($data['redis_port'] ?? 6379) ?: 6379;
-        $performance->redis_database = $int($data['redis_database'] ?? 0);
+        // Only written when actually present: these inputs are ->visible()
+        // behind a Redis driver being selected, and Filament omits hidden
+        // components from the state. Falling back to a default here would
+        // reset a configured Redis host to 127.0.0.1 every time someone saved
+        // this page while on the file/database drivers.
+        if (array_key_exists('redis_host', $data)) {
+            $performance->redis_host = $str($data['redis_host']) ?: '127.0.0.1';
+        }
+        if (array_key_exists('redis_port', $data)) {
+            $performance->redis_port = $int($data['redis_port']) ?: 6379;
+        }
+        if (array_key_exists('redis_database', $data)) {
+            $performance->redis_database = $int($data['redis_database']);
+        }
         $performance->octane_server = $str($data['octane_server'] ?? 'frankenphp');
         if (filled($data['redis_password'] ?? null)) {
             $performance->redis_password = $str($data['redis_password']);

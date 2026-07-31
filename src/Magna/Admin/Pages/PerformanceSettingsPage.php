@@ -178,16 +178,32 @@ class PerformanceSettingsPage extends Page implements HasForms
 
     public function save(): void
     {
-        /** @var array{cache_driver: string, queue_connection: string, redis_host: string, redis_port: int, redis_password: ?string, redis_database: int, octane_server: string} $data */
+        /** @var array{cache_driver: string, queue_connection: string, redis_host?: string, redis_port?: int|string, redis_password?: ?string, redis_database?: int|string, octane_server: string} $data */
         $data = $this->form->getState();
 
         $settings = PerformanceSettings::get();
         $settings->cache_driver = $data['cache_driver'];
         $settings->queue_connection = $data['queue_connection'];
-        $settings->redis_host = $data['redis_host'] ?: '127.0.0.1';
-        $settings->redis_port = (int) ($data['redis_port'] ?: 6379);
-        $settings->redis_database = (int) ($data['redis_database'] ?? 0);
         $settings->octane_server = $data['octane_server'];
+
+        // The Redis inputs are ->visible() only while a Redis driver is
+        // selected, and Filament leaves hidden components out of getState()
+        // altogether — so reading them unconditionally threw "Undefined array
+        // key redis_host" for anyone on file/database drivers. Defaulting
+        // them would be worse than throwing: switching the cache driver to
+        // file and pressing Save would quietly overwrite a working Redis host
+        // with 127.0.0.1. Absent means "not being edited", so leave it alone.
+        if (array_key_exists('redis_host', $data)) {
+            $settings->redis_host = $data['redis_host'] ?: '127.0.0.1';
+        }
+
+        if (array_key_exists('redis_port', $data)) {
+            $settings->redis_port = (int) ($data['redis_port'] ?: 6379);
+        }
+
+        if (array_key_exists('redis_database', $data)) {
+            $settings->redis_database = (int) $data['redis_database'];
+        }
 
         if (filled($data['redis_password'] ?? null)) {
             $settings->redis_password = $data['redis_password'];
@@ -204,16 +220,21 @@ class PerformanceSettingsPage extends Page implements HasForms
 
     public function testRedisConnection(): void
     {
-        /** @var array{redis_host: ?string, redis_port: ?int, redis_password: ?string, redis_database: ?int} $data */
+        /** @var array{redis_host?: ?string, redis_port?: int|string|null, redis_password?: ?string, redis_database?: int|string|null} $data */
         $data = $this->form->getState();
 
+        // This action stays clickable even when no Redis driver is selected
+        // and the Redis inputs are therefore hidden and absent from
+        // getState() — see save(). Test what is stored rather than throwing.
+        $settings = PerformanceSettings::get();
+
         config([
-            'database.redis.default.host' => $data['redis_host'] ?: '127.0.0.1',
-            'database.redis.default.port' => $data['redis_port'] ?: 6379,
+            'database.redis.default.host' => ($data['redis_host'] ?? null) ?: $settings->redis_host,
+            'database.redis.default.port' => ($data['redis_port'] ?? null) ?: $settings->redis_port,
             'database.redis.default.password' => filled($data['redis_password'] ?? null)
                 ? $data['redis_password']
-                : PerformanceSettings::get()->redis_password,
-            'database.redis.default.database' => $data['redis_database'] ?? 0,
+                : $settings->redis_password,
+            'database.redis.default.database' => $data['redis_database'] ?? $settings->redis_database,
         ]);
 
         try {
