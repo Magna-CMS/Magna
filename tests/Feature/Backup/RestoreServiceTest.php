@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Magna\Backup\BackupRun;
 use Magna\Backup\Exceptions\RestoreFailedException;
@@ -110,9 +111,22 @@ it('no-ops restoreDatabase() when the archive has no database dump', function ()
 });
 
 it('refuses to restore into an in-memory sqlite connection', function (): void {
-    // This test environment's DB_DATABASE is ":memory:" (phpunit.xml) —
-    // exercising the exact guard that prevents a restore from silently
-    // doing nothing useful against a connection with no file to write to.
+    // The guard under test exists only for an in-memory SQLite connection:
+    // there is no file to restore into. CI also runs this suite against MySQL
+    // and Postgres, where the guard cannot trip and the assertion below is
+    // simply false — the test was written when SQLite was the only driver the
+    // suite ever saw.
+    //
+    // Worth naming the trap: on a local MySQL run this passed anyway, because
+    // no mysql client binary was installed and restoreDatabase() threw
+    // RestoreFailedException for that unrelated reason. CI has the binary, so
+    // it failed there. A green local run was not evidence.
+    $connection = DB::connection();
+
+    if ($connection->getDriverName() !== 'sqlite' || $connection->getDatabaseName() !== ':memory:') {
+        $this->markTestSkipped('The in-memory SQLite guard is unreachable on the '.$connection->getDriverName().' connection.');
+    }
+
     $run = makeTestArchive(['db-dumps/sqlite-database.sql' => 'SELECT 1;']);
 
     $service = new RestoreService;
