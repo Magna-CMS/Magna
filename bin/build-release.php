@@ -14,10 +14,17 @@ declare(strict_types=1);
  *   - Excludes all dev-only tooling, tests, docs, plugins, and local state.
  *
  * Usage:
- *   php bin/build-release.php [version]
+ *   php bin/build-release.php [version] [--hub]
  *
  * Version defaults to MagnaServiceProvider::VERSION with any -dev suffix
  * stripped. The archive is written to downloads/magna-cms-v<version>.zip.
+ *
+ * `--hub` builds the internal "Magna Hub" profile instead: identical to the
+ * core archive except the first-party Magna plugins are resolved from their
+ * plugins-dev/ path repositories and bundled into vendor/, so a fresh install
+ * ships with them present (still disabled until enabled from the panel or
+ * `magna:plugin:install`). Written to downloads/magna-hub-v<version>.zip.
+ * Never publish a hub archive — it carries proprietary plugins.
  *
  * Requires PHP 8.3+ with the zip extension and a reachable Composer binary.
  */
@@ -47,12 +54,18 @@ if (! extension_loaded('zip')) {
 // ---------------------------------------------------------------------------
 // Resolve version.
 // ---------------------------------------------------------------------------
-// Parse arguments: the first token is the version. There is a single build
-// profile — the core archive — so no flags are accepted.
+// Parse arguments: the first non-flag token is the version. `--hub` selects the
+// plugin-bundling profile; every other flag is rejected.
 $version = null;
+$hub = false;
 foreach (array_slice($argv, 1) as $arg) {
+    if ($arg === '--hub') {
+        $hub = true;
+
+        continue;
+    }
     if (str_starts_with($arg, '--')) {
-        fail("Unknown option '{$arg}'. Usage: php bin/build-release.php [version]");
+        fail("Unknown option '{$arg}'. Usage: php bin/build-release.php [version] [--hub]");
     }
     $version ??= $arg;
 }
@@ -87,7 +100,9 @@ if (preg_match('/const\s+VERSION\s*=\s*[\'"]([^\'"]+)[\'"]/', $providerSource, $
     }
 }
 
-say("Building Magna release v{$version}", C_GREEN);
+say($hub
+    ? "Building Magna Hub v{$version} (core + bundled plugins)"
+    : "Building Magna release v{$version}", C_GREEN);
 
 // ---------------------------------------------------------------------------
 // Locate Composer.
@@ -100,8 +115,26 @@ if ($composer === null) {
         'composer.phar',
         'composer',
     ] as $candidate) {
-        if ($candidate && (is_file($candidate) || str_starts_with((string) shell_exec('command -v '.escapeshellarg($candidate).' 2>/dev/null'), '/'))) {
+        if (! $candidate) {
+            continue;
+        }
+
+        if (is_file($candidate)) {
             $composer = $candidate;
+            break;
+        }
+
+        // Take the path `command -v` resolves to, not the bare candidate. The
+        // command below runs `php <composer>`, and php resolves a relative name
+        // against the working directory rather than PATH — so accepting a
+        // candidate because it is on PATH and then passing the bare name meant
+        // "composer.phar" was chosen on a machine where PATH had it and the
+        // install died with "Could not open input file: composer.phar". Windows
+        // never hit it because it matches the is_file branch above first.
+        $resolved = trim((string) shell_exec('command -v '.escapeshellarg($candidate).' 2>/dev/null'));
+
+        if ($resolved !== '' && str_starts_with($resolved, '/')) {
+            $composer = $resolved;
             break;
         }
     }
@@ -166,13 +199,22 @@ if (! is_array($composerJson)) {
 // NO plugins — they are distributed separately (own repos / marketplace / local
 // ZIP upload). magna-cms/plugin-sdk is deliberately kept: it is the SDK library
 // the core plugin system depends on, not a plugin.
-$stripPlugins = [
+$allPlugins = [
     'magna-cms/docs',
     'magna-cms/marketplace',
     'magna/plugin-manager',
     'roya/dms',
     'roya/erp',
 ];
+
+// The hub profile keeps the first-party Magna plugins and strips only the
+// client-specific ones (Roya's ERP/DMS are that client's deployment, not part
+// of a general Magna install). The core profile strips every plugin.
+$bundledPlugins = $hub
+    ? ['magna-cms/docs', 'magna-cms/marketplace', 'magna/plugin-manager']
+    : [];
+$stripPlugins = array_values(array_diff($allPlugins, $bundledPlugins));
+
 foreach ($stripPlugins as $pkg) {
     foreach (['require', 'require-dev'] as $section) {
         if (isset($composerJson[$section][$pkg])) {
@@ -182,13 +224,33 @@ foreach ($stripPlugins as $pkg) {
     }
 }
 
+// Bundled plugins are wired as require-dev in a working copy (they are dev
+// tooling for core development). The release installs with --no-dev, so a
+// require-dev entry would be silently dropped from vendor/ — promote them.
+foreach ($bundledPlugins as $pkg) {
+    if (isset($composerJson['require-dev'][$pkg])) {
+        $composerJson['require'][$pkg] = $composerJson['require-dev'][$pkg];
+        unset($composerJson['require-dev'][$pkg]);
+    }
+    if (isset($composerJson['require'][$pkg])) {
+        say("  bundling plugin: {$pkg}");
+    }
+}
+
 // A local working copy wires those plugins in through `type: path` repositories
-// pointing at plugins-dev/. With the packages themselves stripped above, the
-// repositories have nothing left to resolve, so drop them too rather than let
-// the rewrite below demand sources the release does not need.
+// pointing at plugins-dev/. Drop the repositories whose package was stripped
+// above — they have nothing left to resolve, and the rewrite below would
+// otherwise demand sources the release does not need. Repositories for bundled
+// packages stay so Composer can copy them into the release vendor/ tree.
 $composerJson['repositories'] = array_values(array_filter(
     $composerJson['repositories'] ?? [],
-    static fn ($repo): bool => ! is_array($repo) || ! str_contains((string) ($repo['url'] ?? ''), 'plugins-dev'),
+    static function ($repo) use ($root, $stripPlugins): bool {
+        if (! is_array($repo) || ! str_contains((string) ($repo['url'] ?? ''), 'plugins-dev')) {
+            return true;
+        }
+
+        return ! in_array(path_repo_package_name($root, (string) $repo['url']), $stripPlugins, true);
+    },
 ));
 
 // Rewrite every remaining path repository to an absolute path in copy mode.
@@ -315,7 +377,8 @@ file_put_contents($stage.'/INSTALL.txt', install_readme($version));
 // Zip it.
 // ---------------------------------------------------------------------------
 @mkdir($root.'/downloads', 0755, true);
-$zipPath = $root.'/downloads/magna-cms-v'.$version.'.zip';
+$archiveName = ($hub ? 'magna-hub-v' : 'magna-cms-v').$version.'.zip';
+$zipPath = $root.'/downloads/'.$archiveName;
 @unlink($zipPath);
 
 say("Creating {$zipPath}", C_GREEN);
@@ -378,6 +441,28 @@ say("Done. {$count} files, {$sizeMb} MB -> downloads/magna-cms-v{$version}.zip",
 // ===========================================================================
 // Helpers.
 // ===========================================================================
+
+/**
+ * Composer package name declared by a `type: path` repository's source
+ * directory. A plugin's directory name does not have to match its package name
+ * (plugins-dev/magna/docs ships magna-cms/docs), so decide what a repository
+ * provides by reading its composer.json rather than parsing the URL.
+ */
+function path_repo_package_name(string $root, string $url): ?string
+{
+    $dir = str_starts_with($url, '.') || ! str_starts_with($url, '/')
+        ? $root.'/'.ltrim($url, './')
+        : $url;
+
+    $manifest = @file_get_contents(rtrim($dir, '/').'/composer.json');
+    if ($manifest === false) {
+        return null;
+    }
+
+    $decoded = json_decode($manifest, true);
+
+    return is_array($decoded) && is_string($decoded['name'] ?? null) ? $decoded['name'] : null;
+}
 
 /**
  * Open the finished archive and assert it is actually installable: the files
