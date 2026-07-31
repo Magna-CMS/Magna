@@ -192,8 +192,18 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      # The builder reports what went wrong on stdout and exits non-zero. Without
+      # this the job surfaced nothing but "Process completed with exit code 1",
+      # so a release that failed here could not be diagnosed from the API at
+      # all — same reason the test steps below already tee and echo.
       - name: Build release archive (zip + SHA-256, self-verified)
-        run: php bin/build-release.php "${GITHUB_REF_NAME}"
+        run: |
+          set -o pipefail
+          if ! php bin/build-release.php "${GITHUB_REF_NAME}" 2>&1 | tee build.log; then
+            echo "::error::release build failed -- $(grep -aiE 'error|fail|missing|could not|refus' build.log | tail -n 6 | tr '\n' ' ' | cut -c1-1200)"
+            echo "::error::release build tail -- $(tail -n 12 build.log | tr '\n' ' ' | cut -c1-1200)"
+            exit 1
+          fi
 
       - name: Extract changelog section for this release
         run: |
