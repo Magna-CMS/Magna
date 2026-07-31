@@ -22,15 +22,7 @@ class SchemaSyncer
      */
     public function sync(DiffResult $diff, SchemaRegistry $registry, bool $allowDestructive = false): void
     {
-        if (! $allowDestructive && $diff->hasDestructive()) {
-            $descriptions = implode('; ', array_map(
-                fn (DiffChange $c): string => $c->description,
-                $diff->destructive(),
-            ));
-            throw new DestructiveChangeException(
-                "Destructive schema changes require --allow-destructive: {$descriptions}",
-            );
-        }
+        $this->guardDestructive($diff, $allowDestructive);
 
         foreach ($diff->changes as $change) {
             $type = $registry->get($change->contentTypeHandle);
@@ -67,6 +59,14 @@ class SchemaSyncer
             return $diff;
         }
 
+        // Refuse before any transaction is opened. Throwing this from inside
+        // DB::transaction() meant the rollback ran first, and on MySQL any DDL
+        // already applied in the request has implicitly committed and taken the
+        // savepoint with it — so the rollback itself failed with "SAVEPOINT
+        // trans2 does not exist" and that PDOException replaced the
+        // DestructiveChangeException the caller was supposed to see.
+        $this->guardDestructive($diff, $allowDestructive);
+
         // Stage 13 (S5-05): this transaction wrap is unconditionally best-effort
         // on MySQL, not just SQLite — MySQL auto-commits every DDL statement
         // (CREATE/ALTER TABLE) regardless of an open transaction, so a
@@ -89,6 +89,29 @@ class SchemaSyncer
         }
 
         return $diff;
+    }
+
+    /**
+     * Refuse a destructive diff. A pure read of $diff — no database work — so
+     * it is safe to call before a transaction is opened, which is exactly
+     * where it belongs.
+     *
+     * @throws DestructiveChangeException
+     */
+    private function guardDestructive(DiffResult $diff, bool $allowDestructive): void
+    {
+        if ($allowDestructive || ! $diff->hasDestructive()) {
+            return;
+        }
+
+        $descriptions = implode('; ', array_map(
+            fn (DiffChange $c): string => $c->description,
+            $diff->destructive(),
+        ));
+
+        throw new DestructiveChangeException(
+            "Destructive schema changes require --allow-destructive: {$descriptions}",
+        );
     }
 
     private function applyChange(DiffChange $change, ContentType $type): void
