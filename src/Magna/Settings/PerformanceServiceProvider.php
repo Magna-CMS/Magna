@@ -30,6 +30,20 @@ class PerformanceServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        // phpunit.xml pins CACHE_STORE=array and QUEUE_CONNECTION=sync so every
+        // run is deterministic. Applying the DB-backed values over the top made
+        // the suite depend on whether a `settings` table happened to exist at
+        // boot: on an in-memory SQLite database it never does, so those runs
+        // kept the pinned drivers, while MySQL and Postgres silently swapped in
+        // the `database` cache and queue. That is the whole reason the same
+        // suite passed on one driver and failed on the other two — dispatched
+        // jobs went to the jobs table instead of running inline, and tagged
+        // cache calls hit a store that cannot tag. A test that wants the real
+        // drivers sets them itself (see DatabaseCacheStoreTest).
+        if ($this->app->runningUnitTests()) {
+            return;
+        }
+
         // Before installation there is no usable database — and the host may
         // not even have a database driver enabled yet (the installer's
         // requirements step is what verifies that). Skip entirely so a fresh
