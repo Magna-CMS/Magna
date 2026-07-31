@@ -62,7 +62,7 @@ jobs:
       # (including path-repo symlinks to directories that do not exist in a
       # clone), and composer then trips over them before installing anything.
       - name: Cache Composer downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/composer
           key: composer-cache-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
