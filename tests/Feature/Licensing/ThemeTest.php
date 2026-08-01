@@ -23,13 +23,33 @@ beforeEach(function (): void {
 
     // Tests run against the real themes/ directory, so remember what was
     // there and put it back afterwards rather than assuming it is empty.
-    $this->preExisting = is_dir($this->themeRoot) ? (array) glob($this->themeRoot.'/*') : [];
+    //
+    // Snapshot at {vendor}/{theme} depth, not {vendor}: these fixtures all
+    // live under themes/acme/, so a vendor-level snapshot treats that whole
+    // directory as pre-existing the moment one fixture survives (an
+    // interrupted run, a crashed test) and never cleans anything inside it
+    // again. The leftovers then show up as extra themes in every later run —
+    // which is exactly how this suite started failing.
+    $this->preExisting = is_dir($this->themeRoot) ? (array) glob($this->themeRoot.'/*/*') : [];
+    $this->preExistingVendors = is_dir($this->themeRoot) ? (array) glob($this->themeRoot.'/*') : [];
 });
 
 afterEach(function (): void {
-    foreach ((array) glob($this->themeRoot.'/*') as $path) {
+    foreach ((array) glob($this->themeRoot.'/*/*') as $path) {
         if (! in_array($path, $this->preExisting, true)) {
             $this->files->remove($path);
+        }
+    }
+
+    // Drop vendor directories this suite created, so themes/ is left the way
+    // it was found. Never touch one that was already there.
+    foreach ((array) glob($this->themeRoot.'/*') as $vendorDir) {
+        if (
+            ! in_array($vendorDir, $this->preExistingVendors, true)
+            && is_dir($vendorDir)
+            && (glob($vendorDir.'/*') ?: []) === []
+        ) {
+            $this->files->remove($vendorDir);
         }
     }
 });
