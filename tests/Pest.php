@@ -40,3 +40,24 @@ function skipWithoutDevPlugin(string $package): void
         test()->markTestSkipped("The {$package} plugin is not part of this checkout.");
     }
 }
+
+/**
+ * The version a first-party plugin currently declares.
+ *
+ * Never hardcode a plugin's version in a core test. Plugins version
+ * independently in their own repositories, so a pinned literal turns every
+ * routine plugin release into a red core suite — which is exactly how
+ * PluginInstallerTest started failing when Magna Docs went 1.0.0 -> 1.1.0.
+ * Call this after skipWithoutDevPlugin() for the same package.
+ */
+function devPluginVersion(string $package): string
+{
+    $manifest = json_decode(
+        (string) file_get_contents(base_path('plugins-dev/'.$package.'/magna.json')),
+        true
+    );
+
+    return is_array($manifest) && is_string($manifest['version'] ?? null)
+        ? $manifest['version']
+        : '0.0.0';
+}

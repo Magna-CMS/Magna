@@ -37,14 +37,20 @@ it('installs and enables an approved plugin', function (): void {
     // enable() resolves the real discovered plugin, so this one needs it present.
     skipWithoutDevPlugin('magna/docs');
 
-    fakeMarket([['package' => 'magna/docs', 'name' => 'Magna Docs', 'version' => '1.0.0', 'compat' => '^1.0']]);
+    // Read the version off the plugin rather than pinning a literal:
+    // verifyInstalledManifest() compares the approved version against the
+    // manifest actually on disk, so a hardcoded one fails the install the day
+    // the plugin ships a release.
+    $version = devPluginVersion('magna/docs');
+
+    fakeMarket([['package' => 'magna/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
     $runner = fakeRunner();
 
     $state = app(PluginInstaller::class)->install('magna/docs');
 
     expect($state)->toBe(InstallState::Completed)
         // Stage 6: pinned to the exact approved version, not an unpinned "latest".
-        ->and($runner->commands)->toContain(['require', 'magna/docs:1.0.0'])
+        ->and($runner->commands)->toContain(['require', 'magna/docs:'.$version])
         ->and(PluginRecord::query()->where('name', 'magna/docs')->where('enabled', true)->exists())->toBeTrue();
 });
 

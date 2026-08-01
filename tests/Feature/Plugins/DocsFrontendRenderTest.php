@@ -46,7 +46,11 @@ it('renders the docs home as the first article with featured image and footer', 
         ->assertSee('Getting Started')
         ->assertSee('docs-featured/hero.jpg')          // featured image rendered
         ->assertSee('Made with Magna Docs')            // footer right
-        ->assertSee('github.com/jish-44/Magna-Docs')   // repo link
+        // The repo LINK is asserted, not the org that owns it: the plugin
+        // moved from a personal account to the Magna-CMS org and pinning the
+        // full URL failed the core suite for a rename that changed nothing a
+        // reader sees.
+        ->assertSee('/Magna-Docs')                     // repo link
         ->assertSee('(c) 2026 Test Co');               // footer left (copyright)
 
     $this->get('/docs/getting-started')
