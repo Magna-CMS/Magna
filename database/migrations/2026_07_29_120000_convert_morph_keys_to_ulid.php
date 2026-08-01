@@ -35,6 +35,8 @@ return new class extends Migration
 
         foreach (self::MORPHS as [$table, $morph]) {
             $column = $morph.'_id';
+            $staging = $column.'_ulid';
+            $index = "{$table}_{$morph}_type_{$column}_index";
 
             if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
                 continue;
@@ -44,24 +46,44 @@ return new class extends Migration
                 continue; // already a ULID column
             }
 
-            Schema::table($table, function (Blueprint $blueprint) use ($column): void {
-                $blueprint->char($column.'_ulid', 26)->nullable();
+            // An earlier attempt that stopped part-way leaves the staging column
+            // behind. Starting from a clean one is safe — nothing reads it, and
+            // it is refilled from the live column immediately below.
+            if (Schema::hasColumn($table, $staging)) {
+                Schema::table($table, function (Blueprint $blueprint) use ($staging): void {
+                    $blueprint->dropColumn($staging);
+                });
+            }
+
+            Schema::table($table, function (Blueprint $blueprint) use ($staging): void {
+                $blueprint->char($staging, 26)->nullable();
             });
 
             if ($sqlite) {
-                DB::table($table)->update([$column.'_ulid' => DB::raw($column)]);
+                DB::table($table)->update([$staging => DB::raw($column)]);
+            }
+
+            // SQLite refuses to drop a column that an index still names, and
+            // fails the whole migration when one does. The morph index comes off
+            // first and is rebuilt over the new column at the end; MySQL and
+            // PostgreSQL would have rebuilt it themselves, but doing it
+            // explicitly keeps one code path for all three.
+            if (Schema::hasIndex($table, $index)) {
+                Schema::table($table, function (Blueprint $blueprint) use ($index): void {
+                    $blueprint->dropIndex($index);
+                });
             }
 
             Schema::table($table, function (Blueprint $blueprint) use ($column): void {
                 $blueprint->dropColumn($column);
             });
 
-            Schema::table($table, function (Blueprint $blueprint) use ($column): void {
-                $blueprint->renameColumn($column.'_ulid', $column);
+            Schema::table($table, function (Blueprint $blueprint) use ($column, $staging): void {
+                $blueprint->renameColumn($staging, $column);
             });
 
-            Schema::table($table, function (Blueprint $blueprint) use ($morph, $column): void {
-                $blueprint->index([$morph.'_type', $column]);
+            Schema::table($table, function (Blueprint $blueprint) use ($morph, $column, $index): void {
+                $blueprint->index([$morph.'_type', $column], $index);
             });
         }
     }
