@@ -233,6 +233,12 @@ final class PluginDiscovery
     {
         $manifest = Manifest::loadFromFile($manifestPath);
 
+        // Everything downstream — enable(), the zip updater, the Core Plugin
+        // Manager — treats this name as a path segment. Reject a malformed one
+        // here, where both callers already handle InvalidManifestException by
+        // skipping the plugin, rather than let it reach a path join.
+        PluginPackageName::assertValid($manifest->name);
+
         return new PluginInfo($manifest, realpath($pkgPath) ?: $pkgPath);
     }
 }
