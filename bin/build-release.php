@@ -47,6 +47,10 @@ function fail(string $msg): never
 $root = dirname(__DIR__);
 chdir($root);
 
+// Pure composer.json rules, kept separate so tests cover them without running
+// a build — see tests/Unit/Release/ReleaseComposerTest.php.
+require_once __DIR__.'/support/release-composer.php';
+
 if (! extension_loaded('zip')) {
     fail('The zip PHP extension is required to build a release.');
 }
@@ -216,42 +220,31 @@ $bundledPlugins = $hub
 $stripPlugins = array_values(array_diff($allPlugins, $bundledPlugins));
 
 foreach ($stripPlugins as $pkg) {
-    foreach (['require', 'require-dev'] as $section) {
-        if (isset($composerJson[$section][$pkg])) {
-            unset($composerJson[$section][$pkg]);
-            say("  stripped plugin from release: {$pkg}");
-        }
+    if (isset($composerJson['require'][$pkg]) || isset($composerJson['require-dev'][$pkg])) {
+        say("  stripped plugin from release: {$pkg}");
+    }
+}
+foreach ($bundledPlugins as $pkg) {
+    if (isset($composerJson['require'][$pkg]) || isset($composerJson['require-dev'][$pkg])) {
+        say("  bundling plugin: {$pkg}");
     }
 }
 
 // Bundled plugins are wired as require-dev in a working copy (they are dev
 // tooling for core development). The release installs with --no-dev, so a
 // require-dev entry would be silently dropped from vendor/ — promote them.
-foreach ($bundledPlugins as $pkg) {
-    if (isset($composerJson['require-dev'][$pkg])) {
-        $composerJson['require'][$pkg] = $composerJson['require-dev'][$pkg];
-        unset($composerJson['require-dev'][$pkg]);
-    }
-    if (isset($composerJson['require'][$pkg])) {
-        say("  bundling plugin: {$pkg}");
-    }
-}
+$composerJson = release_apply_plugin_profile($composerJson, $stripPlugins, $bundledPlugins);
 
 // A local working copy wires those plugins in through `type: path` repositories
 // pointing at plugins-dev/. Drop the repositories whose package was stripped
 // above — they have nothing left to resolve, and the rewrite below would
 // otherwise demand sources the release does not need. Repositories for bundled
 // packages stay so Composer can copy them into the release vendor/ tree.
-$composerJson['repositories'] = array_values(array_filter(
-    $composerJson['repositories'] ?? [],
-    static function ($repo) use ($root, $stripPlugins): bool {
-        if (! is_array($repo) || ! str_contains((string) ($repo['url'] ?? ''), 'plugins-dev')) {
-            return true;
-        }
-
-        return ! in_array(path_repo_package_name($root, (string) $repo['url']), $stripPlugins, true);
-    },
-));
+$composerJson = release_filter_path_repositories(
+    $composerJson,
+    $stripPlugins,
+    static fn (string $url): ?string => path_repo_package_name($root, $url),
+);
 
 // Rewrite every remaining path repository to an absolute path in copy mode.
 // PLUGIN_SDK_PATH can override the sibling SDK location; everything else
@@ -274,18 +267,50 @@ foreach (($composerJson['repositories'] ?? []) as $i => $repo) {
         rrmdir($stage);
         fail("Path repository source not found: {$url} (resolved {$abs}). Check plugins-dev/ / PLUGIN_SDK_PATH.");
     }
+
+    // A hub keeps its path repositories, so the source has to travel inside
+    // the archive and the URL has to stay relative to the deployment root.
+    // Absolute build-machine URLs would break every Composer command on the
+    // target — including the `composer require` the Marketplace runs to
+    // install a plugin, which re-resolves the whole tree and would drop any
+    // package it cannot find a source for.
+    if ($hub) {
+        $relative = release_bundle_relative_path(path_repo_package_name($root, $abs), $abs);
+
+        // Its own exclusion list, not the archive-wide one: that list drops
+        // anything named "docs" or "plugins-dev" (meaningful at the app root,
+        // wrong inside a package) and keeps "dist"/"bin" (a plugin's own
+        // release zips and build tooling, which must not ship).
+        $bundleExcludes = [
+            '.git', '.github', '.gitignore', '.gitattributes', 'node_modules',
+            'vendor', 'tests', 'dist', 'bin', 'storage', '.env',
+            'phpunit.xml', 'phpunit.xml.dist', '.phpunit.result.cache',
+        ];
+        copy_tree($abs, $stage.'/'.$relative, $bundleExcludes, []);
+        $composerJson['repositories'][$i]['url'] = $relative;
+        $composerJson['repositories'][$i]['options']['symlink'] = false;
+        say("  bundled path repo source -> {$relative}");
+
+        continue;
+    }
+
     $composerJson['repositories'][$i]['url'] = str_replace('\\', '/', $abs);
     $composerJson['repositories'][$i]['options']['symlink'] = false;
     say('  rewired path repo -> '.str_replace('\\', '/', $abs));
 }
 
+$composerJson = release_drop_require_dev($composerJson);
+
 file_put_contents(
     $stage.'/composer.json',
     json_encode($composerJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
 );
-// composer.json now differs from the lock (absolute path-repo URLs), so the
+// composer.json now differs from the lock (rewritten path-repo URLs), so the
 // lock would be rejected as out of date. Drop it and let Composer resolve
-// against the pinned constraints + copied path sources.
+// against the pinned constraints + copied path sources. The install below
+// writes a fresh lock that matches whatever shipped — which for a hub means
+// relative, in-archive path repositories, so `composer require` still
+// resolves on the target instead of pruning the bundled packages.
 @unlink($stage.'/composer.lock');
 
 // ---------------------------------------------------------------------------
@@ -332,10 +357,20 @@ say('Installing production dependencies (--no-dev)...', C_GREEN);
 // --no-scripts: skip post-autoload-dump (package:discover), which boots Laravel
 // and would need a database that does not exist at build time. The package
 // manifest and config caches regenerate on the target's first request.
+//
+// --classmap-authoritative is deliberately absent from the hub profile. An
+// authoritative classmap disables PSR-4 fallback entirely, so a class added by
+// a plugin update is simply "not found" until Composer regenerates the map —
+// and the Core Plugin Manager's Update via Upload is exactly that scenario, on
+// hosts that may have no Composer binary at all. The core profile keeps it:
+// nothing swaps files under a core archive except CoreUpdater, which replaces
+// vendor/ wholesale.
+$autoloadFlags = $hub ? '--optimize-autoloader' : '--optimize-autoloader --classmap-authoritative';
 $cmd = sprintf(
-    '%s %s install --no-dev --optimize-autoloader --classmap-authoritative --no-scripts --no-interaction --no-progress --working-dir=%s 2>&1',
+    '%s %s install --no-dev %s --no-scripts --no-interaction --no-progress --working-dir=%s 2>&1',
     escapeshellarg($phpBin),
     escapeshellarg($composer),
+    $autoloadFlags,
     escapeshellarg($stage)
 );
 passthru($cmd, $code);
@@ -436,7 +471,7 @@ file_put_contents($zipPath.'.sha256', $sha.'  '.basename($zipPath)."\n");
 say('  SHA-256: '.$sha, C_GREEN);
 
 $sizeMb = round(filesize($zipPath) / 1048576, 1);
-say("Done. {$count} files, {$sizeMb} MB -> downloads/magna-cms-v{$version}.zip", C_GREEN);
+say("Done. {$count} files, {$sizeMb} MB -> downloads/{$archiveName}", C_GREEN);
 
 // ===========================================================================
 // Helpers.
@@ -450,9 +485,11 @@ say("Done. {$count} files, {$sizeMb} MB -> downloads/magna-cms-v{$version}.zip",
  */
 function path_repo_package_name(string $root, string $url): ?string
 {
-    $dir = str_starts_with($url, '.') || ! str_starts_with($url, '/')
-        ? $root.'/'.ltrim($url, './')
-        : $url;
+    // Absolute already? Both shapes occur: repositories are relative in a
+    // working copy ("plugins-dev/magna/docs") and absolute after the rewrite
+    // above ("/srv/src/..." on POSIX, "C:/Users/..." on Windows).
+    $isAbsolute = str_starts_with($url, '/') || preg_match('#^[A-Za-z]:[/\\\\]#', $url) === 1;
+    $dir = $isAbsolute ? $url : $root.'/'.ltrim($url, './');
 
     $manifest = @file_get_contents(rtrim($dir, '/').'/composer.json');
     if ($manifest === false) {
