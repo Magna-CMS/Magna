@@ -36,6 +36,7 @@ class PluginManager
         private readonly PluginRouteRegistrar $routes,
         private readonly DependencyResolver $dependencies,
         private readonly PluginCommandRegistrar $commandRegistrar,
+        private readonly PluginAutoloader $autoloader,
     ) {}
 
     /**
@@ -84,6 +85,13 @@ class PluginManager
                 continue;
             }
             try {
+                // A plugin dropped on disk by the Core Plugin Manager's zip
+                // upload is not in vendor/composer/autoload_*, and a host with
+                // no Composer binary has nothing to regenerate them with —
+                // without this its entry class is unautoloadable and the catch
+                // below would auto-disable it as "files missing".
+                $this->autoloader->register((string) $record->base_path);
+
                 $plugin = $this->instantiate($record->manifest, $record->base_path);
                 $plugin->register();
                 $this->booted[$record->name] = $plugin;
@@ -135,6 +143,11 @@ class PluginManager
         // enabled may conflict with this one. Throws DependencyException with a
         // developer-facing message the admin UI surfaces.
         $this->dependencies->assertCanEnable($info->manifest, $this->enabledManifests($name));
+
+        // Same reason as bootEnabledPlugins(): the files may have arrived
+        // without Composer ever running, and instantiate() below needs the
+        // entry class to autoload in *this* request.
+        $this->autoloader->register($info->basePath);
 
         $this->runMigrations($info->basePath);
 

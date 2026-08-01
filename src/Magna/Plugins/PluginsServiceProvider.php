@@ -27,6 +27,11 @@ class PluginsServiceProvider extends ServiceProvider
             return new PluginDiscovery($this->app->basePath());
         });
 
+        // Singleton so its "already registered" set is shared — boot registers
+        // every enabled plugin, and an install/update in the same request
+        // registers again for the plugin it just wrote.
+        $this->app->singleton(PluginAutoloader::class);
+
         $this->app->singleton(PluginManager::class, function (): PluginManager {
             return new PluginManager(
                 $this->app,
@@ -36,6 +41,7 @@ class PluginsServiceProvider extends ServiceProvider
                 new PluginRouteRegistrar($this->app),
                 new DependencyResolver,
                 new PluginCommandRegistrar($this->app),
+                $this->app->make(PluginAutoloader::class),
             );
         });
 
