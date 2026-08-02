@@ -36,7 +36,7 @@ final class Marketplace
      * locally. The private half lives only on the marketplace server
      * (MARKETPLACE_LICENSE_SIGNING_SECRET).
      */
-    public const LICENSE_PUBLIC_KEY = '';
+    public const LICENSE_PUBLIC_KEY = 'ogqnrv36ejgQZm14T+TrEyiDzG2oGOOjxXRpoVJIcRg=';
 
     /** Ed25519 public keys are exactly 32 bytes once base64-decoded. */
     private const LICENSE_PUBLIC_KEY_BYTES = 32;
