@@ -18,7 +18,14 @@ final class ProcessComposerRunner implements ComposerRunner
 
     private bool $resolved = false;
 
-    public function __construct(private readonly string $basePath) {}
+    /**
+     * @param  string  $fallbackHome  Where Composer keeps its cache and config when
+     *                                the SAPI provides no home of its own.
+     */
+    public function __construct(
+        private readonly string $basePath,
+        private readonly string $fallbackHome,
+    ) {}
 
     public function isAvailable(): bool
     {
@@ -32,10 +39,18 @@ final class ProcessComposerRunner implements ComposerRunner
             return new ComposerResult(127, 'Composer was not found on this server.');
         }
 
+        // Said plainly here rather than left to Composer, which reports an
+        // unwritable home as a cache warning followed by an unrelated-looking
+        // failure further down.
+        $homeProblem = $this->fallbackHomeProblem();
+        if ($homeProblem !== null) {
+            return new ComposerResult(1, $homeProblem);
+        }
+
         $process = new Process(
             [...$binary, ...$args, '--no-interaction'],
             $this->basePath,
-            ['COMPOSER_NO_INTERACTION' => '1'] + getenv(),
+            $this->environment(),
             null,
             (float) $timeout,
         );
@@ -52,6 +67,65 @@ final class ProcessComposerRunner implements ComposerRunner
         );
     }
 
+    /**
+     * Composer refuses to start with neither HOME nor COMPOSER_HOME set —
+     * "The HOME or COMPOSER_HOME environment variable must be set for composer
+     * to run correctly". The CLI always has HOME; PHP-FPM and most other web
+     * SAPIs do not, so every install triggered from the admin panel died on a
+     * server where the same command worked over SSH. Point Composer at a
+     * directory the web user can definitely write instead.
+     *
+     * @return array<string, string|false>
+     */
+    private function environment(): array
+    {
+        /** @var array<string, string|false> $env */
+        $env = ['COMPOSER_NO_INTERACTION' => '1'] + getenv();
+
+        $hasHome = ($env['COMPOSER_HOME'] ?? '') !== '' || ($env['HOME'] ?? '') !== '';
+        if ($hasHome) {
+            return $env;
+        }
+
+        $this->ensureFallbackHome();
+
+        $env['COMPOSER_HOME'] = $this->fallbackHome;
+
+        return $env;
+    }
+
+    /** Composer creates its own home, but only where the web user may write. */
+    private function ensureFallbackHome(): void
+    {
+        if (! is_dir($this->fallbackHome)) {
+            @mkdir($this->fallbackHome, 0755, true);
+        }
+    }
+
+    /**
+     * Why Composer cannot run under the fallback home, or null when it can.
+     *
+     * Only relevant when the fallback is in play at all — a server that sets
+     * HOME or COMPOSER_HOME itself owns that directory's permissions.
+     */
+    private function fallbackHomeProblem(): ?string
+    {
+        $env = getenv();
+
+        if (($env['COMPOSER_HOME'] ?? '') !== '' || ($env['HOME'] ?? '') !== '') {
+            return null;
+        }
+
+        $this->ensureFallbackHome();
+
+        if (is_dir($this->fallbackHome) && is_writable($this->fallbackHome)) {
+            return null;
+        }
+
+        return 'Composer needs a writable home directory and this server provides none. '
+            ."Create {$this->fallbackHome} writable by the web server user, or set COMPOSER_HOME for the PHP-FPM pool.";
+    }
+
     /** @return list<string>|null */
     private function binary(): ?array
     {
@@ -62,7 +136,9 @@ final class ProcessComposerRunner implements ComposerRunner
         $this->resolved = true;
 
         foreach ($this->candidates() as $candidate) {
-            $check = new Process([...$candidate, '--version'], $this->basePath, null, null, 15.0);
+            // Same environment as a real run: a probe that succeeds under a
+            // different env would report a Composer that then fails to start.
+            $check = new Process([...$candidate, '--version'], $this->basePath, $this->environment(), null, 15.0);
             try {
                 $check->run();
             } catch (\Throwable) {

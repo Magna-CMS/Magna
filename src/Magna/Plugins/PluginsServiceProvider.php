@@ -46,7 +46,10 @@ class PluginsServiceProvider extends ServiceProvider
         });
 
         $this->app->bind(ComposerRunner::class, function (): ProcessComposerRunner {
-            return new ProcessComposerRunner($this->app->basePath());
+            return new ProcessComposerRunner(
+                $this->app->basePath(),
+                $this->app->storagePath('app/composer-home'),
+            );
         });
     }
 
