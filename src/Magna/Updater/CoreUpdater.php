@@ -81,6 +81,18 @@ class CoreUpdater
     /** Version being applied, so every progress line can name it ("v1.3.4 — Downloading release…"). */
     private ?string $targetVersion = null;
 
+    /**
+     * The paths a one-click update overlays. Public so the installer's
+     * requirements screen and CoreWritability can report on the same list core
+     * actually replaces, instead of keeping a second copy that drifts.
+     *
+     * @return list<string>
+     */
+    public static function coreOwnedPaths(): array
+    {
+        return self::CORE_OWNED_PATHS;
+    }
+
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly Filesystem $files,
@@ -104,6 +116,15 @@ class CoreUpdater
         $signatureError = $this->checkChecksumSignature($expectedSha256, $checksumSignature);
         if ($signatureError !== null) {
             return $this->fail($signatureError);
+        }
+
+        // Established before anything is written. A read-only src/Magna used to
+        // surface halfway through the overlay, with the rollback failing for the
+        // same reason and leaving the core tree mixed between two versions.
+        $writability = new CoreWritability(base_path());
+        $blocker = $writability->summary();
+        if ($blocker !== null) {
+            return $this->fail($blocker.'. A one-click update has to replace those files, so nothing was changed. '.($writability->remedy() ?? ''));
         }
 
         $lock = Cache::lock(self::LOCK_KEY, 1800);
@@ -160,7 +181,22 @@ class CoreUpdater
                 $this->clearCachesAndReloadOctane();
             } catch (Throwable $e) {
                 $this->setProgress(CoreUpdateState::Running, 'Update failed mid-apply — restoring previous files…', 50);
-                $this->restore($backupPath);
+
+                // The restore can fail for the same reason the overlay did (a
+                // path PHP cannot write). Letting that escape replaced a
+                // readable failure with a raw stack trace, at the one moment the
+                // admin most needs to be told what state their install is in.
+                try {
+                    $this->restore($backupPath);
+                } catch (Throwable $restoreError) {
+                    Artisan::call('config:clear');
+
+                    return $this->fail(
+                        "Update failed AND the rollback could not finish: {$e->getMessage()} — then: {$restoreError->getMessage()}. "
+                        ."Your core files are now a mix of the old and new version. Re-upload the release archive over this install (src/Magna, app, bootstrap, routes, database/migrations), run `php artisan migrate --force`, and clear the caches. A copy of the previous files is in {$backupPath}."
+                    );
+                }
+
                 Artisan::call('config:clear');
 
                 return $this->fail("Update failed and files were restored: {$e->getMessage()}. If migrations ran before the failure, your database may be ahead of the restored code — check your own DB backup before continuing.");

@@ -706,11 +706,26 @@ Magna CMS v{$version} — installation
    (for example public_html/ or the subdomain's document root). After
    extraction you should see index.php, public/, and vendor/ side by side.
 
-2. Make sure these folders are writable by the web server:
+2. Make sure the extracted files are OWNED by the user PHP runs as.
+
+   Control panels (Virtualmin/Webmin, cPanel, Plesk) often extract archives
+   as root when you are logged in as the server admin, which leaves every
+   file owned by root. PHP can then read the site but write nothing: the
+   installer may still complete, and later "Update Now" will refuse to run
+   because it cannot replace its own files.
+
+   From a shell, as root, with youruser = the domain's PHP/FPM user:
+     chown -R youruser: /path/to/this/directory
+
+   Not sure which user PHP runs as? Finish the install and open
+   System Insights in the admin panel — it names the user and prints the
+   exact command if anything is wrong.
+
+3. Make sure these folders are writable by the web server:
      storage/            (and everything inside it)
      bootstrap/cache/
 
-3. Open your domain in a browser. Magna's installer runs automatically:
+4. Open your domain in a browser. Magna's installer runs automatically:
      - checks server requirements
      - asks for your site name and URL
      - asks for your database connection

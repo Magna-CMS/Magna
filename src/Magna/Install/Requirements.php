@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Install;
 
 use Illuminate\Http\Request;
+use Magna\Updater\CoreWritability;
 
 /**
  * Environment checks shown on the installer's first screen. Required items
@@ -72,6 +73,22 @@ final class Requirements
             is_file($envPath) ? is_writable($envPath) : is_writable(dirname($envPath)),
             required: true,
             help: 'The installer stores your configuration in this file.',
+        );
+
+        // Recommended, never required: a read-only core is a legitimate (and more
+        // locked-down) deployment. It just cannot apply a one-click update, and
+        // finding that out mid-update is how a core tree ends up half-replaced —
+        // so it is reported here, at deploy time.
+        $writability = new CoreWritability(base_path());
+        $updateBlocker = $writability->summary();
+        $checks[] = new Requirement(
+            'writable-core',
+            'Core files are writable (one-click updates)',
+            $updateBlocker === null,
+            required: false,
+            help: $updateBlocker === null
+                ? 'Magna can apply core updates from the admin panel.'
+                : $updateBlocker.'. '.($writability->remedy() ?? '').' Until then, updates from the panel refuse to run and a new version has to be applied by re-uploading the release archive.',
         );
 
         $checks[] = new Requirement(

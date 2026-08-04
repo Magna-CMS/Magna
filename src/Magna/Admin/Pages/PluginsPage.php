@@ -637,6 +637,8 @@ class PluginsPage extends Page
     {
         $plugin = collect($this->available)->firstWhere('name', $this->pendingPluginName ?? '');
         $permissions = is_array($plugin) && is_array($plugin['permissions'] ?? null) ? $plugin['permissions'] : [];
+        $official = is_array($plugin) && ($plugin['official'] ?? false) === true;
+        $verified = is_array($plugin) && ($plugin['verified'] ?? false) === true;
 
         $html = '<p class="text-sm text-gray-600 dark:text-gray-300">This plugin will be downloaded from the marketplace, then enabled on your site.</p>';
 
@@ -654,13 +656,38 @@ class PluginsPage extends Page
         }
         $html .= '</div>';
 
-        $html .= <<<'HTML'
+        // The trust notice matches what the marketplace actually asserts about
+        // the publisher. Official = the registry itself vouches for the
+        // developer account (badge granted by the operator, never inferred
+        // from the vendor prefix) — warning it against itself just teaches
+        // admins to ignore the real warning. Everything else keeps the full
+        // third-party caution, with the "identity checked" nuance for
+        // verified publishers.
+        if ($official) {
+            $html .= <<<'HTML'
+                <div class="mt-4 rounded-lg border border-success-300 dark:border-success-700 bg-success-50 dark:bg-success-950/30 px-4 py-3 flex gap-3">
+                    <svg class="w-5 h-5 text-success-500 dark:text-success-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.403 12.652a3 3 0 000-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.883l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/>
+                    </svg>
+                    <div class="text-sm text-success-800 dark:text-success-200">
+                        <p class="font-semibold mb-0.5">Official plugin</p>
+                        <p class="text-success-700 dark:text-success-300">Published by the marketplace's own team. Like every plugin it runs with full application access.</p>
+                    </div>
+                </div>
+            HTML;
+
+            return new HtmlString($html);
+        }
+
+        $heading = $verified ? 'Third-party plugin — verified publisher' : 'Third-party plugin';
+
+        $html .= <<<HTML
             <div class="mt-4 rounded-lg border border-warning-300 dark:border-warning-700 bg-warning-50 dark:bg-warning-950/30 px-4 py-3 flex gap-3">
                 <svg class="w-5 h-5 text-warning-500 dark:text-warning-400 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
                 </svg>
                 <div class="text-sm text-warning-800 dark:text-warning-200">
-                    <p class="font-semibold mb-0.5">Third-party plugin</p>
+                    <p class="font-semibold mb-0.5">{$heading}</p>
                     <p class="text-warning-700 dark:text-warning-300">Once enabled it runs with <strong>full application access</strong> — it can read your database, files, and environment. Only install plugins you trust.</p>
                 </div>
             </div>

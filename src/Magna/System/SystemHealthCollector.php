@@ -11,6 +11,7 @@ use Laravel\Octane\OctaneServiceProvider;
 use Magna\Backup\BackupRun;
 use Magna\Marketplace\Marketplace;
 use Magna\Settings\BackupSettings;
+use Magna\Updater\CoreWritability;
 use Throwable;
 
 /**
@@ -275,6 +276,18 @@ final class SystemHealthCollector
             $warnings[] = [
                 'label' => 'Cache driver is "'.$cacheDriver.'", not Redis',
                 'help' => 'Every cache read/write costs a '.($cacheDriver === 'database' ? 'SQL query' : 'disk read').' instead of an in-memory lookup. Set this in Settings → Performance once a Redis server is reachable — .env alone does not change this (see the Performance settings guide for why).',
+            ];
+        }
+
+        // Permissions drift after install (host migration, a hardening script, a
+        // stray chown), so this is checked here too and not only on the
+        // installer's requirements screen.
+        $writability = new CoreWritability(base_path());
+        $updateBlocker = $writability->summary();
+        if ($updateBlocker !== null) {
+            $warnings[] = [
+                'label' => 'Core files are not writable — one-click updates will refuse to run',
+                'help' => $updateBlocker.'. '.($writability->remedy() ?? '').' Until it is fixed, a new version has to be applied by re-uploading the release archive over this install.',
             ];
         }
 
