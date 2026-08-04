@@ -15,21 +15,21 @@ uses(PluginTestCase::class);
 
 function lifecycleManager(): PluginManager
 {
-    skipWithoutDevPlugin('magna/docs');
+    skipWithoutDevPlugin('magna-cms/docs');
 
     return app(PluginManager::class);
 }
 
 it('enables, then disables preserving the record (data not destroyed)', function (): void {
     $manager = lifecycleManager();
-    $manager->enable('magna/docs');
+    $manager->enable('magna-cms/docs');
 
-    expect(PluginRecord::query()->where('name', 'magna/docs')->where('enabled', true)->exists())->toBeTrue();
+    expect(PluginRecord::query()->where('name', 'magna-cms/docs')->where('enabled', true)->exists())->toBeTrue();
 
-    $manager->disable('magna/docs');
+    $manager->disable('magna-cms/docs');
 
     // Disable preserves the record + data — only the enabled flag flips.
-    $record = PluginRecord::query()->where('name', 'magna/docs')->first();
+    $record = PluginRecord::query()->where('name', 'magna-cms/docs')->first();
     expect($record)->not->toBeNull()
         ->and($record->enabled)->toBeFalse();
 });
@@ -37,21 +37,21 @@ it('enables, then disables preserving the record (data not destroyed)', function
 it('re-enabling after disable is safe and idempotent', function (): void {
     $manager = lifecycleManager();
 
-    $manager->enable('magna/docs');
-    $manager->disable('magna/docs');
-    $manager->enable('magna/docs');
+    $manager->enable('magna-cms/docs');
+    $manager->disable('magna-cms/docs');
+    $manager->enable('magna-cms/docs');
 
-    expect(PluginRecord::query()->where('name', 'magna/docs')->where('enabled', true)->count())->toBe(1)
-        ->and($manager->getEnabled())->toHaveKey('magna/docs');
+    expect(PluginRecord::query()->where('name', 'magna-cms/docs')->where('enabled', true)->count())->toBe(1)
+        ->and($manager->getEnabled())->toHaveKey('magna-cms/docs');
 });
 
 it('uninstall removes the plugin record', function (): void {
     $manager = lifecycleManager();
-    $manager->enable('magna/docs');
+    $manager->enable('magna-cms/docs');
 
-    $manager->uninstall('magna/docs');
+    $manager->uninstall('magna-cms/docs');
 
-    expect(PluginRecord::query()->where('name', 'magna/docs')->exists())->toBeFalse();
+    expect(PluginRecord::query()->where('name', 'magna-cms/docs')->exists())->toBeFalse();
 });
 
 it('syncDiscovered is idempotent — never duplicates a plugin row', function (): void {
@@ -60,5 +60,5 @@ it('syncDiscovered is idempotent — never duplicates a plugin row', function ()
     $manager->syncDiscovered();
     $manager->syncDiscovered();
 
-    expect(PluginRecord::query()->where('name', 'magna/docs')->count())->toBe(1);
+    expect(PluginRecord::query()->where('name', 'magna-cms/docs')->count())->toBe(1);
 });

@@ -25,9 +25,9 @@ it('fails when asked to validate an unknown plugin', function (): void {
 });
 
 it('shows info for a discovered plugin', function (): void {
-    skipWithoutDevPlugin('magna/docs');
+    skipWithoutDevPlugin('magna-cms/docs');
 
-    $this->artisan('magna:plugin:info', ['name' => 'magna/docs'])
+    $this->artisan('magna:plugin:info', ['name' => 'magna-cms/docs'])
         ->assertSuccessful();
 });
 

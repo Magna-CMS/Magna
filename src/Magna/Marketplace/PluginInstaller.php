@@ -99,19 +99,33 @@ class PluginInstaller
      * misconfigured repository substituted something else despite the
      * version pin in install(). Returns a failure state if it doesn't
      * match (and rolls the install back), or null if it's clean.
+     *
+     * Versions are compared ignoring a leading "v": Composer tags releases
+     * as vX.Y.Z and the catalog stores that tag, while manifests carry the
+     * bare number — the marketplace's own docs plugin shipped as tag v1.1.0
+     * with manifest 1.1.0, and the mismatch rolled back every install of it.
+     * The failure message names what was actually found, because "did not
+     * match" cost a debugging session that "expected v1.1.0, found manifest
+     * magna/docs 1.1.0" would not have.
      */
     private function verifyInstalledManifest(string $package, string $approvedVersion): ?InstallState
     {
         $installedInfo = $this->findInstalled($package);
-        if ($installedInfo !== null && $installedInfo->manifest->version === $approvedVersion) {
+
+        if ($installedInfo !== null
+            && ltrim($installedInfo->manifest->version, 'vV') === ltrim($approvedVersion, 'vV')) {
             return null;
         }
 
         $this->composer->run(['remove', $package], 600);
 
+        $found = $installedInfo === null
+            ? "no discovered plugin names \"{$package}\" in its manifest"
+            : "found manifest {$installedInfo->manifest->name} {$installedInfo->manifest->version}";
+
         return $this->fail(
             $package,
-            "The installed plugin's manifest did not match the approved version and was rolled back.",
+            "The installed plugin did not match the approved listing and was rolled back: expected \"{$package}\" at {$approvedVersion}, {$found}.",
         );
     }
 

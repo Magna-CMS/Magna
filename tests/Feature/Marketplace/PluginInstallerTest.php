@@ -35,23 +35,37 @@ beforeEach(function (): void {
 
 it('installs and enables an approved plugin', function (): void {
     // enable() resolves the real discovered plugin, so this one needs it present.
-    skipWithoutDevPlugin('magna/docs');
+    skipWithoutDevPlugin('magna-cms/docs');
 
     // Read the version off the plugin rather than pinning a literal:
     // verifyInstalledManifest() compares the approved version against the
     // manifest actually on disk, so a hardcoded one fails the install the day
     // the plugin ships a release.
-    $version = devPluginVersion('magna/docs');
+    $version = devPluginVersion('magna-cms/docs');
 
-    fakeMarket([['package' => 'magna/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
     $runner = fakeRunner();
 
-    $state = app(PluginInstaller::class)->install('magna/docs');
+    $state = app(PluginInstaller::class)->install('magna-cms/docs');
 
     expect($state)->toBe(InstallState::Completed)
         // Stage 6: pinned to the exact approved version, not an unpinned "latest".
-        ->and($runner->commands)->toContain(['require', 'magna/docs:'.$version])
-        ->and(PluginRecord::query()->where('name', 'magna/docs')->where('enabled', true)->exists())->toBeTrue();
+        ->and($runner->commands)->toContain(['require', 'magna-cms/docs:'.$version])
+        ->and(PluginRecord::query()->where('name', 'magna-cms/docs')->where('enabled', true)->exists())->toBeTrue();
+});
+
+it('tolerates the catalog listing a Composer tag with a leading v', function (): void {
+    // Composer tags releases vX.Y.Z and the catalog stores the tag, while
+    // manifests carry the bare number. v1.1.0 vs 1.1.0 rolled back every
+    // install of the docs plugin in production — pin the normalization.
+    skipWithoutDevPlugin('magna-cms/docs');
+
+    $version = devPluginVersion('magna-cms/docs');
+
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => 'v'.$version, 'compat' => '^1.0']]);
+    fakeRunner();
+
+    expect(app(PluginInstaller::class)->install('magna-cms/docs'))->toBe(InstallState::Completed);
 });
 
 it('refuses a package that is not in the marketplace', function (): void {
@@ -94,15 +108,18 @@ it('rolls back when the installed manifest version does not match the approved v
     // magna/docs is a real, discoverable dev plugin whose manifest version
     // is 1.0.0 — claim the marketplace approved a different version to
     // simulate Composer resolving something other than what was reviewed.
-    fakeMarket([['package' => 'magna/docs', 'name' => 'Magna Docs', 'version' => '9.9.9', 'compat' => '^1.0']]);
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => '9.9.9', 'compat' => '^1.0']]);
     $runner = fakeRunner();
 
-    $state = app(PluginInstaller::class)->install('magna/docs');
+    $state = app(PluginInstaller::class)->install('magna-cms/docs');
 
     expect($state)->toBe(InstallState::Failed)
-        ->and($runner->commands)->toContain(['require', 'magna/docs:9.9.9'])
-        ->and($runner->commands)->toContain(['remove', 'magna/docs'])
-        ->and(PluginInstaller::progress('magna/docs')['message'])->toContain('did not match the approved version');
+        ->and($runner->commands)->toContain(['require', 'magna-cms/docs:9.9.9'])
+        ->and($runner->commands)->toContain(['remove', 'magna-cms/docs'])
+        ->and(PluginInstaller::progress('magna-cms/docs')['message'])->toContain('did not match the approved listing')
+        // The message must name what was found — a bare "did not match"
+        // already cost one debugging session too many.
+        ->and(PluginInstaller::progress('magna-cms/docs')['message'])->toContain('found manifest magna-cms/docs');
 });
 
 it('fails when composer is unavailable on the host', function (): void {
