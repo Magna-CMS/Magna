@@ -76,6 +76,57 @@ it('still shows Third party when the registry vouches for nothing', function ():
         ->assertSee('Third party');
 });
 
+// The install confirmation is the last thing an admin reads before granting a
+// plugin full application access, so what it claims about the publisher has to
+// match what the registry actually asserted — and the access warning itself must
+// survive in every case, official included.
+//
+// The modal body is read straight off the component: Filament renders action
+// modals outside this component's own render, so asserting on the page HTML would
+// pass whether or not the notice was correct.
+function installNoticeFor(array $catalogExtra): string
+{
+    fakeTrustCatalog($catalogExtra);
+
+    $component = Livewire::test(PluginsPage::class)
+        ->call('setTab', 'addnew')
+        ->set('pendingPluginName', 'acme/docs');
+
+    $method = new ReflectionMethod(PluginsPage::class, 'installModalBody');
+    $method->setAccessible(true);
+
+    return (string) $method->invoke($component->instance());
+}
+
+it('tells the truth about the publisher in the install confirmation', function (): void {
+    $this->actingAs(trustBadgeAdmin());
+
+    $html = installNoticeFor(['official' => true]);
+
+    expect($html)->toContain('Official plugin');
+    expect($html)->not->toContain('Third-party plugin');
+    expect($html)->toContain('full application access');
+});
+
+it('keeps the third-party warning for a publisher the registry does not vouch for', function (): void {
+    $this->actingAs(trustBadgeAdmin());
+
+    $html = installNoticeFor([]);
+
+    expect($html)->toContain('Third-party plugin');
+    expect($html)->not->toContain('Official plugin');
+    expect($html)->toContain('full application access');
+});
+
+it('marks a verified publisher without dropping the third-party caution', function (): void {
+    $this->actingAs(trustBadgeAdmin());
+
+    $html = installNoticeFor(['verified' => true]);
+
+    expect($html)->toContain('Third-party plugin — verified publisher');
+    expect($html)->toContain('full application access');
+});
+
 // Trust is a claim about a publisher and it arrives over the network, so it is
 // only honoured when the registry states it as a real boolean — a truthy string
 // from a compromised or sloppy registry must not paint a listing "Official".
