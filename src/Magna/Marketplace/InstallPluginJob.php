@@ -22,7 +22,9 @@ class InstallPluginJob implements ShouldQueue
     use SerializesModels;
 
     /** A generous ceiling — Composer installs can be slow. */
-    public int $timeout = 900;
+    public const TIMEOUT_SECONDS = 900;
+
+    public int $timeout = self::TIMEOUT_SECONDS;
 
     public function __construct(public readonly string $package) {}
 

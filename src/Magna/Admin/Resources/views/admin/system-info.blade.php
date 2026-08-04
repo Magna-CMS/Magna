@@ -14,6 +14,26 @@
 @keyframes syi-pg { 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
 @keyframes syi-pa { 70% { box-shadow: 0 0 0 8px rgba(245,158,11,0); } 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); } }
 @keyframes syi-pr { 70% { box-shadow: 0 0 0 8px rgba(239,68,68,0);  } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0);  } }
+/* Own colours rather than Tailwind opacity utilities, so the bar can't come out
+   invisible if the panel's compiled stylesheet lacks a given amber/opacity pair. */
+.syi-uptrack { height: 8px; width: 100%; overflow: hidden; border-radius: 99px; background: rgba(245,158,11,.18); }
+.syi-upbar {
+    position: relative; height: 100%; border-radius: 99px; background: #f59e0b;
+    min-width: 6px; transition: width .7s cubic-bezier(.4,0,.2,1);
+}
+.syi-upbar::after {
+    content: ''; position: absolute; inset: 0; border-radius: 99px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+    animation: syi-shimmer 1.4s linear infinite;
+}
+@keyframes syi-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+.syi-upstep { animation: syi-stepin .35s ease-out; }
+@keyframes syi-stepin { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.syi-uppulse { animation: syi-blink 1.2s ease-in-out infinite; }
+@keyframes syi-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+    .syi-upbar::after, .syi-upstep, .syi-uppulse { animation: none; }
+}
 #sysTerminal::-webkit-scrollbar       { width: 5px; }
 #sysTerminal::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
 </style>
@@ -23,18 +43,52 @@
 
     {{-- ── Core update in progress ─────────────────────────────────────────────── --}}
     @if($updating)
-    @php $updateProgress = \Magna\Updater\CoreUpdater::progress(); @endphp
+    @php
+        $updateProgress = \Magna\Updater\CoreUpdater::progress();
+        $updateTitle    = 'Updating Magna CMS'.($updateProgress['version'] ? ' v'.$updateProgress['version'] : '');
+        $updatePercent  = max(1, $updateProgress['percent']);
+        $updateSteps    = array_slice($updateProgress['log'], -4);
+    @endphp
     <div wire:poll.2s="pollCoreUpdate" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
         <div class="flex items-center gap-3">
             <svg class="w-4 h-4 shrink-0 animate-spin text-amber-500" viewBox="0 0 24 24" fill="none">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
             </svg>
-            <div class="min-w-0">
-                <p class="text-sm font-bold text-amber-700 dark:text-amber-400">Updating Magna CMS…</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ $updateProgress['message'] ?: 'Starting…' }}</p>
+            <div class="min-w-0 flex-1">
+                <div class="flex items-baseline justify-between gap-3">
+                    <p class="text-sm font-bold text-amber-700 dark:text-amber-400">{{ $updateTitle }}…</p>
+                    <p class="text-xs font-bold tabular-nums text-amber-700 dark:text-amber-400">{{ $updatePercent }}%</p>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ $updateProgress['message'] ?: 'Starting…' }}</p>
             </div>
         </div>
+
+        {{-- Percentage is step-based, not byte-based: the download's size isn't known
+             up front, so the bar carries a shimmer to show work is still happening
+             between steps rather than implying it has stalled. --}}
+        <div class="syi-uptrack mt-4" role="progressbar"
+             aria-valuenow="{{ $updatePercent }}" aria-valuemin="0" aria-valuemax="100"
+             aria-label="Core update progress">
+            <div class="syi-upbar" style="width: {{ $updatePercent }}%"></div>
+        </div>
+
+        @if($updateSteps !== [])
+        <ul class="mt-3 space-y-1">
+            @foreach($updateSteps as $stepIndex => $step)
+            @php $isCurrent = $stepIndex === array_key_last($updateSteps); @endphp
+            <li wire:key="syi-step-{{ $step['percent'] }}-{{ md5($step['message']) }}"
+                class="syi-upstep flex items-center gap-2 text-xs {{ $isCurrent ? 'text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 dark:text-gray-500' }}">
+                @if($isCurrent)
+                <span class="msri text-amber-500 text-sm syi-uppulse">radio_button_checked</span>
+                @else
+                <span class="msri text-emerald-500 text-sm">check_circle</span>
+                @endif
+                <span class="truncate">{{ $step['message'] }}</span>
+            </li>
+            @endforeach
+        </ul>
+        @endif
     </div>
     @endif
 

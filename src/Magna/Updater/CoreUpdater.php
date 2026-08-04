@@ -78,6 +78,9 @@ class CoreUpdater
         'codeload.github.com',
     ];
 
+    /** Version being applied, so every progress line can name it ("v1.3.4 — Downloading release…"). */
+    private ?string $targetVersion = null;
+
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly Filesystem $files,
@@ -91,7 +94,8 @@ class CoreUpdater
         bool $force = false,
         ?string $checksumSignature = null,
     ): CoreUpdateState {
-        $this->setProgress(CoreUpdateState::Running, 'Starting…');
+        $this->targetVersion = $targetVersion;
+        $this->setProgress(CoreUpdateState::Running, 'Starting…', 2);
 
         if (! is_string($expectedSha256) || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
             return $this->fail('This release has no verified checksum from Update Manager — refusing to apply it. If this persists, the update server may need attention.');
@@ -104,7 +108,7 @@ class CoreUpdater
 
         $lock = Cache::lock(self::LOCK_KEY, 1800);
         if (! $lock->get()) {
-            $this->setProgress(CoreUpdateState::Queued, 'Another update is already in progress…');
+            $this->setProgress(CoreUpdateState::Queued, 'Another update is already in progress…', 0);
 
             return CoreUpdateState::Queued;
         }
@@ -119,16 +123,16 @@ class CoreUpdater
                 return $this->fail('These enabled plugins are not compatible with v'.$targetVersion.': '.implode(', ', $names).'. Disable them first or wait for updated versions.');
             }
 
-            $this->setProgress(CoreUpdateState::Running, 'Backing up current files…');
+            $this->setProgress(CoreUpdateState::Running, 'Backing up current files…', 8);
             $backupPath = $this->backup();
 
-            $this->setProgress(CoreUpdateState::Running, 'Downloading release…');
+            $this->setProgress(CoreUpdateState::Running, 'Downloading release…', 20);
             $zipPath = $this->download($zipUrl);
 
-            $this->setProgress(CoreUpdateState::Running, 'Verifying archive checksum…');
+            $this->setProgress(CoreUpdateState::Running, 'Verifying archive checksum…', 55);
             $this->verifyChecksum($zipPath, $expectedSha256);
 
-            $this->setProgress(CoreUpdateState::Running, 'Extracting…');
+            $this->setProgress(CoreUpdateState::Running, 'Extracting…', 65);
             $extractPath = $this->extract($zipPath);
 
             Artisan::call('down');
@@ -136,10 +140,10 @@ class CoreUpdater
             $disableResult = null;
 
             try {
-                $this->setProgress(CoreUpdateState::Running, 'Applying update…');
+                $this->setProgress(CoreUpdateState::Running, 'Applying update…', 78);
                 $this->overlay($extractPath);
 
-                $this->setProgress(CoreUpdateState::Running, 'Running migrations…');
+                $this->setProgress(CoreUpdateState::Running, 'Running migrations…', 88);
                 Artisan::call('migrate', ['--force' => true]);
 
                 // A forced update may leave plugins enabled that are known-incompatible
@@ -148,14 +152,14 @@ class CoreUpdater
                 // are disabled here, still inside maintenance mode, before the site comes
                 // back up. Data/config are preserved; the admin re-enables once updated.
                 if ($force && $incompatible !== []) {
-                    $this->setProgress(CoreUpdateState::Running, 'Disabling incompatible plugins…');
+                    $this->setProgress(CoreUpdateState::Running, 'Disabling incompatible plugins…', 93);
                     $disableResult = $this->disableIncompatiblePlugins($incompatible);
                 }
 
-                $this->setProgress(CoreUpdateState::Running, 'Clearing caches…');
+                $this->setProgress(CoreUpdateState::Running, 'Clearing caches…', 96);
                 $this->clearCachesAndReloadOctane();
             } catch (Throwable $e) {
-                $this->setProgress(CoreUpdateState::Running, 'Update failed mid-apply — restoring previous files…');
+                $this->setProgress(CoreUpdateState::Running, 'Update failed mid-apply — restoring previous files…', 50);
                 $this->restore($backupPath);
                 Artisan::call('config:clear');
 
@@ -167,7 +171,7 @@ class CoreUpdater
             $this->cleanup($zipPath, $extractPath);
 
             $message = $this->buildSuccessMessage($targetVersion, $disableResult);
-            $this->setProgress(CoreUpdateState::Completed, $message);
+            $this->setProgress(CoreUpdateState::Completed, $message, 100);
 
             return CoreUpdateState::Completed;
         } catch (Throwable $e) {
@@ -184,19 +188,17 @@ class CoreUpdater
     /**
      * Current apply progress, read the same way Marketplace\PluginInstaller::progress() is.
      *
-     * @return array{state: string|null, message: string}
+     * @return array{state: string|null, message: string, percent: int, version: string|null, log: list<array{message: string, percent: int}>, waiting_seconds: int}
      */
     public static function progress(): array
     {
-        $value = Cache::get(self::key());
+        return CoreUpdateProgress::read();
+    }
 
-        if (is_array($value) && isset($value['state'], $value['message']) && is_string($value['message'])) {
-            $state = is_string($value['state']) ? $value['state'] : null;
-
-            return ['state' => $state, 'message' => $value['message']];
-        }
-
-        return ['state' => null, 'message' => ''];
+    /** @see CoreUpdateProgress::markQueued() */
+    public static function markQueued(PendingCoreUpdate $pending): void
+    {
+        CoreUpdateProgress::markQueued($pending);
     }
 
     /**
@@ -428,18 +430,19 @@ class CoreUpdater
 
     private function fail(string $message): CoreUpdateState
     {
-        $this->setProgress(CoreUpdateState::Failed, $message);
+        $this->setProgress(CoreUpdateState::Failed, $message, 100);
 
         return CoreUpdateState::Failed;
     }
 
-    private function setProgress(CoreUpdateState $state, string $message): void
+    /**
+     * @param  int  $percent  roughly how far along the apply is, so the UI can
+     *                        draw a bar rather than only name the current step.
+     *                        Approximate on purpose: the download dominates and
+     *                        its size is not known until it starts.
+     */
+    private function setProgress(CoreUpdateState $state, string $message, int $percent = 0): void
     {
-        Cache::put(self::key(), ['state' => $state->value, 'message' => $message], 1800);
-    }
-
-    private static function key(): string
-    {
-        return 'magna.updater.apply.progress';
+        CoreUpdateProgress::set($state, $message, $percent, $this->targetVersion);
     }
 }

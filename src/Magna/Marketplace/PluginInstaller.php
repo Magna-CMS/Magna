@@ -117,6 +117,7 @@ class PluginInstaller
 
     private function finishSuccess(string $package): InstallState
     {
+        InstallProgress::clearPending($package);
         $this->marketplace->clearCache();
         $this->marketplace->reportInstall($package);
         $this->setProgress($package, InstallState::Completed, 'Installed.');
@@ -127,19 +128,11 @@ class PluginInstaller
     /**
      * Current install progress for a package.
      *
-     * @return array{state: string|null, message: string}
+     * @return array{state: string|null, message: string, waiting_seconds: int}
      */
     public static function progress(string $package): array
     {
-        $value = Cache::get(self::key($package));
-
-        if (is_array($value) && isset($value['state'], $value['message']) && is_string($value['message'])) {
-            $state = is_string($value['state']) ? $value['state'] : null;
-
-            return ['state' => $state, 'message' => $value['message']];
-        }
-
-        return ['state' => null, 'message' => ''];
+        return InstallProgress::read($package);
     }
 
     private function findInstalled(string $package): ?PluginInfo
@@ -155,6 +148,7 @@ class PluginInstaller
 
     private function fail(string $package, string $message): InstallState
     {
+        InstallProgress::clearPending($package);
         $this->setProgress($package, InstallState::Failed, $message);
 
         return InstallState::Failed;
@@ -162,11 +156,6 @@ class PluginInstaller
 
     private function setProgress(string $package, InstallState $state, string $message): void
     {
-        Cache::put(self::key($package), ['state' => $state->value, 'message' => $message], 900);
-    }
-
-    private static function key(string $package): string
-    {
-        return 'magna.marketplace.install.'.$package;
+        InstallProgress::set($package, $state, $message);
     }
 }

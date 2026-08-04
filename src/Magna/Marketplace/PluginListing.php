@@ -43,6 +43,15 @@ final class PluginListing
         public readonly bool $trialEnabled = false,
         public readonly ?int $trialDays = null,
         public readonly int $seatLimit = 1,
+        // Publisher trust, as the marketplace records it. `official` means the
+        // registry itself vouches for the developer account that published this
+        // (Magna's own team, or whoever runs the registry a site is pointed at);
+        // `verified` is the weaker "identity checked" badge. Both default to
+        // false, so a catalog that predates the field — or a registry that
+        // simply doesn't grant badges — reads as an ordinary third-party
+        // listing rather than claiming trust it never asserted.
+        public readonly bool $official = false,
+        public readonly bool $verified = false,
     ) {}
 
     /**
@@ -125,6 +134,8 @@ final class PluginListing
             trialEnabled: (bool) ($data['trialEnabled'] ?? false),
             trialDays: is_numeric($data['trialDays'] ?? null) ? (int) $data['trialDays'] : null,
             seatLimit: is_numeric($data['seatLimit'] ?? null) ? max(1, (int) $data['seatLimit']) : 1,
+            official: ($data['official'] ?? null) === true,
+            verified: ($data['verified'] ?? null) === true,
         );
     }
 

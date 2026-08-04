@@ -15,10 +15,12 @@ use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
 use Magna\System\SystemHealthCollector;
-use Magna\Updater\CoreUpdateJob;
+use Magna\Updater\CoreUpdateProgress;
 use Magna\Updater\CoreUpdater;
+use Magna\Updater\CoreUpdateStarter;
 use Magna\Updater\CoreUpdateState;
 use Magna\Updater\IncompatiblePlugin;
+use Magna\Updater\PendingCoreUpdate;
 use Magna\Updater\UpdateCheck;
 use Magna\Updater\UpdateCheckClient;
 use Throwable;
@@ -139,7 +141,7 @@ class SystemInfoPage extends Page
                 ->modalHeading(fn (): string => 'Update Magna CMS to v'.(UpdateCheck::core()?->latest_version ?? '').'?')
                 ->modalDescription('The site goes into maintenance mode during the update. Current files are backed up first and restored automatically if anything fails.')
                 ->modalSubmitActionLabel('Update now')
-                ->action(function (CoreUpdater $updater): void {
+                ->action(function (CoreUpdater $updater, CoreUpdateStarter $starter): void {
                     $core = UpdateCheck::core();
                     if ($core?->latest_version === null || $core->download_url === null || $core->download_sha256 === null) {
                         Notification::make()->title("Can't update")->body('No verified release archive is available for the latest version yet.')->danger()->send();
@@ -159,12 +161,12 @@ class SystemInfoPage extends Page
                         return;
                     }
 
-                    CoreUpdateJob::dispatch(
-                        $core->latest_version,
-                        $core->download_url,
-                        $core->download_sha256,
+                    $starter->start(new PendingCoreUpdate(
+                        version: $core->latest_version,
+                        zipUrl: $core->download_url,
+                        expectedSha256: $core->download_sha256,
                         checksumSignature: $core->download_sha256_signature,
-                    );
+                    ));
                     $this->updating = true;
                     Notification::make()->title('Update started…')->send();
                 }),
@@ -237,7 +239,7 @@ class SystemInfoPage extends Page
 
         [$version, $zipUrl, $sha256, $signature] = $target;
 
-        CoreUpdateJob::dispatch($version, $zipUrl, $sha256, force: true, checksumSignature: $signature);
+        app(CoreUpdateStarter::class)->start(new PendingCoreUpdate($version, $zipUrl, $sha256, force: true, checksumSignature: $signature));
         $this->updating = true;
         Notification::make()
             ->title('Forced update started…')
@@ -295,7 +297,7 @@ class SystemInfoPage extends Page
             return;
         }
 
-        CoreUpdateJob::dispatch($version, $zipUrl, $sha256, checksumSignature: $signature);
+        app(CoreUpdateStarter::class)->start(new PendingCoreUpdate($version, $zipUrl, $sha256, checksumSignature: $signature));
         $this->updating = true;
         Notification::make()->title('Plugins removed. Update started…')->send();
     }
@@ -347,20 +349,78 @@ class SystemInfoPage extends Page
             return;
         }
 
-        $progress = CoreUpdater::progress();
+        $starter = app(CoreUpdateStarter::class);
 
+        // Reading progress is fine for anyone who can see this page
+        // (settings.view), but the stall fallback *performs* the apply inside
+        // this request — that is the same privilege "Update Now" needs, and
+        // $updating is a plain public property a client can flip. So the
+        // fallback is authorized separately here rather than inherited from
+        // page access.
+        if ($starter->isStalled() && (auth()->user()?->can('settings.manage') ?? false)) {
+            $this->applyStalledUpdate($starter);
+
+            return;
+        }
+
+        $this->reportUpdateOutcome(CoreUpdater::progress());
+    }
+
+    /**
+     * No worker took the job, so this request applies the update itself.
+     *
+     * Deliberately synchronous: the admin is already watching a progress panel,
+     * the site is in maintenance mode for the duration, and the alternative is
+     * an update that never runs at all.
+     */
+    private function applyStalledUpdate(CoreUpdateStarter $starter): void
+    {
+        Notification::make()
+            ->title('No background worker is running')
+            ->body('Applying the update in this request instead — keep this page open until it finishes.')
+            ->warning()
+            ->send();
+
+        if ($starter->applyStalledInline() === null) {
+            return;
+        }
+
+        $this->reportUpdateOutcome(CoreUpdater::progress());
+    }
+
+    /** @param  array{state: string|null, message: string, percent: int, version: string|null, log: list<array{message: string, percent: int}>, waiting_seconds: int}  $progress */
+    private function reportUpdateOutcome(array $progress): void
+    {
         if ($progress['state'] === CoreUpdateState::Completed->value) {
             $this->updating = false;
+            CoreUpdateProgress::clearPending();
             Notification::make()->title('Update complete')->body($progress['message'])->success()->send();
             $this->js('setTimeout(function(){ window.location.reload(); }, 800)');
         } elseif ($progress['state'] === CoreUpdateState::Failed->value) {
             $this->updating = false;
+            CoreUpdateProgress::clearPending();
             Notification::make()->title("Update didn't complete")->body($progress['message'])->danger()->send();
         }
     }
 
+    /**
+     * Writing APP_DEBUG=true to .env turns stack traces, SQL and environment
+     * dumps on for every visitor, and clearing the cache is a site-wide
+     * side effect — neither is a read-only operation, so neither may be
+     * reachable with the settings.view that canAccess() asks for. Livewire
+     * methods are callable by anyone who can render the component, regardless
+     * of whether the button that calls them was rendered, so the check has to
+     * live in the method.
+     */
+    private function authorizeSettingsManage(): void
+    {
+        abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
+    }
+
     public function toggleDebugMode(): void
     {
+        $this->authorizeSettingsManage();
+
         $newValue = ! (bool) config('app.debug');
         $envPath = base_path('.env');
 
@@ -426,6 +486,8 @@ class SystemInfoPage extends Page
 
     public function clearCache(): void
     {
+        $this->authorizeSettingsManage();
+
         $driver = (string) config('cache.default', 'file');
         $this->terminalLines[] = ['type' => 'cmd',  'text' => 'php artisan cache:clear'];
         $this->terminalLines[] = ['type' => 'info', 'text' => "[INFO] Clearing internal storage caches on driver '{$driver}'..."];

@@ -18,10 +18,10 @@ use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseInstaller;
 use Magna\Licensing\LicenseStore;
-use Magna\Marketplace\InstallPluginJob;
 use Magna\Marketplace\InstallState;
 use Magna\Marketplace\MarketplaceClient;
 use Magna\Marketplace\PluginInstaller;
+use Magna\Marketplace\PluginInstallStarter;
 use Magna\Marketplace\PluginListing;
 use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\PluginInfo;
@@ -313,8 +313,18 @@ class PluginsPage extends Page
                 }
 
                 // Queue the install to run in the background; multiple installs
-                // are processed one at a time by the installer's lock.
-                InstallPluginJob::dispatch($package);
+                // are processed one at a time by the installer's lock. The
+                // starter also records the package, so pollInstalls() can run
+                // the install itself if no queue worker ever takes the job.
+                if (! app(PluginInstallStarter::class)->start($package)) {
+                    Notification::make()
+                        ->title("Can't install that")
+                        ->body('That is not a valid vendor/package name.')
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
 
                 if (! in_array($package, $this->installQueue, true)) {
                     $this->installQueue[] = $package;
@@ -576,8 +586,22 @@ class PluginsPage extends Page
 
         $stillGoing = [];
         $anyFinished = false;
+        $starter = app(PluginInstallStarter::class);
 
         foreach ($this->installQueue as $package) {
+            // No worker took the job. Run one stalled install per poll so a
+            // long request stays bounded to a single Composer run; anything
+            // else queued behind it is picked up by the following polls.
+            if (! $anyFinished && $starter->isStalled($package)) {
+                Notification::make()
+                    ->title('No background worker is running')
+                    ->body("Installing {$package} in this request instead — keep this page open until it finishes.")
+                    ->warning()
+                    ->send();
+
+                $starter->installStalledInline($package);
+            }
+
             $state = PluginInstaller::progress($package)['state'];
 
             if ($state === InstallState::Completed->value) {
@@ -719,7 +743,18 @@ class PluginsPage extends Page
             ->pluck('latest_version', 'slug')
             ->all();
 
-        $this->installed = $records->map(function (PluginRecord $r) use ($discoveredVersions, $bootedPlugins): array {
+        // The catalog is read before the installed list is built: publisher
+        // trust ("official") is something only the marketplace knows, so an
+        // installed plugin's badge has to come from the same listing the
+        // marketplace serves, keyed by package name.
+        $marketplace = app(MarketplaceClient::class);
+        $catalog = $marketplace->plugins();
+        $this->marketplaceUnreachable = $catalog === [] && $marketplace->wasUnreachable();
+
+        /** @var array<string, PluginListing> $listingsByPackage */
+        $listingsByPackage = collect($catalog)->keyBy(fn (PluginListing $l): string => $l->package)->all();
+
+        $this->installed = $records->map(function (PluginRecord $r) use ($discoveredVersions, $bootedPlugins, $listingsByPackage): array {
             $settingsUrl = null;
             $booted = $bootedPlugins[$r->name] ?? null;
             if ($booted instanceof RegistersSettingsPages) {
@@ -755,14 +790,16 @@ class PluginsPage extends Page
                 // does not entitle it to — rendered as a renew prompt rather
                 // than an Update button that cannot work.
                 'license_blocked_version' => $licenseBlocked[$r->name] ?? null,
+                // Publisher trust from the marketplace listing, when this
+                // plugin is one the marketplace knows about. A plugin sitting
+                // in plugins-dev/ or installed by hand has no listing and
+                // therefore claims nothing.
+                'official' => $listingsByPackage[$r->name]->official ?? false,
+                'verified' => $listingsByPackage[$r->name]->verified ?? false,
             ];
         })->values()->all();
 
         // "Add New" is the marketplace: browse the official catalog (not yet installed).
-        $marketplace = app(MarketplaceClient::class);
-        $catalog = $marketplace->plugins();
-        $this->marketplaceUnreachable = $catalog === [] && $marketplace->wasUnreachable();
-
         $this->available = collect($catalog)
             ->reject(fn (PluginListing $l): bool => in_array($l->package, $installedNames, true))
             ->map(fn (PluginListing $l): array => [
@@ -786,6 +823,8 @@ class PluginsPage extends Page
                 'trial_enabled' => $l->trialEnabled && $l->isPaid(),
                 'trial_days' => $l->trialDays,
                 'seat_limit' => $l->seatLimit,
+                'official' => $l->official,
+                'verified' => $l->verified,
             ])->values()->all();
     }
 

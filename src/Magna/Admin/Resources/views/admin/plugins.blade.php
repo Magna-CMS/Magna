@@ -169,7 +169,20 @@
                                     </div>
                                 @endif
                                 <div class="min-w-0">
-                                    <div class="font-semibold text-gray-900 dark:text-white">{{ $p['display_name'] }}</div>
+                                    <div class="flex items-center gap-2 leading-tight">
+                                        <span class="font-semibold text-gray-900 dark:text-white">{{ $p['display_name'] }}</span>
+                                        @if (($p['official'] ?? false) === true)
+                                            <span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-700/50 shrink-0" title="Published by a developer account the marketplace vouches for">
+                                                <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd"/></svg>
+                                                Official
+                                            </span>
+                                        @elseif (($p['verified'] ?? false) === true)
+                                            <span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-success-100 dark:bg-success-900/40 text-success-700 dark:text-success-400 border border-success-200 dark:border-success-700/50 shrink-0" title="Published by a developer account with a verified identity">
+                                                <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd"/></svg>
+                                                Verified
+                                            </span>
+                                        @endif
+                                    </div>
                                     @if ($p['description'])
                                         <p class="text-gray-500 dark:text-gray-400 text-[13px] mt-0.5 max-w-md leading-relaxed">{{ $p['description'] }}</p>
                                     @endif
@@ -327,7 +340,14 @@
                     $initials = strtoupper(mb_substr($words[0] ?? '', 0, 1))
                         . (isset($words[1]) ? strtoupper(mb_substr($words[1], 0, 1)) : '');
                 @endphp
-                @php $isThirdParty = $p['source'] !== 'plugins-dev/'; @endphp
+                @php
+                    // An "official" publisher is one the marketplace itself
+                    // vouches for, so its listings are not third-party even
+                    // though they install through Composer like any other.
+                    $isOfficial = ($p['official'] ?? false) === true;
+                    $isVerified = ($p['verified'] ?? false) === true;
+                    $isThirdParty = ! $isOfficial && $p['source'] !== 'plugins-dev/';
+                @endphp
                 <div class="bg-white dark:bg-gray-900/60 rounded-xl border {{ $isThirdParty ? 'border-warning-200 dark:border-warning-800/50' : 'border-gray-200 dark:border-white/10' }} p-4 flex flex-col">
                     <div class="flex gap-3 mb-3">
                         @if ($p['icon'] ?? null)
@@ -340,7 +360,17 @@
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 leading-tight">
                                 <span class="font-semibold text-gray-900 dark:text-white">{{ $p['display_name'] }}</span>
-                                @if ($isThirdParty)
+                                @if ($isOfficial)
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-700/50 shrink-0">
+                                        <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd"/></svg>
+                                        Official
+                                    </span>
+                                @elseif ($isVerified)
+                                    <span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-success-100 dark:bg-success-900/40 text-success-700 dark:text-success-400 border border-success-200 dark:border-success-700/50 shrink-0">
+                                        <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd"/></svg>
+                                        Verified
+                                    </span>
+                                @elseif ($isThirdParty)
                                     <span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning-100 dark:bg-warning-900/40 text-warning-700 dark:text-warning-400 border border-warning-200 dark:border-warning-700/50 shrink-0">
                                         <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                                         Third party
