@@ -658,8 +658,10 @@
                             <div class="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
                                 <p class="text-[11px] font-semibold text-amber-700 dark:text-amber-300">No queue worker is running</p>
                                 <p class="mt-1 text-[11px] leading-relaxed text-amber-700/80 dark:text-amber-300/80">
-                                    The oldest job has waited {{ $waited }}. Nothing queued runs until a worker consumes it —
-                                    start one with <code class="font-mono">php artisan queue:work</code>.
+                                    The oldest job has waited {{ $waited }}. Magna drains the queue automatically every minute
+                                    through the cron scheduler — a backlog this old means the scheduler cron is not running either.
+                                    Add <code class="font-mono">* * * * * php artisan schedule:run</code> to cron, or run a
+                                    dedicated worker with <code class="font-mono">php artisan queue:work</code>.
                                 </p>
                             </div>
                         @endif

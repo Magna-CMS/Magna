@@ -300,7 +300,7 @@ final class SystemHealthCollector
         } elseif ($queueConnection === 'database') {
             $warnings[] = [
                 'label' => 'Queue connection is "database", not Redis',
-                'help' => 'Works, but Redis has lower overhead for a production queue. Also confirm a "php artisan queue:work" process is actually running and supervised — queued jobs silently pile up otherwise.',
+                'help' => 'Works, but Redis has lower overhead for a production queue. Jobs are drained every minute by the cron scheduler even without a worker; a supervised "php artisan queue:work" process just picks them up faster.',
             ];
         }
 

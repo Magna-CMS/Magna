@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Magna\AccountCentre\AccountCentreServiceProvider;
 use Magna\Admin\AdminServiceProvider;
@@ -63,6 +64,21 @@ class MagnaServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        // Shared hosts rarely run a supervised queue worker, but they do run
+        // cron — the same cron that already drives this scheduler. Drain the
+        // queue from it: once a minute, consume everything pending and exit.
+        // With a real worker these ticks find nothing and cost nothing; with
+        // the sync driver nothing is ever queued; without any cron at all,
+        // System Info's backlog warning still tells the operator the truth.
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+            if (config('queue.default') === 'sync') {
+                return;
+            }
+
+            $schedule->command('queue:work', ['--stop-when-empty', '--max-time=55', '--tries=3'])
+                ->everyMinute()
+                ->withoutOverlapping()
+                ->runInBackground();
+        });
     }
 }

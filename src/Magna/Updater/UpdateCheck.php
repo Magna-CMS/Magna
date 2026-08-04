@@ -7,6 +7,7 @@ namespace Magna\Updater;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Magna\MagnaServiceProvider;
 
 /**
  * @property int $id
@@ -54,7 +55,25 @@ class UpdateCheck extends Model
 
     public static function core(): ?self
     {
-        return static::query()->where('type', 'core')->first();
+        $check = static::query()->where('type', 'core')->first();
+
+        // Self-heal after an update. The row's update_available flag was
+        // computed at CHECK time against the version running then; a core
+        // update replaces the code but the next scheduled check is up to
+        // 12h away, so System Info kept offering the update the site was
+        // already running. If the code's version no longer matches the
+        // row, recompute against what is actually running now.
+        if ($check !== null && $check->current_version !== MagnaServiceProvider::VERSION) {
+            $latest = ltrim((string) $check->latest_version, 'vV');
+
+            $check->forceFill([
+                'current_version' => MagnaServiceProvider::VERSION,
+                'update_available' => $latest !== ''
+                    && version_compare($latest, MagnaServiceProvider::VERSION, '>'),
+            ])->saveQuietly();
+        }
+
+        return $check;
     }
 
     /** @return Collection<int, static> */
