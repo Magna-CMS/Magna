@@ -42,6 +42,9 @@ class PluginsServiceProvider extends ServiceProvider
                 new DependencyResolver,
                 new PluginCommandRegistrar($this->app),
                 $this->app->make(PluginAutoloader::class),
+                new PluginFileRemover($this->app->basePath()),
+                new PluginMigrator,
+                new PluginRegistry($this->app->make(PluginDiscovery::class)),
             );
         });
 

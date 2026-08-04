@@ -27,6 +27,15 @@
         </include>
     </source>
     <php>
+        <!--
+            The whole suite runs in one process, so peak memory is the sum of
+            ~1500 tests' worth of retained state, not any single test's. PHP's
+            own 512M default started killing the run mid-suite — always in
+            whichever test happened to make the next large allocation, which
+            reads as a random unrelated failure. Set here rather than in a
+            developer's php.ini so CI and every machine agree.
+        -->
+        <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

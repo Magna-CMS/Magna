@@ -209,3 +209,51 @@ it('gives every admin page and resource an access gate', function (): void {
 
     expect($offenders)->toBe([]);
 });
+
+/**
+ * A NOT NULL TIMESTAMP with no default cannot be created on MySQL.
+ *
+ * With `explicit_defaults_for_timestamp` off — still the case on plenty of
+ * hosts — MySQL hands every such column past the first in a table an implicit
+ * default of '0000-00-00 00:00:00', which strict mode's NO_ZERO_DATE then
+ * rejects, so CREATE TABLE fails outright:
+ *
+ *     SQLSTATE[42000]: 1067 Invalid default value for 'expires_at'
+ *
+ * SQLite has no such rule, so the suite runs these migrations happily and only
+ * a MySQL install ever finds out — which is exactly what happened to
+ * roya_device_sessions, dms_notification_log and update_checks. Whether a given
+ * column escapes depends on its position in the table, making it a coin toss
+ * rather than a design.
+ *
+ * Use dateTime() for a required moment in time (it also has no 2038 limit), or
+ * make the timestamp nullable, or give it an explicit default.
+ */
+it('declares no NOT NULL timestamp column without a default', function (): void {
+    // Not base_path(): these architecture checks read the tree directly and do
+    // not boot the application.
+    $root = dirname(__DIR__, 3);
+
+    $migrations = array_merge(
+        glob($root.'/database/migrations/*.php') ?: [],
+        glob($root.'/plugins-dev/*/*/database/migrations/*.php') ?: [],
+    );
+
+    expect($migrations)->not->toBe([]);
+
+    $offenders = [];
+
+    foreach ($migrations as $file) {
+        foreach (file($file) ?: [] as $number => $line) {
+            // A chained ->nullable(), ->default() or ->useCurrent() on the same
+            // line settles it; those are the three ways to be safe.
+            if (preg_match("/->timestamp\('([a-z0-9_]+)'\)\s*;/", $line, $matches) !== 1) {
+                continue;
+            }
+
+            $offenders[] = basename($file).':'.($number + 1)." ({$matches[1]})";
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});

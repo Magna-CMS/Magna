@@ -35,8 +35,13 @@ final class Marketplace
      * could point this at their own key could mint "valid" licence responses
      * locally. The private half lives only on the marketplace server
      * (MARKETPLACE_LICENSE_SIGNING_SECRET).
+     *
+     * Rotating this is a breaking change for every install already running:
+     * a site holding the previous key rejects every response signed by the new
+     * private half, so it must take a core update carrying this value before
+     * the marketplace starts using the new pair.
      */
-    public const LICENSE_PUBLIC_KEY = 'ogqnrv36ejgQZm14T+TrEyiDzG2oGOOjxXRpoVJIcRg=';
+    public const LICENSE_PUBLIC_KEY = 'vyc/PzRWDethd0Wgpu8UBV/nhQzyDJCkrW+/ivb8Fpw=';
 
     /** Ed25519 public keys are exactly 32 bytes once base64-decoded. */
     private const LICENSE_PUBLIC_KEY_BYTES = 32;

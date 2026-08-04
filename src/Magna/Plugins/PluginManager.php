@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Magna\Plugins;
 
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +36,9 @@ class PluginManager
         private readonly DependencyResolver $dependencies,
         private readonly PluginCommandRegistrar $commandRegistrar,
         private readonly PluginAutoloader $autoloader,
+        private readonly PluginFileRemover $fileRemover,
+        private readonly PluginMigrator $migrator,
+        private readonly PluginRegistry $registry,
     ) {}
 
     /**
@@ -127,7 +129,17 @@ class PluginManager
      */
     public function enable(string $name): void
     {
-        $info = $this->discovery->find($name);
+        $info = $this->discovery->find($name)
+            // A plugin already recorded is installed, whatever discovery can
+            // currently see. Licensed installs write into plugins-dev/, which
+            // discoverFromDev() skips outright in production and otherwise only
+            // reads when the directory is a wired Composer path repository — so
+            // enabling one answered "Plugin [x] was not found. Run `composer
+            // require x` first." for files sitting on disk. The record carries
+            // the manifest and base path this needs; nothing has to be
+            // rediscovered to use them.
+            ?? $this->registry->find($name);
+
         if ($info === null) {
             throw new PluginNotFoundException($name);
         }
@@ -149,7 +161,7 @@ class PluginManager
         // entry class to autoload in *this* request.
         $this->autoloader->register($info->basePath);
 
-        $this->runMigrations($info->basePath);
+        $this->migrator->run($info->basePath);
 
         // Stage 11 (S11-03): the PluginRecord write, permission
         // registration, and content-type persistence are dependent DML
@@ -157,7 +169,7 @@ class PluginManager
         // earlier ones were previously left committed, so the plugin would
         // show as "enabled" in the admin list while missing the content
         // types it's supposed to provide, with no clean way to recover
-        // short of manual DB surgery. runMigrations() is DDL and stays
+        // short of manual DB surgery. The migrator is DDL and stays
         // outside — MySQL auto-commits DDL regardless, so wrapping it
         // would only be misleading (same caveat already accepted in
         // SchemaSyncer for the same reason).
@@ -239,7 +251,7 @@ class PluginManager
      *
      * @throws PluginNotFoundException
      */
-    public function uninstall(string $name, bool $purge = false): void
+    public function uninstall(string $name, bool $purge = false, bool $removeFiles = false): void
     {
         /** @var PluginRecord|null $record */
         $record = PluginRecord::query()->where('name', $name)->first();
@@ -271,11 +283,25 @@ class PluginManager
                 // plugin can never be installed again on this database. Forget
                 // the ledger entries too, so a purge really does return the
                 // plugin to "never installed".
-                $this->forgetMigrations($record->base_path);
+                $this->migrator->forget($record->base_path);
             }
 
             $record->delete();
         });
+
+        // Outside the transaction: filesystem work cannot be rolled back, so
+        // it must not run where a later DB failure would imply it had been.
+        //
+        // Deleting the files is what makes an uninstall stick — without it the
+        // record went, the files stayed, and the next syncDiscovered() (which
+        // the Plugins page calls on every load) re-created the row from those
+        // files. Opt-in rather than automatic: this is a recursive delete
+        // against a path derived from a package name, and every caller that
+        // only wants the record gone should not have to know that.
+        if ($removeFiles) {
+            $this->fileRemover->remove($name);
+            $this->discovery->reset();
+        }
 
         $this->invalidateAdminPanelCache();
     }
@@ -339,48 +365,13 @@ class PluginManager
     }
 
     /**
-     * Ensure every discovered plugin has a row in the `plugins` table so it
-     * shows up in the admin plugin list. Plugins that ship pre-bundled in
-     * vendor/ (installed as Composer dependencies) are discoverable but never went
-     * through the install flow that writes a PluginRecord, so without this
-     * they are invisible and can never be enabled. New rows are created
-     * DISABLED — a bundled plugin still requires an explicit, deliberate
-     * enable (it runs with full application access). Existing rows are left
-     * untouched: enabled state, timestamps, and version are never overwritten
-     * here.
+     * Delegates to PluginRegistry. Kept on the manager because it is public API
+     * — the Core Plugin Manager and the licensed installer both call it, and
+     * neither should have to know which collaborator owns the table.
      */
     public function syncDiscovered(): void
     {
-        if (! Schema::hasTable('plugins')) {
-            return;
-        }
-
-        $existing = PluginRecord::query()->pluck('name')->all();
-
-        foreach ($this->discovery->discover() as $info) {
-            if (in_array($info->manifest->name, $existing, true)) {
-                continue;
-            }
-
-            // firstOrCreate + swallowing a duplicate-key race keeps this safe
-            // when two admin page loads hit it concurrently (the `name` column
-            // is unique): the loser simply no-ops instead of 500ing. Existing
-            // rows are never touched, so an enabled plugin is never re-disabled.
-            try {
-                PluginRecord::firstOrCreate(
-                    ['name' => $info->manifest->name],
-                    [
-                        'display_name' => $info->manifest->displayName,
-                        'version' => $info->manifest->version,
-                        'enabled' => false,
-                        'base_path' => $info->basePath,
-                        'manifest' => $info->manifest->toArray(),
-                    ],
-                );
-            } catch (UniqueConstraintViolationException) {
-                // Created concurrently by another request — nothing to do.
-            }
-        }
+        $this->registry->syncDiscovered();
     }
 
     /**
@@ -469,52 +460,6 @@ class PluginManager
             'app' => $this->app,
             'basePath' => $basePath,
             'manifest' => $manifestObj,
-        ]);
-    }
-
-    /**
-     * Remove a purged plugin's migrations from the ledger.
-     *
-     * Names come from the plugin's own migrations directory, so only files
-     * that physically belong to it can be forgotten — core's ledger rows are
-     * never touched, even if the plugin's tables happen to share a prefix.
-     *
-     * Laravel records migrations by bare filename, so two plugins shipping an
-     * identically-named migration file would collide here. Timestamp prefixes
-     * make that vanishingly unlikely, and the alternative (recording paths)
-     * would mean diverging from the framework's own schema.
-     */
-    private function forgetMigrations(string $basePath): void
-    {
-        $migrationsPath = $basePath.'/database/migrations';
-
-        if (! is_dir($migrationsPath) || ! Schema::hasTable('migrations')) {
-            return;
-        }
-
-        $names = array_map(
-            static fn (string $file): string => basename($file, '.php'),
-            glob($migrationsPath.'/*.php') ?: [],
-        );
-
-        if ($names === []) {
-            return;
-        }
-
-        DB::table('migrations')->whereIn('migration', $names)->delete();
-    }
-
-    private function runMigrations(string $basePath): void
-    {
-        $migrationsPath = $basePath.'/database/migrations';
-        if (! is_dir($migrationsPath)) {
-            return;
-        }
-
-        Artisan::call('migrate', [
-            '--path' => $migrationsPath,
-            '--realpath' => true,
-            '--force' => true,
         ]);
     }
 

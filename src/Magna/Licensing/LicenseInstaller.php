@@ -10,7 +10,9 @@ use Illuminate\Support\Str;
 use Magna\MagnaServiceProvider;
 use Magna\Marketplace\Marketplace;
 use Magna\Plugins\Manifest;
+use Magna\Plugins\PluginDiscovery;
 use Magna\Plugins\PluginManager;
+use Magna\Plugins\PluginRecord;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
 use RuntimeException;
@@ -47,6 +49,7 @@ class LicenseInstaller
         private readonly PackageExtractor $extractor,
         private readonly Filesystem $files,
         private readonly ThemeManager $themes,
+        private readonly PluginDiscovery $discovery,
     ) {}
 
     /**
@@ -267,6 +270,32 @@ class LicenseInstaller
                 $this->files->mkdir(dirname($targetDir), 0755);
                 $this->files->rename($contentRoot, $targetDir);
             }
+
+            // Recorded from the manifest just validated, rather than left to
+            // discovery to find. plugins-dev/ is not a tree discovery reads in
+            // production — discoverFromDev() returns nothing there, and even
+            // outside production it only reads directories wired in as Composer
+            // path repositories. So syncDiscovered() recorded nothing and the
+            // enable below answered "Plugin [x] was not found. Run `composer
+            // require x` first." for files it had itself written moments before.
+            //
+            // Disabled on write: enable() below is what turns it on, and it is
+            // the one place that runs migrations and registers permissions.
+            PluginRecord::query()->updateOrCreate(
+                ['name' => $manifest->name],
+                [
+                    'display_name' => $manifest->displayName,
+                    'version' => $manifest->version,
+                    'base_path' => $targetDir,
+                    'manifest' => $manifest->toArray(),
+                    'enabled' => $isUpdate,
+                ],
+            );
+
+            // Discovery memoizes per request, and the page that submitted this
+            // install has already run a scan. Bust it so anything reading
+            // discovery later in this request sees the new directory too.
+            $this->discovery->reset();
 
             $this->plugins->syncDiscovered();
 

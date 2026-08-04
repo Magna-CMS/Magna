@@ -650,12 +650,12 @@ class PluginsPage extends Page
         return Action::make('uninstall')
             ->requiresConfirmation()
             ->modalHeading('Uninstall plugin')
-            ->modalDescription('The plugin record will be removed. Database tables are preserved.')
+            ->modalDescription('The plugin files are deleted from this site and its Composer entry removed. Database tables and their data are preserved — reinstalling the plugin picks them up again.')
             ->modalSubmitActionLabel('Uninstall')
             ->color('danger')
             ->action(function (): void {
                 try {
-                    app(PluginManager::class)->uninstall($this->pendingPluginName ?? '');
+                    app(PluginManager::class)->uninstall($this->pendingPluginName ?? '', removeFiles: true);
                     Notification::make()->title('Plugin uninstalled.')->success()->send();
                     $url = static::getUrl();
                     $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
@@ -672,12 +672,12 @@ class PluginsPage extends Page
         return Action::make('purge')
             ->requiresConfirmation()
             ->modalHeading('Purge plugin data')
-            ->modalDescription('Removes the plugin record AND drops its database tables. This cannot be undone.')
+            ->modalDescription('Deletes the plugin files AND drops every database table it created, with all their data. This cannot be undone.')
             ->modalSubmitActionLabel('Delete everything')
             ->color('danger')
             ->action(function (): void {
                 try {
-                    app(PluginManager::class)->uninstall($this->pendingPluginName ?? '', purge: true);
+                    app(PluginManager::class)->uninstall($this->pendingPluginName ?? '', purge: true, removeFiles: true);
                     Notification::make()->title('Plugin purged.')->success()->send();
                     $url = static::getUrl();
                     $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');

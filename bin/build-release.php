@@ -203,20 +203,41 @@ if (! is_array($composerJson)) {
 // NO plugins — they are distributed separately (own repos / marketplace / local
 // ZIP upload). magna-cms/plugin-sdk is deliberately kept: it is the SDK library
 // the core plugin system depends on, not a plugin.
-$allPlugins = [
-    'magna-cms/docs',
-    'magna-cms/marketplace',
-    'magna/plugin-manager',
-    'roya/dms',
-    'roya/erp',
-];
+// Discovered from the working copy's own path repositories, not hardcoded.
+// A hardcoded list silently ships whatever it has not been told about: a
+// client plugin wired in after the list was written is not in $stripPlugins,
+// so nothing strips it and the hub bundles another customer's source. Only
+// packages under plugins-dev/ count — the SDK is a library, not a plugin.
+$allPlugins = [];
+foreach (($composerJson['repositories'] ?? []) as $repo) {
+    if (($repo['type'] ?? null) !== 'path' || ! isset($repo['url'])) {
+        continue;
+    }
 
-// The hub profile keeps the first-party Magna plugins and strips only the
-// client-specific ones (Roya's ERP/DMS are that client's deployment, not part
-// of a general Magna install). The core profile strips every plugin.
-$bundledPlugins = $hub
-    ? ['magna-cms/docs', 'magna-cms/marketplace', 'magna/plugin-manager']
-    : [];
+    $repoUrl = str_replace('\\', '/', (string) $repo['url']);
+
+    if (! str_contains($repoUrl, 'plugins-dev/')) {
+        continue;
+    }
+
+    $discovered = path_repo_package_name($root, $repoUrl);
+
+    if ($discovered !== null) {
+        $allPlugins[] = $discovered;
+    }
+}
+
+$allPlugins = array_values(array_unique($allPlugins));
+
+// The hub ships the Core Plugin Manager and nothing else: every other plugin
+// is uploaded through it. Bundling more was a false economy — the extra
+// plugins arrived disabled anyway, and a bundled plugin is just a plugin whose
+// first update has to be done by hand.
+//
+// This is an allow-list on purpose. $allPlugins above is discovered from the
+// working copy's own path repositories, so a plugin wired in later is stripped
+// by default rather than shipped by omission.
+$bundledPlugins = $hub ? ['magna/plugin-manager'] : [];
 $stripPlugins = array_values(array_diff($allPlugins, $bundledPlugins));
 
 foreach ($stripPlugins as $pkg) {
