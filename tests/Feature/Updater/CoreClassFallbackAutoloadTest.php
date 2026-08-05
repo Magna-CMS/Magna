@@ -62,6 +62,30 @@ it('ignores classes outside the Magna namespace', function (): void {
     expect(class_exists('Other\\Probe\\Foreign', false))->toBeFalse();
 });
 
+it('refuses a name that resolves outside the source tree', function (): void {
+    // Not every escape spells "..": a symlink, or a separator the namespace
+    // mapping did not expect, can land the resolved path elsewhere. The loader
+    // requires only files that really sit under src/Magna.
+    $outside = dirname($this->root).'/magna-fallback-outside.php';
+    file_put_contents($outside, "<?php\n\nnamespace Magna\\Probe;\n\nclass Outside {}\n");
+
+    $link = $this->root.'/Probe/Linked.php';
+
+    if (! @symlink($outside, $link)) {
+        @unlink($outside);
+        test()->markTestSkipped('This environment does not allow creating symlinks.');
+    }
+
+    try {
+        magnaFallbackLoader($this->root)('Magna\\Probe\\Linked');
+
+        expect(class_exists('Magna\\Probe\\Outside', false))->toBeFalse();
+    } finally {
+        @unlink($link);
+        @unlink($outside);
+    }
+});
+
 it('refuses a class name that would climb out of the source tree', function (): void {
     $escape = dirname($this->root).'/magna-fallback-escape.php';
     file_put_contents($escape, "<?php\n\nnamespace Magna;\n\nclass Escaped {}\n");

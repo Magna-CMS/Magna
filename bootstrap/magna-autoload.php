@@ -46,8 +46,19 @@ return static function (string $baseDir): callable {
 
         $path = $baseDir.DIRECTORY_SEPARATOR.str_replace('\\', DIRECTORY_SEPARATOR, $relative).'.php';
 
-        if (is_file($path)) {
-            require $path;
+        if (! is_file($path)) {
+            return;
         }
+
+        // Belt and braces: whatever the name contained, only ever require a
+        // file that actually resolves inside src/Magna.
+        $resolved = realpath($path);
+        $root = realpath($baseDir);
+
+        if ($resolved === false || $root === false || ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR)) {
+            return;
+        }
+
+        require $resolved;
     };
 };

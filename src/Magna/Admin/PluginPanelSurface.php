@@ -44,52 +44,11 @@ class PluginPanelSurface
      */
     public function resources(): array
     {
-        $resources = [];
-
-        try {
-            if (! Schema::hasTable('plugins')) {
-                return [];
-            }
-
-            /** @var Collection<int, PluginRecord> $records */
-            $records = PluginRecord::query()
-                ->where('enabled', true)
-                ->get(['manifest', 'base_path']);
-
-            foreach ($records as $record) {
-                /** @var array<string, mixed> $manifest */
-                $manifest = $record->manifest;
-                $entryClass = $manifest['entry'] ?? null;
-
-                // Panel registration runs before PluginManager boots plugins,
-                // so a plugin whose files were dropped on disk (a marketplace
-                // install, a zip upload) is not autoloadable yet at this point.
-                $this->registerAutoload($record);
-
-                if (! is_string($entryClass) || ! class_exists($entryClass)) {
-                    continue;
-                }
-
-                if (! is_a($entryClass, RegistersAdminResources::class, true)) {
-                    continue;
-                }
-
-                /** @var Plugin&RegistersAdminResources $plugin */
-                $plugin = $this->app->make($entryClass, [
-                    'app' => $this->app,
-                    'basePath' => $record->base_path,
-                    'manifest' => Manifest::fromArray($manifest),
-                ]);
-
-                foreach ($plugin->adminResources() as $resourceClass) {
-                    $resources[] = $resourceClass;
-                }
-            }
-        } catch (Throwable) {
-            // A broken plugin must never prevent the admin panel from loading.
-        }
-
-        return $resources;
+        return $this->collect(
+            RegistersAdminResources::class,
+            /** @param Plugin&RegistersAdminResources $plugin */
+            static fn (object $plugin): iterable => $plugin->adminResources(),
+        );
     }
 
     /**
@@ -100,52 +59,11 @@ class PluginPanelSurface
      */
     public function pages(): array
     {
-        $pages = [];
-
-        try {
-            if (! Schema::hasTable('plugins')) {
-                return [];
-            }
-
-            /** @var Collection<int, PluginRecord> $records */
-            $records = PluginRecord::query()
-                ->where('enabled', true)
-                ->get(['manifest', 'base_path']);
-
-            foreach ($records as $record) {
-                /** @var array<string, mixed> $manifest */
-                $manifest = $record->manifest;
-                $entryClass = $manifest['entry'] ?? null;
-
-                // Panel registration runs before PluginManager boots plugins,
-                // so a plugin whose files were dropped on disk (a marketplace
-                // install, a zip upload) is not autoloadable yet at this point.
-                $this->registerAutoload($record);
-
-                if (! is_string($entryClass) || ! class_exists($entryClass)) {
-                    continue;
-                }
-
-                if (! is_a($entryClass, RegistersSettingsPages::class, true)) {
-                    continue;
-                }
-
-                /** @var Plugin&RegistersSettingsPages $plugin */
-                $plugin = $this->app->make($entryClass, [
-                    'app' => $this->app,
-                    'basePath' => $record->base_path,
-                    'manifest' => Manifest::fromArray($manifest),
-                ]);
-
-                foreach ($plugin->settingsPages() as $pageClass) {
-                    $pages[] = $pageClass;
-                }
-            }
-        } catch (Throwable) {
-            // A broken plugin must never prevent the admin panel from loading.
-        }
-
-        return $pages;
+        return $this->collect(
+            RegistersSettingsPages::class,
+            /** @param Plugin&RegistersSettingsPages $plugin */
+            static fn (object $plugin): iterable => $plugin->settingsPages(),
+        );
     }
 
     /**
@@ -156,8 +74,32 @@ class PluginPanelSurface
      */
     public function widgets(): array
     {
-        $widgets = [];
+        return $this->collect(
+            RegistersDashboardWidgets::class,
+            /** @param Plugin&RegistersDashboardWidgets $plugin */
+            static fn (object $plugin): iterable => $plugin->dashboardWidgets(),
+        );
+    }
 
+    /**
+     * Ask every enabled plugin implementing $contract for the classes it
+     * contributes, one plugin at a time.
+     *
+     * Isolation is the point. A single try/catch around the whole loop meant
+     * one plugin whose entry class threw — a bad manifest, a constructor that
+     * touches a table its migration never created — silently cost EVERY plugin
+     * after it its admin surface. For pages that is not cosmetic: the classes
+     * collected here are what give a plugin's settings pages their routes, so
+     * dropping them leaves nav entries and widgets pointing at routes that do
+     * not exist, which is a 500 on every admin request. One broken plugin now
+     * costs exactly itself.
+     *
+     * @param  class-string  $contract
+     * @param  callable(object): iterable<class-string>  $classes
+     * @return list<class-string>
+     */
+    private function collect(string $contract, callable $classes): array
+    {
         try {
             if (! Schema::hasTable('plugins')) {
                 return [];
@@ -167,41 +109,64 @@ class PluginPanelSurface
             $records = PluginRecord::query()
                 ->where('enabled', true)
                 ->get(['manifest', 'base_path']);
-
-            foreach ($records as $record) {
-                /** @var array<string, mixed> $manifest */
-                $manifest = $record->manifest;
-                $entryClass = $manifest['entry'] ?? null;
-
-                // Panel registration runs before PluginManager boots plugins,
-                // so a plugin whose files were dropped on disk (a marketplace
-                // install, a zip upload) is not autoloadable yet at this point.
-                $this->registerAutoload($record);
-
-                if (! is_string($entryClass) || ! class_exists($entryClass)) {
-                    continue;
-                }
-
-                if (! is_a($entryClass, RegistersDashboardWidgets::class, true)) {
-                    continue;
-                }
-
-                /** @var Plugin&RegistersDashboardWidgets $plugin */
-                $plugin = $this->app->make($entryClass, [
-                    'app' => $this->app,
-                    'basePath' => $record->base_path,
-                    'manifest' => Manifest::fromArray($manifest),
-                ]);
-
-                foreach ($plugin->dashboardWidgets() as $widgetClass) {
-                    $widgets[] = $widgetClass;
-                }
-            }
         } catch (Throwable) {
-            // A broken plugin must never prevent the admin panel from loading.
+            // No usable database yet (pre-install, or mid-migration) — the
+            // panel still has to render.
+            return [];
         }
 
-        return $widgets;
+        $collected = [];
+
+        foreach ($records as $record) {
+            try {
+                $plugin = $this->pluginFor($record, $contract);
+
+                if ($plugin === null) {
+                    continue;
+                }
+
+                foreach ($classes($plugin) as $class) {
+                    $collected[] = $class;
+                }
+            } catch (Throwable) {
+                // This plugin contributes nothing; the rest still do.
+            }
+        }
+
+        return $collected;
+    }
+
+    /**
+     * The plugin behind a record, or null when it cannot contribute to this
+     * contract (not installed on disk, not autoloadable, does not implement it).
+     */
+    private function pluginFor(PluginRecord $record, string $contract): ?Plugin
+    {
+        /** @var array<string, mixed> $manifest */
+        $manifest = $record->manifest;
+        $entryClass = $manifest['entry'] ?? null;
+
+        // Panel registration runs before PluginManager boots plugins, so a
+        // plugin whose files were dropped on disk (a marketplace install, a zip
+        // upload) is not autoloadable yet at this point.
+        $this->registerAutoload($record);
+
+        if (! is_string($entryClass) || ! class_exists($entryClass)) {
+            return null;
+        }
+
+        if (! is_a($entryClass, $contract, true)) {
+            return null;
+        }
+
+        /** @var Plugin $plugin */
+        $plugin = $this->app->make($entryClass, [
+            'app' => $this->app,
+            'basePath' => $record->base_path,
+            'manifest' => Manifest::fromArray($manifest),
+        ]);
+
+        return $plugin;
     }
 
     /**

@@ -69,6 +69,36 @@ function droppedFilePlugin(string $suffix): string
     return $base;
 }
 
+/** A plugin that implements the contract and throws from inside it. */
+function brokenPlugin(string $suffix): string
+{
+    $base = sys_get_temp_dir().'/magna-panel-plugin-'.$suffix;
+    @mkdir($base.'/src', 0777, true);
+
+    file_put_contents($base.'/composer.json', json_encode([
+        'name' => 'acme/broken-'.strtolower($suffix),
+        'autoload' => ['psr-4' => ['PanelProbe'.$suffix.'\\' => 'src/']],
+    ]));
+
+    $plugin = <<<'PHP'
+    <?php
+
+    namespace PanelProbeSUFFIX;
+
+    class BoomPlugin extends \Magna\Plugins\Plugin implements \Magna\Contracts\RegistersSettingsPages
+    {
+        public function settingsPages(): array
+        {
+            throw new \RuntimeException('this plugin is broken');
+        }
+    }
+    PHP;
+
+    file_put_contents($base.'/src/BoomPlugin.php', str_replace('SUFFIX', $suffix, $plugin));
+
+    return $base;
+}
+
 it('registers the settings pages of a plugin Composer cannot autoload', function (): void {
     $suffix = 'A'.bin2hex(random_bytes(3));
     $base = droppedFilePlugin($suffix);
@@ -109,4 +139,55 @@ it('registers the settings pages of a plugin Composer cannot autoload', function
     expect(class_exists($entry, false))->toBeTrue()
         // …so its settings page is registered, and therefore gets a route.
         ->and($resolved)->toContain('PanelProbe'.$suffix.'\\Filament\\Pages\\ProbeSettingsPage');
+});
+
+// A single try/catch around the whole loop meant the first plugin that threw
+// took every plugin after it down with it — silently. Their settings pages
+// then got no routes, and their nav entries and widgets went on rendering
+// links to routes that do not exist: a 500 on every admin request, caused by
+// a DIFFERENT plugin than the broken one.
+it('registers a healthy plugin even when another plugin is broken', function (): void {
+    $suffix = 'B'.bin2hex(random_bytes(3));
+    $healthy = droppedFilePlugin($suffix);
+
+    $manifest = static fn (string $name, string $entry, string $base): array => [
+        'name' => $name,
+        'display_name' => 'Probe',
+        'version' => '1.0.0',
+        'enabled' => true,
+        'base_path' => $base,
+        'manifest' => [
+            'name' => $name,
+            'displayName' => 'Probe',
+            'description' => 'Probe.',
+            'version' => '1.0.0',
+            'author' => 'Acme',
+            'license' => 'proprietary',
+            'entry' => $entry,
+            'compat' => ['magna' => '^1.0', 'php' => '^8.3'],
+            'permissions' => [],
+            'provides' => [],
+        ],
+    ];
+
+    // Inserted first, so it is reached first and its failure would swallow
+    // everything after it. It implements the contract and throws from inside
+    // it — the case a contract check cannot filter out.
+    PluginRecord::query()->create($manifest(
+        'acme/broken-'.strtolower($suffix),
+        'PanelProbe'.$suffix.'Broken\\BoomPlugin',
+        brokenPlugin($suffix.'Broken'),
+    ));
+
+    PluginRecord::query()->create($manifest(
+        'acme/panel-probe-'.strtolower($suffix),
+        'PanelProbe'.$suffix.'\\ProbePlugin',
+        $healthy,
+    ));
+
+    $pages = (new ReflectionClass(PluginPanelSurface::class))->getMethod('pages');
+    $pages->setAccessible(true);
+
+    expect($pages->invoke(new PluginPanelSurface(app())))
+        ->toContain('PanelProbe'.$suffix.'\\Filament\\Pages\\ProbeSettingsPage');
 });
