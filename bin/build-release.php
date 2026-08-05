@@ -379,14 +379,19 @@ say('Installing production dependencies (--no-dev)...', C_GREEN);
 // and would need a database that does not exist at build time. The package
 // manifest and config caches regenerate on the target's first request.
 //
-// --classmap-authoritative is deliberately absent from the hub profile. An
-// authoritative classmap disables PSR-4 fallback entirely, so a class added by
-// a plugin update is simply "not found" until Composer regenerates the map —
-// and the Core Plugin Manager's Update via Upload is exactly that scenario, on
-// hosts that may have no Composer binary at all. The core profile keeps it:
-// nothing swaps files under a core archive except CoreUpdater, which replaces
-// vendor/ wholesale.
-$autoloadFlags = $hub ? '--optimize-autoloader' : '--optimize-autoloader --classmap-authoritative';
+// --classmap-authoritative is deliberately absent from BOTH profiles. An
+// authoritative classmap disables PSR-4 fallback entirely, so a class that
+// arrives after the build is simply "not found" until Composer regenerates
+// the map — on hosts that may have no Composer binary at all. That is not a
+// hub-only scenario: EVERY customer site installs marketplace plugins as
+// dropped files (the licensed-download path extracts a zip, and
+// PluginAutoloader registers its PSR-4 at runtime). The core profile carried
+// the flag on the assumption that only CoreUpdater ever changes files under
+// a release — and every roya/erp install then died with "Plugin entry class
+// [Roya\Erp\RoyaErpPlugin] does not exist" the moment it was enabled.
+// --optimize-autoloader stays: it builds the classmap for everything known
+// at build time without forbidding runtime additions.
+$autoloadFlags = '--optimize-autoloader';
 $cmd = sprintf(
     '%s %s install --no-dev %s --no-scripts --no-interaction --no-progress --working-dir=%s 2>&1',
     escapeshellarg($phpBin),
