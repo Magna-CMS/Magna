@@ -13,8 +13,6 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\HtmlString;
 use Magna\Admin\Pages\AccountCentrePage;
 use Magna\Admin\Pages\ApiSettingsPage;
@@ -47,13 +45,7 @@ use Magna\Admin\Widgets\RecentActivity;
 use Magna\Admin\Widgets\UpcomingScheduleWidget;
 use Magna\Auth\Filament\Login;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
-use Magna\Contracts\RegistersAdminResources;
-use Magna\Contracts\RegistersDashboardWidgets;
-use Magna\Contracts\RegistersSettingsPages;
-use Magna\Plugins\Manifest;
 use Magna\Plugins\Plugin;
-use Magna\Plugins\PluginRecord;
-use Throwable;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -179,7 +171,7 @@ class AdminPanelProvider extends PanelProvider
                 AuditLogResource::class,
                 ApiKeyResource::class,
                 BackupResource::class,
-            ], $this->resolvePluginResources()))
+            ], $this->pluginSurface()->resources()))
             // ── Custom pages ─────────────────────────────────────────────────
             ->pages(array_merge([
                 Dashboard::class,
@@ -207,13 +199,13 @@ class AdminPanelProvider extends PanelProvider
                 ThemesPage::class,
                 AccountCentrePage::class,
                 ProfilePage::class,
-            ], $this->resolvePluginPages()))
+            ], $this->pluginSurface()->pages()))
             // ── Widgets ──────────────────────────────────────────────────────
             ->widgets(array_merge([
                 EntryCounts::class,
                 RecentActivity::class,
                 UpcomingScheduleWidget::class,
-            ], $this->resolvePluginWidgets()))
+            ], $this->pluginSurface()->widgets()))
             // ── Fix: Alpine $persist uses global localStorage keys ('isOpen',
             //    'isOpenDesktop') shared across all Filament panels on the same
             //    origin. If lovelink's sidebar is collapsed, those keys are 'false'
@@ -403,162 +395,10 @@ class AdminPanelProvider extends PanelProvider
             );
     }
 
-    /**
-     * Collect Filament resource classes from active plugins that implement
-     * RegistersAdminResources.
-     *
-     * This is called during the resolving(PanelRegistry) callback, which fires
-     * during FilamentServiceProvider::boot() — before PluginsServiceProvider::boot()
-     * has run bootEnabledPlugins(). We therefore bypass PluginManager::getEnabled()
-     * and query the plugins table directly; DB is available at this point.
-     *
-     * @return list<class-string>
-     */
-    private function resolvePluginResources(): array
+    /** Plugin-contributed resources, pages and widgets — see PluginPanelSurface. */
+    private function pluginSurface(): PluginPanelSurface
     {
-        $resources = [];
-
-        try {
-            if (! Schema::hasTable('plugins')) {
-                return [];
-            }
-
-            /** @var Collection<int, PluginRecord> $records */
-            $records = PluginRecord::query()
-                ->where('enabled', true)
-                ->get(['manifest', 'base_path']);
-
-            foreach ($records as $record) {
-                /** @var array<string, mixed> $manifest */
-                $manifest = $record->manifest;
-                $entryClass = $manifest['entry'] ?? null;
-
-                if (! is_string($entryClass) || ! class_exists($entryClass)) {
-                    continue;
-                }
-
-                if (! is_a($entryClass, RegistersAdminResources::class, true)) {
-                    continue;
-                }
-
-                /** @var Plugin&RegistersAdminResources $plugin */
-                $plugin = $this->app->make($entryClass, [
-                    'app' => $this->app,
-                    'basePath' => $record->base_path,
-                    'manifest' => Manifest::fromArray($manifest),
-                ]);
-
-                foreach ($plugin->adminResources() as $resourceClass) {
-                    $resources[] = $resourceClass;
-                }
-            }
-        } catch (Throwable) {
-            // A broken plugin must never prevent the admin panel from loading.
-        }
-
-        return $resources;
-    }
-
-    /**
-     * Collects Filament page classes from plugins that implement RegistersSettingsPages.
-     * These are registered in the panel so their routes exist and getUrl() works.
-     *
-     * @return list<class-string>
-     */
-    private function resolvePluginPages(): array
-    {
-        $pages = [];
-
-        try {
-            if (! Schema::hasTable('plugins')) {
-                return [];
-            }
-
-            /** @var Collection<int, PluginRecord> $records */
-            $records = PluginRecord::query()
-                ->where('enabled', true)
-                ->get(['manifest', 'base_path']);
-
-            foreach ($records as $record) {
-                /** @var array<string, mixed> $manifest */
-                $manifest = $record->manifest;
-                $entryClass = $manifest['entry'] ?? null;
-
-                if (! is_string($entryClass) || ! class_exists($entryClass)) {
-                    continue;
-                }
-
-                if (! is_a($entryClass, RegistersSettingsPages::class, true)) {
-                    continue;
-                }
-
-                /** @var Plugin&RegistersSettingsPages $plugin */
-                $plugin = $this->app->make($entryClass, [
-                    'app' => $this->app,
-                    'basePath' => $record->base_path,
-                    'manifest' => Manifest::fromArray($manifest),
-                ]);
-
-                foreach ($plugin->settingsPages() as $pageClass) {
-                    $pages[] = $pageClass;
-                }
-            }
-        } catch (Throwable) {
-            // A broken plugin must never prevent the admin panel from loading.
-        }
-
-        return $pages;
-    }
-
-    /**
-     * Collects Filament widget classes from plugins that implement
-     * RegistersDashboardWidgets, so plugin cards appear on the dashboard.
-     *
-     * @return list<class-string>
-     */
-    private function resolvePluginWidgets(): array
-    {
-        $widgets = [];
-
-        try {
-            if (! Schema::hasTable('plugins')) {
-                return [];
-            }
-
-            /** @var Collection<int, PluginRecord> $records */
-            $records = PluginRecord::query()
-                ->where('enabled', true)
-                ->get(['manifest', 'base_path']);
-
-            foreach ($records as $record) {
-                /** @var array<string, mixed> $manifest */
-                $manifest = $record->manifest;
-                $entryClass = $manifest['entry'] ?? null;
-
-                if (! is_string($entryClass) || ! class_exists($entryClass)) {
-                    continue;
-                }
-
-                if (! is_a($entryClass, RegistersDashboardWidgets::class, true)) {
-                    continue;
-                }
-
-                /** @var Plugin&RegistersDashboardWidgets $plugin */
-                $plugin = $this->app->make($entryClass, [
-                    'app' => $this->app,
-                    'basePath' => $record->base_path,
-                    'manifest' => Manifest::fromArray($manifest),
-                ]);
-
-                foreach ($plugin->dashboardWidgets() as $widgetClass) {
-                    $widgets[] = $widgetClass;
-                }
-            }
-        } catch (Throwable) {
-            // A broken plugin must never prevent the admin panel from loading.
-        }
-
-        return $widgets;
+        return new PluginPanelSurface($this->app);
     }
 
     /**
