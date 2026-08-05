@@ -19,6 +19,11 @@ use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
 use Magna\Content\Http\Middleware\RefreshDatabaseContentTypes;
 use Magna\Install\Http\Middleware\RedirectIfNotInstalled;
 
+// Before anything resolves a Magna class: a core update replaces src/Magna but
+// never vendor/, so classes added by a release are missing from the classmap
+// the site was installed with. See bootstrap/magna-autoload.php.
+spl_autoload_register((require __DIR__.'/magna-autoload.php')(__DIR__.'/../src/Magna'));
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
