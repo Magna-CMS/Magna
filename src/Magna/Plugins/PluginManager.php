@@ -65,11 +65,13 @@ class PluginManager
         // plugins table still says enabled. LicenseEnforcer normally disables
         // it at the next verify, but this check closes the window in between
         // — and the window that opens if someone flips `enabled` back on by
-        // hand. Cache-only and offline-safe by contract (see LicenseGate);
-        // a plugin with no licence entry, which is every free plugin, is
-        // never affected.
+        // hand. Cache-only and offline-safe by contract (see LicenseGate).
+        // A free plugin has no licence entry and is never affected; a plugin
+        // that arrived through the licensed download path is, because for it
+        // "no entry" means the licence is gone rather than never needed.
         $records = $records->reject(
-            fn (PluginRecord $record): bool => app(LicenseGate::class)->isLocked($record->name)
+            fn (PluginRecord $record): bool => app(LicenseGate::class)
+                ->isLocked($record->name, (bool) $record->requires_license)
         );
 
         // Register/boot in dependency order (a plugin's dependencies boot first).

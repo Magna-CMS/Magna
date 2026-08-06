@@ -8,7 +8,11 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Magna\Admin\Pages\AccountCentrePage;
+use Magna\Plugins\Exceptions\DependencyException;
+use Magna\Plugins\PluginManager;
+use Magna\Plugins\PluginRecord;
 use RuntimeException;
+use Throwable;
 
 /**
  * The admin-facing actions behind the Licences section of the Magna Account
@@ -159,13 +163,24 @@ class LicenseController
         $released = $this->client->deactivate($entry->token);
         $this->store->forget($data['product_slug']);
 
-        // Forgetting the entry also clears any licensing-imposed lock; the
-        // plugin is now simply an unlicensed local install, which the gate
-        // does not block (free plugins have no entry either).
+        // Releasing the seat has to stop the product here too. The seat is now
+        // free for another domain, so leaving the plugin enabled would let one
+        // key run on every site it was ever released from — release, activate
+        // next door, repeat. LicenseGate refuses to boot it either way (the
+        // plugin record remembers it needs a licence), but disabling it says
+        // so honestly on the Plugins page instead of showing "Active" for
+        // something that no longer loads.
+        $disabled = $this->disablePlugin($data['product_slug']);
+
+        if (! $disabled) {
+            return $this->ok($released
+                ? 'Licence released — the seat is free to use on another domain. This site can no longer load the plugin; disable it from the Plugins page.'
+                : 'Licence removed from this site. The seat could not be released remotely; release it from your account page.');
+        }
 
         return $this->ok($released
-            ? 'Licence released — the seat is free to use on another domain.'
-            : 'Licence removed from this site. The seat could not be released remotely; release it from your account page.');
+            ? 'Licence released and the plugin disabled here — the seat is free to use on another domain.'
+            : 'Licence removed and the plugin disabled here. The seat could not be released remotely; release it from your account page.');
     }
 
     /**
@@ -218,6 +233,40 @@ class LicenseController
             'Content-Type' => $document['mime'],
             'Content-Disposition' => 'attachment; filename="'.$document['filename'].'"',
         ]);
+    }
+
+    /**
+     * Switch off a plugin whose licence has just left this site.
+     *
+     * The manager is asked first, because it runs the plugin's own disable
+     * hook and refuses when another enabled plugin still requires this one —
+     * that refusal has to stand, so DependencyException is reported rather
+     * than overridden.
+     *
+     * Anything else (a missing entry class, files deleted by hand) falls back
+     * to flipping the record. The seat is already released at this point, so
+     * leaving the row saying "enabled" would be a lie: the gate will not boot
+     * it again either way.
+     */
+    private function disablePlugin(string $productSlug): bool
+    {
+        $record = PluginRecord::query()->where('name', $productSlug)->first();
+
+        if ($record === null || ! $record->enabled) {
+            return false;
+        }
+
+        try {
+            app(PluginManager::class)->disable($productSlug);
+
+            return true;
+        } catch (DependencyException) {
+            return false;
+        } catch (Throwable) {
+            $record->forceFill(['enabled' => false, 'disabled_at' => now()])->save();
+
+            return true;
+        }
     }
 
     /**

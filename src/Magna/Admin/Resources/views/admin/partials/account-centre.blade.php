@@ -146,6 +146,19 @@
                                     $isTheme = ($license['licensable_type'] ?? 'plugin') === 'theme';
                                     $activeHere = (bool) ($license['active_on_this_site'] ?? false);
 
+                                    // A cancelled, suspended or expired key
+                                    // cannot download anything — the licence
+                                    // server refuses it — so offering "Install
+                                    // here" only produced an error after the
+                                    // click. Renew/redeem is the way back for
+                                    // those, and both live elsewhere on this
+                                    // page.
+                                    $installable = ! in_array($status, ['revoked', 'suspended', 'expired'], true);
+
+                                    // Only offer Update when a newer entitled
+                                    // version actually exists for this product.
+                                    $updateVersion = $productUpdates[$license['product_slug']] ?? null;
+
                                     // A live auto-debit mandate replaces the manual
                                     // Renew button entirely — the gateway charges on
                                     // its own, so offering Renew beside it would
@@ -208,18 +221,20 @@
                                                 >Renew</button>
                                             @endif
                                             @if ($activeHere)
-                                                <form method="POST" action="{{ route('licensing.update') }}">
-                                                    @csrf
-                                                    <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
-                                                    <button type="submit" class="text-xs font-semibold text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Update</button>
-                                                </form>
+                                                @if ($updateVersion !== null)
+                                                    <form method="POST" action="{{ route('licensing.update') }}">
+                                                        @csrf
+                                                        <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
+                                                        <button type="submit" class="text-xs font-semibold text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Update to {{ $updateVersion }}</button>
+                                                    </form>
+                                                @endif
                                                 <form method="POST" action="{{ route('licensing.deactivate') }}"
-                                                      onsubmit="return confirm('Release this licence from this site? The seat becomes free for another domain.');">
+                                                      onsubmit="return confirm('Release this licence from this site? The plugin is disabled here and the seat becomes free for another domain.');">
                                                     @csrf
                                                     <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
                                                     <button type="submit" class="text-xs font-semibold text-gray-500 transition-colors hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400">Release</button>
                                                 </form>
-                                            @else
+                                            @elseif ($installable)
                                                 <form method="POST" action="{{ route('licensing.install') }}">
                                                     @csrf
                                                     <input type="hidden" name="license_id" value="{{ $license['id'] }}">

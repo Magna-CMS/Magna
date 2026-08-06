@@ -289,6 +289,12 @@ class LicenseInstaller
                     'base_path' => $targetDir,
                     'manifest' => $manifest->toArray(),
                     'enabled' => $isUpdate,
+                    // These bytes were only downloadable because a licence
+                    // entitled this site to them, and that stays true after
+                    // the licence entry is forgotten — releasing the seat must
+                    // not silently turn a paid plugin into a free one. See
+                    // LicenseGate::stateOf().
+                    'requires_license' => true,
                 ],
             );
 

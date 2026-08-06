@@ -24,10 +24,14 @@ class LicenseGate
 {
     public function __construct(private readonly LicenseStore $store) {}
 
-    /** True when this plugin must not load — its licence has ended or been withdrawn. */
-    public function isLocked(string $productSlug): bool
+    /**
+     * True when this plugin must not load — its licence has ended, been
+     * withdrawn, or (for a plugin that arrived through the licensed download
+     * path) is simply gone.
+     */
+    public function isLocked(string $productSlug, bool $requiresLicense = false): bool
     {
-        return $this->stateOf($productSlug) === LicenseState::Locked;
+        return $this->stateOf($productSlug, $requiresLicense) === LicenseState::Locked;
     }
 
     /**
@@ -35,13 +39,21 @@ class LicenseGate
      * network fallbacks: a product with no cached entry is NOT locked here,
      * because free plugins (the overwhelming majority) have no licence at
      * all and must boot normally.
+     *
+     * $requiresLicense flips that default for plugins installed through the
+     * licensed download path (PluginRecord::$requires_license). Releasing a
+     * seat both frees it on the marketplace AND forgets the local entry, so
+     * without this a paid plugin kept running while its key moved to the next
+     * domain — release, re-activate, repeat, and one seat quietly powered any
+     * number of sites. A missing entry for such a plugin is now a lock, not a
+     * licence-free plugin.
      */
-    public function stateOf(string $productSlug): LicenseState
+    public function stateOf(string $productSlug, bool $requiresLicense = false): LicenseState
     {
         $entry = $this->store->get($productSlug);
 
         if ($entry === null) {
-            return LicenseState::Unlicensed;
+            return $requiresLicense ? LicenseState::Locked : LicenseState::Unlicensed;
         }
 
         return match ($entry->status) {

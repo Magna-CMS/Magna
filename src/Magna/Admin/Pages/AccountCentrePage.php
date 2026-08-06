@@ -11,6 +11,8 @@ use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseStore;
+use Magna\Updater\UpdateCheck;
+use Throwable;
 
 /**
  * This site's connection to a Magna Account (managemagna.jrstudios.dev) — not
@@ -64,9 +66,40 @@ class AccountCentrePage extends Page
             'otherSites' => $otherSites,
             'licenses' => $settings->connected ? $this->licenses() : [],
             'localLicenses' => app(LicenseStore::class)->all(),
+            // Which installed products actually have a newer entitled version.
+            // Without this the row offered "Update" for every licence active
+            // here, and pressing it on an up-to-date plugin reported whatever
+            // the installer had to say about re-downloading the same version.
+            'productUpdates' => $this->availableProductUpdates(),
             'panel' => $settings->connected ? app(LicenseClient::class)->panel() : null,
             'invoices' => $settings->connected ? app(LicenseClient::class)->invoices() : [],
         ];
+    }
+
+    /**
+     * Newer entitled versions of installed plugins, keyed by product slug.
+     *
+     * Read from the update check the site already performs (daily, and from
+     * "Check for Updates"), so this page agrees with the Plugins page instead
+     * of guessing. Licence-blocked versions are deliberately excluded: those
+     * cannot be downloaded, and offering an Update button for them would fail
+     * every time.
+     *
+     * @return array<string, string> slug => latest version
+     */
+    private function availableProductUpdates(): array
+    {
+        try {
+            return UpdateCheck::query()
+                ->where('type', 'plugin')
+                ->where('update_available', true)
+                ->whereNotNull('latest_version')
+                ->pluck('latest_version', 'slug')
+                ->all();
+        } catch (Throwable) {
+            // Never let the update hint break the account page.
+            return [];
+        }
     }
 
     /**

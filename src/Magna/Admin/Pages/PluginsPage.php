@@ -770,6 +770,19 @@ class PluginsPage extends Page
             ->pluck('latest_version', 'slug')
             ->all();
 
+        // Versions published to the marketplace since this site installed.
+        // Update detection used to compare the on-disk manifest against the
+        // plugins row, which only ever notices files someone had ALREADY put
+        // there — so publishing a new version of a paid plugin left this page
+        // reading "Update Available (0)" while `magna:updater:check` was
+        // reporting the very same update.
+        $marketplaceUpdates = UpdateCheck::query()
+            ->where('type', 'plugin')
+            ->where('update_available', true)
+            ->whereNotNull('latest_version')
+            ->pluck('latest_version', 'slug')
+            ->all();
+
         // The catalog is read before the installed list is built: publisher
         // trust ("official") is something only the marketplace knows, so an
         // installed plugin's badge has to come from the same listing the
@@ -781,7 +794,7 @@ class PluginsPage extends Page
         /** @var array<string, PluginListing> $listingsByPackage */
         $listingsByPackage = collect($catalog)->keyBy(fn (PluginListing $l): string => $l->package)->all();
 
-        $this->installed = $records->map(function (PluginRecord $r) use ($discoveredVersions, $bootedPlugins, $listingsByPackage): array {
+        $this->installed = $records->map(function (PluginRecord $r) use ($discoveredVersions, $marketplaceUpdates, $bootedPlugins, $listingsByPackage): array {
             $settingsUrl = null;
             $booted = $bootedPlugins[$r->name] ?? null;
             if ($booted instanceof RegistersSettingsPages) {
@@ -806,9 +819,14 @@ class PluginsPage extends Page
                 'source' => str_contains(str_replace('\\', '/', (string) $r->base_path), '/plugins-dev/')
                     ? 'plugins-dev/'
                     : 'Composer',
-                'update_version' => isset($discoveredVersions[$r->name]) && $discoveredVersions[$r->name] !== $r->version
-                    ? $discoveredVersions[$r->name]
-                    : null,
+                // Two ways a newer version shows up: someone put files on disk
+                // (zip upload, manual copy), or the marketplace published one.
+                // The marketplace answer wins when both are present — it is
+                // the version the update button would actually fetch.
+                'update_version' => $marketplaceUpdates[$r->name]
+                    ?? (isset($discoveredVersions[$r->name]) && $discoveredVersions[$r->name] !== $r->version
+                        ? $discoveredVersions[$r->name]
+                        : null),
                 'settings_url' => $settingsUrl,
                 // magna.json's optional "icon" field, served through PluginIconController;
                 // null when the plugin declared none — the view falls back to a letter avatar.
