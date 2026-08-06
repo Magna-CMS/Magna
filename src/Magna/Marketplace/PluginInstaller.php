@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
+use Magna\Updater\InstalledVersionRecorder;
 use Throwable;
 
 /**
@@ -23,6 +24,7 @@ class PluginInstaller
         private readonly MarketplaceClient $marketplace,
         private readonly PluginManager $plugins,
         private readonly ComposerRunner $composer,
+        private readonly InstalledVersionRecorder $versions = new InstalledVersionRecorder,
     ) {}
 
     public function install(string $package): InstallState
@@ -87,7 +89,7 @@ class PluginInstaller
                 return $this->fail($package, 'The plugin was installed but failed to enable, and has been rolled back: '.$e->getMessage());
             }
 
-            return $this->finishSuccess($package);
+            return $this->finishSuccess($package, $listing->version);
         } finally {
             $lock->release();
         }
@@ -129,11 +131,17 @@ class PluginInstaller
         );
     }
 
-    private function finishSuccess(string $package): InstallState
+    private function finishSuccess(string $package, string $installedVersion): InstallState
     {
         InstallProgress::clearPending($package);
         $this->marketplace->clearCache();
         $this->marketplace->reportInstall($package);
+
+        // Without this the Plugins page and the dashboard badge went on offering
+        // the version just installed, because they read the check-in row and
+        // nothing updated it until the next 12-hourly check.
+        $this->versions->record($package, $installedVersion);
+
         $this->setProgress($package, InstallState::Completed, 'Installed.');
 
         return InstallState::Completed;

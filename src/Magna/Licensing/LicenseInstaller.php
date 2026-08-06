@@ -15,6 +15,7 @@ use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
+use Magna\Updater\InstalledVersionRecorder;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Throwable;
@@ -50,6 +51,7 @@ class LicenseInstaller
         private readonly Filesystem $files,
         private readonly ThemeManager $themes,
         private readonly PluginDiscovery $discovery,
+        private readonly InstalledVersionRecorder $versions = new InstalledVersionRecorder,
     ) {}
 
     /**
@@ -304,6 +306,13 @@ class LicenseInstaller
             $this->discovery->reset();
 
             $this->plugins->syncDiscovered();
+
+            // The Plugins page and the dashboard badge read the check-in row,
+            // which the install never touched — so a site that had just updated
+            // went on being told the same version was available, with an Update
+            // button that would fetch a version already on disk. Reads as a
+            // failed update, and for a paid plugin it reads as a licence problem.
+            $this->versions->record($manifest->name, $manifest->version);
 
             if (! $isUpdate) {
                 // A freshly installed licensed plugin is enabled right away —

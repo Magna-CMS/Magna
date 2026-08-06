@@ -11,6 +11,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Magna\Admin\Resources\User\EditUser;
@@ -128,6 +129,18 @@ class UserResource extends \Filament\Resources\Resource
                     ->searchable()
                     ->sortable(),
 
+                // Every plugin that seeds roles (Roya, EMBHAS, anything third
+                // party) assigns them to core users, so without this the panel
+                // listed the accounts but said nothing about what any of them
+                // are — the roles existed on the Roles screen and were invisible
+                // on the people holding them.
+                TextColumn::make('roles.name')
+                    ->label('Roles')
+                    ->badge()
+                    ->separator(',')
+                    ->placeholder('No role')
+                    ->toggleable(),
+
                 BadgeColumn::make('status')
                     ->label('Status')
                     ->colors([
@@ -153,6 +166,23 @@ class UserResource extends \Filament\Resources\Resource
                     ->label('Joined')
                     ->dateTime()
                     ->sortable(),
+            ])
+            ->filters([
+                // "Show me every Roya super admin" / "every portal user" — the
+                // question an operator actually arrives with once a plugin has
+                // seeded its own roles into this table.
+                SelectFilter::make('roles')
+                    ->label('Role')
+                    ->relationship('roles', 'name')
+                    ->multiple()
+                    ->preload(),
+
+                SelectFilter::make('status')
+                    ->label('Status')
+                    ->options([
+                        UserStatus::Active->value => 'Active',
+                        UserStatus::Suspended->value => 'Suspended',
+                    ]),
             ])
             ->actions([
                 EditAction::make()
