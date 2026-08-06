@@ -221,7 +221,13 @@
                                                 >Renew</button>
                                             @endif
                                             @if ($activeHere)
-                                                @if ($updateVersion !== null)
+                                                {{-- A site can hold activations for more than one key of the
+                                                     same product (an older one that was never released), and
+                                                     the marketplace reports each of those rows as active here.
+                                                     Updating through a cancelled key is refused, so only the
+                                                     usable ones offer it; Release stays on every active row,
+                                                     because releasing is how the stale activation is cleared. --}}
+                                                @if ($updateVersion !== null && $installable)
                                                     <form method="POST" action="{{ route('licensing.update') }}">
                                                         @csrf
                                                         <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
