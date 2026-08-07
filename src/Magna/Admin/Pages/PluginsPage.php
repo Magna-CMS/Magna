@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Contracts\RegistersSettingsPages;
@@ -268,6 +269,15 @@ class PluginsPage extends Page
             $url = static::getUrl();
             $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
         } catch (Throwable $e) {
+            // Logged as well as shown. A toast is gone in six seconds and lives
+            // only in the browser that saw it, so a failed update used to leave
+            // no trace anywhere on the server — which is exactly the evidence
+            // needed to work out why a licensed download was refused.
+            Log::warning('Plugin update failed.', [
+                'plugin' => $name,
+                'reason' => $e->getMessage(),
+            ]);
+
             Notification::make()->title('Update failed')->body($e->getMessage())->danger()->send();
         }
     }

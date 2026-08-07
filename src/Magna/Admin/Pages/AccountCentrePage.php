@@ -11,6 +11,7 @@ use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseStore;
+use Magna\Plugins\PluginRecord;
 use Magna\Updater\UpdateCheck;
 use Throwable;
 
@@ -71,6 +72,12 @@ class AccountCentrePage extends Page
             // here, and pressing it on an up-to-date plugin reported whatever
             // the installer had to say about re-downloading the same version.
             'productUpdates' => $this->availableProductUpdates(),
+            // Which products have files on this site right now. A licence row
+            // decides between "Update" and "Install here" with this — the seat
+            // being active on the marketplace says nothing about whether the
+            // plugin is still installed, because uninstalling does not release
+            // the seat.
+            'installedProducts' => $this->installedProductSlugs(),
             'panel' => $settings->connected ? app(LicenseClient::class)->panel() : null,
             'invoices' => $settings->connected ? app(LicenseClient::class)->invoices() : [],
         ];
@@ -90,14 +97,39 @@ class AccountCentrePage extends Page
     private function availableProductUpdates(): array
     {
         try {
-            return UpdateCheck::query()
+            $updates = UpdateCheck::query()
                 ->where('type', 'plugin')
                 ->where('update_available', true)
                 ->whereNotNull('latest_version')
                 ->pluck('latest_version', 'slug')
                 ->all();
+
+            if ($updates === []) {
+                return [];
+            }
+
+            // Installed products only. The rows are written by the scheduled
+            // check-in and outlive an uninstall until the next one, and a
+            // licence row offering "Update" for a product with no files here
+            // can only produce an error after the click.
+            $installed = PluginRecord::query()
+                ->whereIn('name', array_keys($updates))
+                ->pluck('name')
+                ->all();
+
+            return array_intersect_key($updates, array_flip($installed));
         } catch (Throwable) {
             // Never let the update hint break the account page.
+            return [];
+        }
+    }
+
+    /** @return list<string> */
+    private function installedProductSlugs(): array
+    {
+        try {
+            return PluginRecord::query()->pluck('name')->all();
+        } catch (Throwable) {
             return [];
         }
     }

@@ -164,7 +164,17 @@ class LicenseInstaller
         $grant = $this->client->downloadUrl($entry->token);
 
         if ($grant === null) {
-            throw new RuntimeException('The licence server did not authorise a download for '.$productSlug.'.');
+            // Carry the marketplace's own words. "Did not authorise a download"
+            // was the same sentence for a released seat, a package awaiting
+            // review, a lapsed entitlement, an outage and a signature that did
+            // not verify — five different fixes behind one message nobody could
+            // act on.
+            $reason = $this->client->lastDownloadError();
+
+            throw new RuntimeException(
+                'The licence server did not authorise a download for '.$productSlug.
+                ($reason !== null ? ': '.$reason.'.' : '.')
+            );
         }
 
         return $this->installFromGrant($productSlug, $grant);

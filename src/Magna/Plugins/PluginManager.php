@@ -21,6 +21,7 @@ use Magna\MagnaServiceProvider;
 use Magna\Plugins\Exceptions\DependencyException;
 use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\Exceptions\PluginNotFoundException;
+use Magna\Updater\UpdateCheck;
 use Throwable;
 
 class PluginManager
@@ -291,6 +292,13 @@ class PluginManager
 
             $record->delete();
         });
+
+        // The update-check row must not outlive the plugin: the dashboard badge
+        // and the Account Centre licences card both read it, so an uninstalled
+        // plugin kept advertising "Update to X" — a button that could only ever
+        // fail, there being nothing here to update. After the transaction on
+        // purpose: if the uninstall rolled back, the hint is still true.
+        UpdateCheck::query()->where('type', 'plugin')->where('slug', $name)->delete();
 
         // Outside the transaction: filesystem work cannot be rolled back, so
         // it must not run where a later DB failure would imply it had been.

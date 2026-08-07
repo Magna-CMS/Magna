@@ -159,6 +159,17 @@
                                     // version actually exists for this product.
                                     $updateVersion = $productUpdates[$license['product_slug']] ?? null;
 
+                                    // The seat being active here is the marketplace's
+                                    // view; whether the product is still installed is
+                                    // this site's. Uninstalling does not release the
+                                    // seat, so the two disagree exactly when it
+                                    // matters — an uninstalled plugin must offer
+                                    // "Install here", never "Update". Themes have no
+                                    // plugin record, so for them the seat stands in.
+                                    $installedHere = $isTheme
+                                        ? $activeHere
+                                        : in_array($license['product_slug'], $installedProducts ?? [], true);
+
                                     // A live auto-debit mandate replaces the manual
                                     // Renew button entirely — the gateway charges on
                                     // its own, so offering Renew beside it would
@@ -227,11 +238,25 @@
                                                      Updating through a cancelled key is refused, so only the
                                                      usable ones offer it; Release stays on every active row,
                                                      because releasing is how the stale activation is cleared. --}}
-                                                @if ($updateVersion !== null && $installable)
-                                                    <form method="POST" action="{{ route('licensing.update') }}">
+                                                {{-- Both buttons go through licensing.install: the wallet
+                                                     licence id mints a fresh activation token together with
+                                                     the download grant in one signed response. The old
+                                                     licensing.update path spent whatever token this site had
+                                                     stored — and a stale one produced "did not authorise a
+                                                     download" with a healthy licence sitting right here. --}}
+                                                @if ($installedHere && $updateVersion !== null && $installable)
+                                                    <form method="POST" action="{{ route('licensing.install') }}">
                                                         @csrf
+                                                        <input type="hidden" name="license_id" value="{{ $license['id'] }}">
                                                         <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
                                                         <button type="submit" class="text-xs font-semibold text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Update to {{ $updateVersion }}</button>
+                                                    </form>
+                                                @elseif (! $installedHere && $installable)
+                                                    <form method="POST" action="{{ route('licensing.install') }}">
+                                                        @csrf
+                                                        <input type="hidden" name="license_id" value="{{ $license['id'] }}">
+                                                        <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
+                                                        <button type="submit" class="text-xs font-semibold text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Install here</button>
                                                     </form>
                                                 @endif
                                                 <form method="POST" action="{{ route('licensing.deactivate') }}"

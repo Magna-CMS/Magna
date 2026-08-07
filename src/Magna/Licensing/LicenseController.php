@@ -156,8 +156,23 @@ class LicenseController
 
         $entry = $this->store->get($data['product_slug']);
 
+        // No local token to spend. That is exactly the state a drifted site is
+        // in — the plugin was uninstalled, or the marketplace re-issued the key
+        // — and it used to be a dead end: Release answered "no licence is
+        // active on this site" while the marketplace showed this site holding
+        // the seat, so the seat could never be freed from here. The account
+        // owns the licence, so the seat is released through it instead.
         if ($entry === null) {
-            return $this->fail('No licence for that product is active on this site.');
+            $released = $this->releaseSeatThroughAccount($data['product_slug']);
+
+            if (! $released) {
+                return $this->fail('No licence for that product is active on this site.');
+            }
+
+            $this->client->forgetCache();
+            $this->disablePlugin($data['product_slug']);
+
+            return $this->ok('Licence released through your Magna Account — the seat is free to use on another domain.');
         }
 
         $released = $this->client->deactivate($entry->token);
@@ -181,6 +196,48 @@ class LicenseController
         return $this->ok($released
             ? 'Licence released and the plugin disabled here — the seat is free to use on another domain.'
             : 'Licence removed and the plugin disabled here. The seat could not be released remotely; release it from your account page.');
+    }
+
+    /**
+     * Frees this site's seat on an account-owned licence when no local token
+     * exists to present.
+     *
+     * The wallet says which licence covers the product and whether one of its
+     * activations belongs to this site; the activation is then matched by this
+     * site's own domain, because the wallet deliberately never exposes other
+     * sites' fingerprints.
+     */
+    private function releaseSeatThroughAccount(string $productSlug): bool
+    {
+        $appUrl = config('app.url');
+        $host = is_string($appUrl) ? parse_url($appUrl, PHP_URL_HOST) : null;
+
+        if (! is_string($host) || $host === '') {
+            return false;
+        }
+
+        foreach ($this->client->wallet() ?? [] as $license) {
+            if (($license['product_slug'] ?? null) !== $productSlug || ($license['active_on_this_site'] ?? false) !== true) {
+                continue;
+            }
+
+            $activations = is_array($license['activations'] ?? null) ? $license['activations'] : [];
+
+            foreach ($activations as $activation) {
+                if (! is_array($activation) || ($activation['site_domain'] ?? null) !== $host) {
+                    continue;
+                }
+
+                $licenseId = $license['id'] ?? null;
+                $activationId = $activation['id'] ?? null;
+
+                if (is_numeric($licenseId) && (is_string($activationId) || is_int($activationId))) {
+                    return $this->client->deactivateSite((int) $licenseId, (string) $activationId);
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
