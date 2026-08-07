@@ -1,0 +1,11 @@
+{
+    "name": "testv/fixture",
+    "displayName": "Fixture Theme",
+    "description": "Test-only theme exercising the themes v2 loader.",
+    "version": "1.0.0",
+    "author": "Magna Tests",
+    "license": "MIT",
+    "compat": {
+        "magna": "^1.0"
+    }
+}

@@ -1,5 +1,10 @@
 {{-- Block: faq (native <details>/<summary>, zero JS) --}}
-@php $items = json_decode($block['data']['items'] ?? '[]', true) ?: []; @endphp
+@php
+    // Repeater field stores a real array; legacy json-field era stored a
+    // JSON string — accept both so old content keeps rendering.
+    $rawItems = $block['data']['items'] ?? [];
+    $items = is_array($rawItems) ? $rawItems : (json_decode(is_string($rawItems) ? $rawItems : '[]', true) ?: []);
+@endphp
 <div class="magna-block magna-block--faq magna-faq">
     @foreach($items as $item)
         <details class="magna-faq__item">

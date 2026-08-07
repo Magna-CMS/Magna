@@ -5,52 +5,79 @@ declare(strict_types=1);
 namespace Magna\Blocks;
 
 /**
- * Validates a decoded blocks_data payload (array of section objects) against
- * the rules from ADR-0002.  Validation is enforced on save and skipped on read
- * so that disabled-plugin blocks remain tolerated.
+ * Structural validation for a decoded block document.
+ *
+ * Purely structural — schema shape, spans, id uniqueness, nesting depth,
+ * registered handles, field rules. It never reads the authenticated user:
+ * permission questions (who may save raw-HTML blocks) live in
+ * {@see PageTreeAuthorizer} so that render paths, CLI imports, theme
+ * activation, and system contexts can validate without an actor
+ * (docs/magna-pages/10-REVIEW-RESOLUTIONS.md §C2).
+ *
+ * Accepts both document shapes: the legacy plain list of sections, and the
+ * wrapped form {"schemaVersion": "1.0", "sections": [...]}. A schemaVersion
+ * this build does not support fails closed with an error — newer documents
+ * are rejected, never silently stripped.
+ *
+ * Validation is enforced on save and skipped on read so that
+ * disabled-plugin blocks remain tolerated.
  */
 final class PageTreeValidator
 {
     /**
-     * Block handles whose Blade partials render field data unescaped
-     * ({!! !!}) by design — resources/views/blocks/{html,text}.blade.php.
-     * Keep in sync with any future block type that does the same. Gated
-     * behind a dedicated permission (Stage 7 finding) rather than being
-     * available to anyone who can edit a `blocks` field at all — ordinary
-     * content-edit permission (content.{type}.update) says nothing about
-     * whether that editor should be trusted with raw HTML/script.
-     *
-     * @var list<string>
+     * Maximum depth of nested block `children` below a column
+     * (column-level block = depth 1).
      */
-    private const RAW_HTML_BLOCK_HANDLES = ['html', 'text'];
+    public const MAX_BLOCK_DEPTH = 6;
 
     public function __construct(private readonly BlockRegistry $registry) {}
 
     /**
-     * Validate the raw blocks_data array.
+     * Validate a decoded blocks_data payload (either document shape).
      *
-     * @param  list<mixed>  $data
+     * @param  array<mixed, mixed>  $data
      * @return list<string> Error messages (empty = valid)
      */
     public function validate(array $data): array
     {
         $errors = [];
+
+        $sections = $this->unwrap($data, $errors);
+        if ($sections === null) {
+            return $errors;
+        }
+
         $seenIds = [];
 
-        foreach ($data as $sectionIndex => $sectionRaw) {
+        foreach ($sections as $sectionIndex => $sectionRaw) {
             if (! is_array($sectionRaw)) {
                 $errors[] = "Section #{$sectionIndex} must be an object.";
 
                 continue;
             }
 
-            $sectionId = isset($sectionRaw['id']) && is_string($sectionRaw['id']) ? $sectionRaw['id'] : '';
+            $sectionId = $this->collectId($sectionRaw, $seenIds, $errors);
             if ($sectionId === '') {
                 $errors[] = "Section #{$sectionIndex} is missing an 'id'.";
-            } elseif (in_array($sectionId, $seenIds, true)) {
-                $errors[] = "Duplicate id '{$sectionId}' in the page tree.";
-            } else {
-                $seenIds[] = $sectionId;
+            }
+
+            $type = isset($sectionRaw['type']) && is_string($sectionRaw['type']) && $sectionRaw['type'] !== ''
+                ? $sectionRaw['type']
+                : SectionNode::TYPE_SECTION;
+
+            if ($type === SectionNode::TYPE_REF) {
+                $part = $sectionRaw['part'] ?? null;
+                if (! is_string($part) || $part === '') {
+                    $errors[] = "Ref section '{$sectionId}' is missing a 'part' reference.";
+                }
+
+                continue; // a ref carries no own columns to validate
+            }
+
+            if ($type !== SectionNode::TYPE_SECTION) {
+                $errors[] = "Section '{$sectionId}' has unknown type '{$type}'.";
+
+                continue;
             }
 
             $this->validateTokenOverrides($sectionRaw['settings'] ?? [], $sectionIndex, $errors);
@@ -62,7 +89,6 @@ final class PageTreeValidator
                 continue;
             }
 
-            // Validate column spans sum to 12
             $spanSum = 0;
             foreach ($columns as $col) {
                 if (is_array($col)) {
@@ -79,14 +105,7 @@ final class PageTreeValidator
                     continue;
                 }
 
-                $colId = isset($colRaw['id']) && is_string($colRaw['id']) ? $colRaw['id'] : '';
-                if ($colId !== '') {
-                    if (in_array($colId, $seenIds, true)) {
-                        $errors[] = "Duplicate id '{$colId}' in the page tree.";
-                    } else {
-                        $seenIds[] = $colId;
-                    }
-                }
+                $this->collectId($colRaw, $seenIds, $errors);
 
                 $blocks = $colRaw['blocks'] ?? [];
                 if (! is_array($blocks)) {
@@ -98,40 +117,127 @@ final class PageTreeValidator
                         continue;
                     }
 
-                    $blockId = isset($blockRaw['id']) && is_string($blockRaw['id']) ? $blockRaw['id'] : '';
-                    if ($blockId !== '') {
-                        if (in_array($blockId, $seenIds, true)) {
-                            $errors[] = "Duplicate id '{$blockId}' in the page tree.";
-                        } else {
-                            $seenIds[] = $blockId;
-                        }
-                    }
-
-                    $handle = isset($blockRaw['block']) && is_string($blockRaw['block']) ? $blockRaw['block'] : '';
-                    if (! $this->registry->has($handle)) {
-                        $errors[] = "Block handle '{$handle}' in section '{$sectionId}', column #{$colIndex}, block #{$blockIndex} is not registered.";
-                    } elseif (in_array($handle, self::RAW_HTML_BLOCK_HANDLES, true)
-                        && ! (auth()->user()?->can('blocks.raw_html') ?? false)
-                    ) {
-                        $errors[] = "Block '{$handle}' (id: {$blockId}) renders raw HTML and requires the blocks.raw_html permission.";
-                    } else {
-                        // Validate block data against the block's field rules
-                        $definition = $this->registry->get($handle);
-                        if ($definition !== null) {
-                            $blockData = is_array($blockRaw['data'] ?? null) ? $blockRaw['data'] : [];
-                            $fieldErrors = $definition->validate($blockData);
-                            foreach ($fieldErrors as $fieldHandle => $fieldMessages) {
-                                foreach ($fieldMessages as $message) {
-                                    $errors[] = "Block '{$handle}' (id: {$blockId}): {$message}";
-                                }
-                            }
-                        }
-                    }
+                    $this->validateBlock(
+                        $blockRaw,
+                        "section '{$sectionId}', column #{$colIndex}, block #{$blockIndex}",
+                        depth: 1,
+                        seenIds: $seenIds,
+                        errors: $errors,
+                    );
                 }
             }
         }
 
         return $errors;
+    }
+
+    /**
+     * Resolve the document shape to its sections list, validating the
+     * wrapper when present. Returns null when the shape itself is invalid.
+     *
+     * @param  array<mixed, mixed>  $data
+     * @param  list<string>  $errors
+     * @return array<int, mixed>|null
+     */
+    private function unwrap(array $data, array &$errors): ?array
+    {
+        if (array_is_list($data)) {
+            return $data;
+        }
+
+        $schemaVersion = $data['schemaVersion'] ?? null;
+        if ($schemaVersion !== null
+            && (! is_string($schemaVersion) || ! in_array($schemaVersion, PageTree::SUPPORTED_SCHEMA_VERSIONS, true))
+        ) {
+            $label = is_scalar($schemaVersion) ? (string) $schemaVersion : gettype($schemaVersion);
+            $errors[] = "Unsupported document schemaVersion '{$label}'. This installation supports: "
+                .implode(', ', PageTree::SUPPORTED_SCHEMA_VERSIONS)
+                .'. Upgrade Magna before saving this document — saving would destroy newer content.';
+
+            return null;
+        }
+
+        $sections = $data['sections'] ?? null;
+        if (! is_array($sections)) {
+            $errors[] = "Document 'sections' must be an array.";
+
+            return null;
+        }
+
+        return array_values($sections);
+    }
+
+    /**
+     * Validate one block node and recurse into its children.
+     *
+     * @param  array<mixed, mixed>  $blockRaw
+     * @param  list<string>  $seenIds
+     * @param  list<string>  $errors
+     */
+    private function validateBlock(array $blockRaw, string $location, int $depth, array &$seenIds, array &$errors): void
+    {
+        $blockId = $this->collectId($blockRaw, $seenIds, $errors);
+
+        if ($depth > self::MAX_BLOCK_DEPTH) {
+            $errors[] = "Block '{$blockId}' exceeds the maximum nesting depth of ".self::MAX_BLOCK_DEPTH.'.';
+
+            return;
+        }
+
+        $handle = isset($blockRaw['block']) && is_string($blockRaw['block']) ? $blockRaw['block'] : '';
+        if (! $this->registry->has($handle)) {
+            $errors[] = "Block handle '{$handle}' in {$location} is not registered.";
+        } else {
+            $definition = $this->registry->get($handle);
+            if ($definition !== null) {
+                $blockData = is_array($blockRaw['data'] ?? null) ? $blockRaw['data'] : [];
+                $fieldErrors = $definition->validate($blockData);
+                foreach ($fieldErrors as $fieldMessages) {
+                    foreach ($fieldMessages as $message) {
+                        $errors[] = "Block '{$handle}' (id: {$blockId}): {$message}";
+                    }
+                }
+            }
+        }
+
+        $children = $blockRaw['children'] ?? null;
+        if (is_array($children)) {
+            foreach ($children as $childIndex => $childRaw) {
+                if (is_array($childRaw)) {
+                    $this->validateBlock(
+                        $childRaw,
+                        "{$location}, child #{$childIndex}",
+                        depth: $depth + 1,
+                        seenIds: $seenIds,
+                        errors: $errors,
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Record a node id into the seen set, reporting duplicates.
+     * Returns the id ('' when missing/invalid).
+     *
+     * @param  array<mixed, mixed>  $nodeRaw
+     * @param  list<string>  $seenIds
+     * @param  list<string>  $errors
+     */
+    private function collectId(array $nodeRaw, array &$seenIds, array &$errors): string
+    {
+        $id = isset($nodeRaw['id']) && is_string($nodeRaw['id']) ? $nodeRaw['id'] : '';
+        if ($id === '') {
+            return '';
+        }
+
+        if (in_array($id, $seenIds, true)) {
+            $errors[] = "Duplicate id '{$id}' in the page tree.";
+        } else {
+            $seenIds[] = $id;
+        }
+
+        return $id;
     }
 
     /**

@@ -9,7 +9,9 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Magna\Blocks\BlockRegistry;
 use Magna\Blocks\PageTree;
+use Magna\Blocks\PageTreeAuthorizer;
 use Magna\Blocks\PageTreeValidator;
+use Magna\Blocks\Resolution\BlockDataResolver;
 
 /**
  * Debug renderer for the Section/Column/Block page tree.
@@ -29,6 +31,8 @@ final class BlockPreviewController
     public function __construct(
         private readonly BlockRegistry $registry,
         private readonly PageTreeValidator $validator,
+        private readonly PageTreeAuthorizer $authorizer,
+        private readonly BlockDataResolver $resolver,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -49,7 +53,12 @@ final class BlockPreviewController
 
         $decoded = json_decode($json, true);
         if (is_array($decoded)) {
-            $errors = $this->validator->validate(array_values($decoded));
+            // Structural validation + actor authorization (raw-HTML gate) —
+            // the split keeps the validator auth-free for system contexts.
+            $errors = [
+                ...$this->validator->validate($decoded),
+                ...$this->authorizer->authorize($decoded, $request->user()),
+            ];
             if ($errors !== []) {
                 return response(e(implode("\n", $errors)), 422, [
                     'Content-Type' => 'text/plain; charset=utf-8',
@@ -62,6 +71,7 @@ final class BlockPreviewController
         $html = view('magna::block-preview.preview', [
             'tree' => $tree,
             'registry' => $this->registry,
+            'resolver' => $this->resolver,
         ])->render();
 
         return response($html, 200, [

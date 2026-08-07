@@ -1,8 +1,9 @@
 {{--
     Block: text — richtext body.
-    Output is UNESCAPED by design to render HTML markup from the richtext editor.
-    Restricted to admin/editor roles only — do NOT expose to untrusted authors.
+    Raw output ONLY via the sanitized `_resolved.body` produced by
+    TextBlockResolver (allowlist sanitizer). When no resolver ran, the
+    stored body renders ESCAPED — a bypassed resolve step fails safe.
 --}}
 <div class="magna-block magna-block--text magna-prose">
-    {!! $block['data']['body'] ?? '' !!}
+    {!! $block['_resolved']['body'] ?? e($block['data']['body'] ?? '') !!}
 </div>

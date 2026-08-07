@@ -3,7 +3,20 @@
   Embedded in the Filament entry form as a Livewire component.
 --}}
 
-<div class="magna-block-editor" x-data="{ addBlockModal: false, addBlockTarget: null, cloudModal: false }">
+@php
+    // Live preview lights up only when a renderer is bound (Magna Pages) —
+    // core never references a plugin route (§E1 contract seam).
+    $documentPreviewUrl = app()->bound(\Magna\Blocks\Contracts\ProvidesDocumentPreview::class)
+        ? app(\Magna\Blocks\Contracts\ProvidesDocumentPreview::class)->previewUrl()
+        : null;
+@endphp
+<div class="magna-block-editor"
+     x-data="{ addBlockModal: false, addBlockTarget: null, cloudModal: false, previewOpen: false }"
+     @if($documentPreviewUrl !== null)
+         data-preview-url="{{ $documentPreviewUrl }}"
+         data-preview-csrf="{{ csrf_token() }}"
+     @endif
+>
 
     {{-- Header bar --}}
     <div class="flex items-center justify-between rounded-t-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-white/10 dark:bg-white/5">
@@ -11,6 +24,14 @@
         <div class="flex items-center gap-3">
             @if($saveStatus)
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ $saveStatus }}</span>
+            @endif
+            @if($documentPreviewUrl !== null)
+                <button type="button"
+                        @click="previewOpen = !previewOpen; if (previewOpen) window.magnaRefreshPreview && window.magnaRefreshPreview()"
+                        class="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-200 dark:hover:bg-white/20">
+                    <x-heroicon-o-eye class="h-3.5 w-3.5"/>
+                    <span x-text="previewOpen ? 'Hide preview' : 'Preview'"></span>
+                </button>
             @endif
             {{-- Cloud Library hook (Stage 19 wires this) --}}
             <button type="button"
@@ -207,6 +228,104 @@
                                                             <input type="checkbox"
                                                                    wire:model.live="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}"
                                                                    class="rounded border-gray-300">
+                                                        @elseif($bField->type === 'media')
+                                                            @php
+                                                                $mediaValue = $block['data'][$bField->handle] ?? null;
+                                                                $mediaThumb = $this->mediaThumbUrl($mediaValue);
+                                                                $mediaName = $this->mediaLabel($mediaValue);
+                                                            @endphp
+                                                            <div class="flex items-center gap-2">
+                                                                @if($mediaThumb)
+                                                                    <img src="{{ $mediaThumb }}" alt=""
+                                                                         class="h-10 w-10 rounded border border-gray-200 object-cover dark:border-white/10">
+                                                                @elseif($mediaName)
+                                                                    <span class="max-w-[8rem] truncate text-[10px] text-gray-500">{{ $mediaName }}</span>
+                                                                @endif
+                                                                <button type="button"
+                                                                        @click="$dispatch('magna:open-media-picker', { target: 'block-field:{{ $si }}:{{ $ci }}:{{ $bi }}:{{ $bField->handle }}' })"
+                                                                        class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:border-indigo-400 hover:text-indigo-600 dark:border-white/10 dark:text-gray-300 dark:hover:border-indigo-500">
+                                                                    {{ $mediaName !== null ? 'Change' : 'Choose media' }}
+                                                                </button>
+                                                                @if(is_string($mediaValue) && $mediaValue !== '')
+                                                                    <button type="button"
+                                                                            wire:click="clearMediaField({{ $si }}, {{ $ci }}, {{ $bi }}, '{{ $bField->handle }}')"
+                                                                            class="text-xs text-gray-400 hover:text-red-500">
+                                                                        Remove
+                                                                    </button>
+                                                                @endif
+                                                            </div>
+                                                        @elseif($bField->type === 'alignment')
+                                                            <select wire:model.live="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}"
+                                                                    class="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-white/10 dark:bg-white/10 dark:text-white">
+                                                                <option value="left">Left</option>
+                                                                <option value="center">Center</option>
+                                                                <option value="right">Right</option>
+                                                            </select>
+                                                        @elseif($bField->type === 'color')
+                                                            <div class="flex items-center gap-2">
+                                                                @php $colorValue = $block['data'][$bField->handle] ?? null; @endphp
+                                                                <input type="color"
+                                                                       value="{{ is_string($colorValue) && str_starts_with($colorValue, '#') ? substr($colorValue, 0, 7) : '#000000' }}"
+                                                                       wire:change="updateBlockData({{ $si }}, {{ $ci }}, {{ $bi }}, '{{ $bField->handle }}', $event.target.value)"
+                                                                       class="h-7 w-9 cursor-pointer rounded border border-gray-200 dark:border-white/10">
+                                                                <input type="text"
+                                                                       wire:model.live.debounce.400ms="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}"
+                                                                       placeholder="#rrggbb or token:primary"
+                                                                       class="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-white/10 dark:bg-white/10 dark:text-white">
+                                                            </div>
+                                                        @elseif($bField->type === 'icon' || $bField->type === 'link')
+                                                            <input type="text"
+                                                                   wire:model.live.debounce.400ms="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}"
+                                                                   placeholder="{{ $bField->type === 'icon' ? 'heroicon-o-sparkles' : 'https://… or /page-path' }}"
+                                                                   class="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-white/10 dark:bg-white/10 dark:text-white">
+                                                        @elseif($bField->type === 'repeater')
+                                                            @php
+                                                                $repeaterItems = $block['data'][$bField->handle] ?? [];
+                                                                $repeaterItems = is_array($repeaterItems) ? $repeaterItems : [];
+                                                            @endphp
+                                                            <div class="space-y-2">
+                                                                @foreach($repeaterItems as $ri => $repeaterItem)
+                                                                    <div class="rounded border border-gray-200 p-2 dark:border-white/10">
+                                                                        <div class="mb-1 flex items-center justify-between">
+                                                                            <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Item {{ $ri + 1 }}</span>
+                                                                            <button type="button"
+                                                                                    wire:click="removeRepeaterItem({{ $si }}, {{ $ci }}, {{ $bi }}, '{{ $bField->handle }}', {{ $ri }})"
+                                                                                    class="text-xs text-gray-400 hover:text-red-500">Remove</button>
+                                                                        </div>
+                                                                        @foreach($bField->fields as $riField)
+                                                                            <div class="mb-1.5">
+                                                                                <label class="mb-0.5 block text-[10px] font-medium text-gray-500 dark:text-gray-400">{{ $riField->label }}</label>
+                                                                                @if($riField->type === 'textarea' || $riField->type === 'richtext')
+                                                                                    <textarea wire:model.live.debounce.400ms="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}.{{ $ri }}.{{ $riField->handle }}"
+                                                                                              rows="2"
+                                                                                              class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/10 dark:text-white"></textarea>
+                                                                                @elseif($riField->type === 'select')
+                                                                                    <select wire:model.live="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}.{{ $ri }}.{{ $riField->handle }}"
+                                                                                            class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/10 dark:text-white">
+                                                                                        @foreach($riField->resolveOptions() as $optVal => $optLabel)
+                                                                                            <option value="{{ $optVal }}">{{ $optLabel }}</option>
+                                                                                        @endforeach
+                                                                                    </select>
+                                                                                @elseif($riField->type === 'boolean')
+                                                                                    <input type="checkbox"
+                                                                                           wire:model.live="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}.{{ $ri }}.{{ $riField->handle }}"
+                                                                                           class="rounded border-gray-300">
+                                                                                @else
+                                                                                    <input type="{{ $riField->type === 'number' ? 'number' : 'text' }}"
+                                                                                           wire:model.live.debounce.400ms="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}.{{ $ri }}.{{ $riField->handle }}"
+                                                                                           class="w-full rounded border border-gray-200 bg-white px-2 py-1 text-xs dark:border-white/10 dark:bg-white/10 dark:text-white">
+                                                                                @endif
+                                                                            </div>
+                                                                        @endforeach
+                                                                    </div>
+                                                                @endforeach
+                                                                <button type="button"
+                                                                        wire:click="addRepeaterItem({{ $si }}, {{ $ci }}, {{ $bi }}, '{{ $bField->handle }}')"
+                                                                        class="flex w-full items-center justify-center gap-1 rounded border border-dashed border-gray-200 py-1.5 text-xs text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:border-white/10 dark:hover:border-indigo-500">
+                                                                    <x-heroicon-o-plus class="h-3 w-3"/>
+                                                                    Add item
+                                                                </button>
+                                                            </div>
                                                         @elseif($bField->type === 'textarea' || $bField->type === 'richtext' || $bField->type === 'json')
                                                             <textarea wire:model.live="sections.{{ $si }}.columns.{{ $ci }}.blocks.{{ $bi }}.data.{{ $bField->handle }}"
                                                                       rows="3"
@@ -314,6 +433,23 @@
     {{-- Include the global media picker once --}}
     <livewire:magna-media-picker />
 
+    @if($documentPreviewUrl !== null)
+        {{-- Live preview: the REAL themed render of the current (unsaved)
+             editor state — same pipeline as publishing, so no drift. --}}
+        <div x-show="previewOpen" x-cloak class="border border-t-0 border-gray-200 dark:border-white/10">
+            <div class="flex items-center justify-between bg-gray-50 px-4 py-1.5 dark:bg-white/5">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Live preview — rendered through the active theme</span>
+                <button type="button"
+                        @click="window.magnaRefreshPreview && window.magnaRefreshPreview()"
+                        class="text-xs text-gray-400 hover:text-indigo-600">Refresh</button>
+            </div>
+            <iframe id="magna-preview-frame"
+                    title="Page preview"
+                    class="h-[36rem] w-full bg-white"
+                    sandbox="allow-same-origin"></iframe>
+        </div>
+    @endif
+
 </div>
 
 {{-- Autosave: 3-second debounce after any editor change --}}
@@ -331,6 +467,46 @@
                 editor.save();
             }
         }, 3000);
+    });
+})();
+</script>
+
+{{-- Live preview: render current editor state through the themed pipeline --}}
+<script>
+(function () {
+    var refreshTimer = null;
+
+    function editorRoot() {
+        return document.querySelector('.magna-block-editor[wire\\:id][data-preview-url]');
+    }
+
+    window.magnaRefreshPreview = function () {
+        var root = editorRoot();
+        var frame = document.getElementById('magna-preview-frame');
+        if (!root || !frame) { return; }
+
+        var editor = Livewire.find(root.getAttribute('wire:id'));
+        if (!editor || typeof editor.serialise !== 'function') { return; }
+
+        Promise.resolve(editor.serialise()).then(function (blocksData) {
+            var body = new FormData();
+            body.append('blocks_data', blocksData);
+            body.append('_token', root.getAttribute('data-preview-csrf'));
+
+            return fetch(root.getAttribute('data-preview-url'), { method: 'POST', body: body });
+        }).then(function (response) {
+            return response.text();
+        }).then(function (html) {
+            frame.srcdoc = html;
+        }).catch(function () { /* preview is best-effort; editing must never break */ });
+    };
+
+    // Auto-refresh (debounced) while the pane is open.
+    document.addEventListener('livewire:update', function () {
+        var frame = document.getElementById('magna-preview-frame');
+        if (!frame || frame.offsetParent === null) { return; } // pane hidden
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(window.magnaRefreshPreview, 900);
     });
 })();
 </script>

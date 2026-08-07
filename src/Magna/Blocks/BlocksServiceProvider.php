@@ -26,6 +26,20 @@ class BlocksServiceProvider extends ServiceProvider
         $this->app->singleton(PageTreeValidator::class, function (): PageTreeValidator {
             return new PageTreeValidator(app(BlockRegistry::class));
         });
+
+        $this->app->singleton(PageTreeAuthorizer::class);
+
+        $this->app->singleton(Resolution\BlockDataResolver::class, function (): Resolution\BlockDataResolver {
+            $resolver = new Resolution\BlockDataResolver;
+
+            // Core dynamic-block resolvers. Plugins get their own
+            // registration surface with the Pages RegistersDataSources
+            // contract; until then this is the single registration point.
+            $resolver->register(app(Resolution\EntriesBlockResolver::class));
+            $resolver->register(app(Resolution\TextBlockResolver::class));
+
+            return $resolver;
+        });
     }
 
     public function boot(): void

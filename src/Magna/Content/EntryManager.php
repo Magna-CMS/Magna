@@ -6,6 +6,7 @@ namespace Magna\Content;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Magna\Content\Events\EntryCreated;
 use Magna\Content\Events\EntryDeleted;
@@ -18,10 +19,15 @@ use Magna\Content\Models\Revision;
 
 class EntryManager
 {
+    /** @var array<string, bool> */
+    private array $translationGroupColumnMemo = [];
+
     public function __construct(
         private readonly SchemaRegistry $registry,
         private readonly SchemaValidator $validator,
-        private readonly SlugGenerator $slugs,
+        private readonly AutoSlugApplier $autoSlugs,
+        private readonly EntryRevisionRecorder $revisions,
+        private readonly HierarchyMaintainer $hierarchy,
     ) {}
 
     /**
@@ -36,8 +42,9 @@ class EntryManager
     {
         $type = $this->resolveType($typeHandle);
 
-        $data = $this->applyAutoSlugs($type, $data);
+        $data = $this->autoSlugs->apply($type, $data);
         $validated = $this->validator->validate($type, $data);
+        $validated = $this->prepareForStorage($type, $validated);
 
         $entry = Entry::makeInstance($typeHandle, $this->registry);
         $entry->fill($validated);
@@ -45,12 +52,25 @@ class EntryManager
         $entry->author_id = $authorId;
         $entry->draft_of = null;
 
+        // A new entry roots its own translation group (§A2). Pre-generate
+        // the key so group == id without a second write; translations of
+        // this entry will share the group even when their slugs diverge.
+        if ($this->hasTranslationGroupColumn($type)) {
+            // newUniqueId() (HasUlids) — NOT Str::ulid() directly: the trait
+            // lowercases, and lookups (delivery single fetch) normalise ids
+            // with strtolower before comparing.
+            $entry->id = $entry->newUniqueId();
+            $entry->translation_group = $entry->id;
+        }
+
         if ($type->draftable) {
             $entry->status = EntryStatus::Draft;
         } else {
             $entry->status = EntryStatus::Published;
             $entry->published_at = now();
         }
+
+        $this->hierarchy->applyOnSave($entry, $type, $data);
 
         $entry->save();
 
@@ -79,21 +99,24 @@ class EntryManager
     {
         $type = $this->getType($entry);
 
-        $data = $this->applyAutoSlugs($type, $data);
+        $data = $this->autoSlugs->apply($type, $data, $entry);
         $validated = $this->validator->validate($type, $data, partial: true);
+        $validated = $this->prepareForStorage($type, $validated);
 
         // Stage 13 (S11-02): revision insert + entry save + cross-locale
         // sync are 3 dependent writes — a failure partway previously left
         // whichever ones already committed, e.g. a revision snapshotted
         // but the entry never actually updated, or the entry updated but
         // sibling-locale rows left out of sync.
-        DB::transaction(function () use ($entry, $type, $actorId, $validated): void {
+        DB::transaction(function () use ($entry, $type, $actorId, $validated, $data): void {
             if ($entry->status === EntryStatus::Published) {
-                $this->createRevision($entry, $type->handle, $actorId);
+                $this->revisions->record($entry, $type->handle, $actorId);
             }
 
             $entry->fill($validated);
+            $this->hierarchy->applyOnSave($entry, $type, $data);
             $entry->save();
+            $this->hierarchy->cascadeDescendants($entry, $type);
 
             // Sync non-localizable fields to all other locale rows (same type + same slug
             // treated as the shared identity for localizable content types).
@@ -136,7 +159,7 @@ class EntryManager
         // save atomicity concern.
         DB::transaction(function () use ($entry, $actorId): void {
             if ($entry->status === EntryStatus::Published) {
-                $this->createRevision($entry, $this->getType($entry)->handle, $actorId);
+                $this->revisions->record($entry, $this->getType($entry)->handle, $actorId, Revision::KIND_PUBLISH);
             }
 
             $entry->status = EntryStatus::Published;
@@ -192,6 +215,15 @@ class EntryManager
                     ->orWhere(function ($query) use ($handle, $id): void {
                         $query->where('to_type', $handle)->where('to_id', $id);
                     })
+                    ->delete();
+
+                // Revisions of a hard-deleted entry are unrestorable by
+                // construction (restore() findOrFails the live row) — keeping
+                // them is unbounded orphan growth, not history. Deleted via
+                // the query builder because the model is append-only.
+                DB::table('magna_revisions')
+                    ->where('entry_type', $handle)
+                    ->where('entry_id', $id)
                     ->delete();
             }
         });
@@ -260,8 +292,9 @@ class EntryManager
         // Stage 13 (S11-02): see update() above — same revision-insert +
         // save atomicity concern.
         DB::transaction(function () use ($entry, $handle, $actorId, $type, $revision): void {
-            // Snapshot current state before restoring.
-            $this->createRevision($entry, $handle, $actorId);
+            // Snapshot current state before restoring, so the restore is
+            // itself reversible.
+            $this->revisions->record($entry, $handle, $actorId, Revision::KIND_RESTORE_POINT);
 
             $payload = $revision->payload;
             foreach ($type->columnFields() as $field) {
@@ -311,6 +344,20 @@ class EntryManager
         $translation->status = EntryStatus::Draft;
         $translation->published_at = null;
         $translation->unpublish_at = null;
+
+        // Locale variants share one translation group. A pre-backfill source
+        // (null group) is adopted into a group rooted at its own id.
+        if ($this->hasTranslationGroupColumn($type)) {
+            $sourceGroup = $source->getAttribute('translation_group');
+            if (! is_string($sourceGroup) || $sourceGroup === '') {
+                $sourceKey = $source->getKey();
+                $sourceGroup = is_string($sourceKey) ? $sourceKey : $source->newUniqueId();
+                $source->translation_group = $sourceGroup;
+                $source->save();
+            }
+            $translation->translation_group = $sourceGroup;
+        }
+
         $translation->save();
 
         event(new EntryCreated($translation, $actorId));
@@ -349,24 +396,6 @@ class EntryManager
             return;
         }
 
-        // Determine the identity slug — find the first slug field.
-        $slugHandle = null;
-        foreach ($type->fields as $field) {
-            if ($field->type instanceof SlugField) {
-                $slugHandle = $field->handle;
-                break;
-            }
-        }
-
-        if ($slugHandle === null) {
-            return;
-        }
-
-        $slugValue = $entry->getAttribute($slugHandle);
-        if (! is_string($slugValue) || $slugValue === '') {
-            return;
-        }
-
         // Collect updates for the non-localizable fields that were actually changed.
         $syncData = [];
         foreach ($nonLocalizable as $field) {
@@ -379,13 +408,25 @@ class EntryManager
             return;
         }
 
+        // Locale-variant identity: translation_group when available (§A2 —
+        // survives translated slugs), falling back to the legacy same-slug
+        // convention only for rows the backfill command has not touched yet.
+        $group = $entry->getAttribute('translation_group');
+        [$identityColumn, $identityValue] = is_string($group) && $group !== ''
+            ? ['translation_group', $group]
+            : $this->legacySlugIdentity($entry, $type);
+
+        if ($identityColumn === null || ! is_string($identityValue) || $identityValue === '') {
+            return;
+        }
+
         $entryLocale = is_string($entry->getAttribute('locale')) ? $entry->getAttribute('locale') : '';
 
         // Wrap in a transaction: multiple locale variants are common and each save
         // would otherwise auto-commit individually, causing unnecessary round-trips.
-        DB::transaction(function () use ($type, $slugHandle, $slugValue, $entryLocale, $syncData): void {
+        DB::transaction(function () use ($type, $identityColumn, $identityValue, $entryLocale, $syncData): void {
             Entry::type($type->handle)
-                ->where($slugHandle, $slugValue)
+                ->where($identityColumn, $identityValue)
                 ->where('locale', '!=', $entryLocale)
                 ->get()
                 ->each(function (Entry $other) use ($syncData): void {
@@ -393,6 +434,33 @@ class EntryManager
                     $other->save();
                 });
         });
+    }
+
+    /**
+     * The pre-translation_group identity: first slug field + its value.
+     *
+     * @return array{0: string|null, 1: mixed}
+     */
+    private function legacySlugIdentity(Entry $entry, ContentType $type): array
+    {
+        foreach ($type->fields as $field) {
+            if ($field->type instanceof SlugField) {
+                return [$field->handle, $entry->getAttribute($field->handle)];
+            }
+        }
+
+        return [null, null];
+    }
+
+    /**
+     * Whether the type's table carries translation_group yet (older installs
+     * must run magna:content:add-translation-groups). Memoized per handle —
+     * this sits on the entry-save hot path.
+     */
+    private function hasTranslationGroupColumn(ContentType $type): bool
+    {
+        return $this->translationGroupColumnMemo[$type->handle]
+            ??= Schema::hasColumn($type->tableName(), 'translation_group');
     }
 
     private function publishDraftOf(Entry $draft, ?string $actorId): Entry
@@ -421,7 +489,7 @@ class EntryManager
         // committed instead of a half-applied state.
         DB::transaction(function () use ($published, $handle, $actorId, $type, $draft): void {
             // Snapshot the published state before overwriting it.
-            $this->createRevision($published, $handle, $actorId);
+            $this->revisions->record($published, $handle, $actorId, Revision::KIND_PUBLISH);
 
             // Copy all field values from the draft to the published entry.
             foreach ($type->columnFields() as $field) {
@@ -437,26 +505,6 @@ class EntryManager
         event(new EntryPublished($published, $actorId));
 
         return $published;
-    }
-
-    private function createRevision(Entry $entry, string $typeHandle, ?string $actorId): void
-    {
-        $type = $this->registry->get($typeHandle);
-        if ($type === null) {
-            return;
-        }
-
-        $payload = [];
-        foreach ($type->columnFields() as $field) {
-            $payload[$field->handle] = $entry->getAttribute($field->handle);
-        }
-
-        Revision::create([
-            'entry_type' => $typeHandle,
-            'entry_id' => $entry->getKey(),
-            'payload' => $payload,
-            'author_id' => $actorId,
-        ]);
     }
 
     private function getType(Entry $entry): ContentType
@@ -489,45 +537,20 @@ class EntryManager
     }
 
     /**
-     * Auto-populate slug fields from their configured source field.
+     * Run each field's storage transform (sanitization/normalization) over
+     * the validated payload — see FieldType::prepareForStorage().
      *
-     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
      */
-    private function applyAutoSlugs(ContentType $type, array $data): array
+    private function prepareForStorage(ContentType $type, array $validated): array
     {
         foreach ($type->fields as $field) {
-            if (! ($field->type instanceof SlugField)) {
-                continue;
+            if (array_key_exists($field->handle, $validated)) {
+                $validated[$field->handle] = $field->type->prepareForStorage($validated[$field->handle]);
             }
-
-            $rawSlug = $data[$field->handle] ?? null;
-            $currentSlug = is_string($rawSlug) ? $rawSlug : '';
-            if ($currentSlug !== '') {
-                continue;
-            }
-
-            $fromHandle = $field->rawData['from'] ?? null;
-            if (! is_string($fromHandle) || $fromHandle === '') {
-                continue;
-            }
-
-            $sourceValue = $data[$fromHandle] ?? null;
-            if (! is_string($sourceValue) || $sourceValue === '') {
-                continue;
-            }
-
-            $rawLocale = $data['locale'] ?? null;
-            $locale = is_string($rawLocale) ? $rawLocale : '';
-
-            $data[$field->handle] = $this->slugs->generate(
-                $type,
-                $field->handle,
-                $sourceValue,
-                $locale !== '' ? $locale : null,
-            );
         }
 
-        return $data;
+        return $validated;
     }
 }

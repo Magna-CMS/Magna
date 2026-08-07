@@ -10,6 +10,7 @@ use Magna\Content\ContentType;
 use Magna\Content\Field;
 use Magna\Content\FieldTypes\RelationField;
 use Magna\Content\SchemaRegistry;
+use Magna\Delivery\BlocksDocumentResolution;
 use Magna\Delivery\CursorPaginator;
 use Magna\Delivery\DeliveryQueryBuilder;
 use Magna\Delivery\EntryTransformer;
@@ -32,6 +33,7 @@ final class ContentListController extends DeliveryController
         private readonly RelationLoader $relationLoader,
         private readonly ETagService $etag,
         private readonly ResponseCacheService $responseCache,
+        private readonly BlocksDocumentResolution $blocksResolution,
     ) {}
 
     public function __invoke(Request $request, string $type): Response
@@ -155,6 +157,10 @@ final class ContentListController extends DeliveryController
             : [];
 
         $data = $this->transformer->transformMany($entries, $contentType, $fields, $relations, $mediaCache, $keys);
+
+        if ($request->boolean('resolve')) {
+            $data = $this->blocksResolution->applyMany($data, $contentType);
+        }
 
         $body = [
             'data' => $data,

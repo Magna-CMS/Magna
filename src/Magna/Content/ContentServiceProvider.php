@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Magna\Auth\PermissionRegistry;
 use Magna\Content\Console\AddPerformanceIndexesCommand;
+use Magna\Content\Console\AddTranslationGroupsCommand;
 use Magna\Content\Console\MakeTypeCommand;
 use Magna\Content\Console\PublishScheduledCommand;
 use Magna\Content\Console\RevisionsPruneCommand;
@@ -90,7 +91,9 @@ class ContentServiceProvider extends ServiceProvider
             return new EntryManager(
                 $app->make(SchemaRegistry::class),
                 $app->make(SchemaValidator::class),
-                $app->make(SlugGenerator::class),
+                $app->make(AutoSlugApplier::class),
+                $app->make(EntryRevisionRecorder::class),
+                $app->make(HierarchyMaintainer::class),
             );
         });
     }
@@ -139,6 +142,7 @@ class ContentServiceProvider extends ServiceProvider
                 PublishScheduledCommand::class,
                 RevisionsPruneCommand::class,
                 AddPerformanceIndexesCommand::class,
+                AddTranslationGroupsCommand::class,
             ]);
         }
     }

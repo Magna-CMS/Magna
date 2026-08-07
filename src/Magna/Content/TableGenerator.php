@@ -7,11 +7,13 @@ namespace Magna\Content;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Magna\Content\FieldTypes\SlugField;
 
 class TableGenerator
 {
     private const FIXED_COLUMNS = [
-        'id', 'status', 'locale', 'published_at', 'unpublish_at', 'author_id', 'draft_of', 'created_at', 'updated_at',
+        'id', 'status', 'locale', 'translation_group', 'published_at', 'unpublish_at', 'author_id', 'draft_of', 'created_at', 'updated_at',
+        'parent_id', 'position', 'path',
     ];
 
     public function createTable(ContentType $type): void
@@ -24,6 +26,12 @@ class TableGenerator
             // and the scheduler widget filters/orders by published_at/unpublish_at.
             $table->string('status', 20)->default('draft')->index();
             $table->string('locale', 10)->default('')->index();
+            // Stable identity shared by all locale variants of one logical
+            // entry (docs/magna-pages/10-REVIEW-RESOLUTIONS.md §A2) — the
+            // previous "same slug = same entry" convention collapses the
+            // moment slugs are translated (/about-us vs /ueber-uns).
+            $table->char('translation_group', 26)->nullable();
+            $table->index(['translation_group', 'locale']);
             $table->timestamp('published_at')->nullable()->index();
             $table->timestamp('unpublish_at')->nullable()->index();
             $table->char('author_id', 26)->nullable();
@@ -32,12 +40,143 @@ class TableGenerator
             // EntryResource default-sorts by updated_at desc.
             $table->index('updated_at');
 
+            if ($type->hierarchical) {
+                // Structural columns for nested content: adjacency parent,
+                // sibling order, and the materialized path (joined ancestor
+                // slugs) that makes nested URL resolution one indexed read.
+                $table->char('parent_id', 26)->nullable()->index();
+                $table->unsignedInteger('position')->default(0);
+                $table->string('path', 2048)->nullable();
+                $table->index(['path', 'locale']);
+            }
+
             foreach ($type->columnFields() as $field) {
                 $field->type->addColumn($table, $field->handle);
             }
         });
 
         $this->addGinIndexes($type);
+    }
+
+    /**
+     * Backfill structural hierarchy columns onto a table created before its
+     * type declared `hierarchical` (same upgrade pattern as
+     * addTranslationGroupColumn). Existing rows become roots with
+     * path = slug.
+     */
+    public function addHierarchyColumns(ContentType $type): void
+    {
+        $tableName = $type->tableName();
+
+        if (! $type->hierarchical || ! Schema::hasTable($tableName) || Schema::hasColumn($tableName, 'parent_id')) {
+            return;
+        }
+
+        Schema::table($tableName, function (Blueprint $table): void {
+            $table->char('parent_id', 26)->nullable()->index();
+            $table->unsignedInteger('position')->default(0);
+            $table->string('path', 2048)->nullable();
+        });
+
+        try {
+            Schema::table($tableName, function (Blueprint $table): void {
+                $table->index(['path', 'locale']);
+            });
+        } catch (\Throwable $e) {
+            if (! preg_match('/already exists|duplicate/i', $e->getMessage())) {
+                throw $e;
+            }
+        }
+
+        $slugHandle = $this->firstSlugHandle($type);
+        if ($slugHandle !== null) {
+            // Chunked per-row copy instead of a column-to-column raw UPDATE:
+            // portable across drivers (double-quoted identifiers are string
+            // literals on default-config MySQL) and this is a one-time
+            // upgrade path, not a hot path.
+            DB::table($tableName)
+                ->whereNull('path')
+                ->orderBy('id')
+                ->chunkById(500, function ($rows) use ($tableName, $slugHandle): void {
+                    foreach ($rows as $row) {
+                        $slug = $row->{$slugHandle} ?? null;
+                        if (is_string($slug) && $slug !== '') {
+                            DB::table($tableName)->where('id', $row->id)->update(['path' => $slug]);
+                        }
+                    }
+                });
+        }
+    }
+
+    /**
+     * Backfill the translation_group column onto a content-type table
+     * created before it existed. Safe to run repeatedly.
+     *
+     * Existing locale variants were linked by the "same slug" convention, so
+     * the backfill preserves that linkage: on localizable types, rows sharing
+     * a slug become one group keyed by the oldest row's id (ULIDs sort by
+     * creation time); every remaining row becomes its own group.
+     */
+    public function addTranslationGroupColumn(ContentType $type): void
+    {
+        $tableName = $type->tableName();
+
+        if (! Schema::hasTable($tableName)) {
+            return;
+        }
+
+        if (! Schema::hasColumn($tableName, 'translation_group')) {
+            Schema::table($tableName, function (Blueprint $table): void {
+                $table->char('translation_group', 26)->nullable();
+            });
+
+            try {
+                Schema::table($tableName, function (Blueprint $table): void {
+                    $table->index(['translation_group', 'locale']);
+                });
+            } catch (\Throwable $e) {
+                if (! preg_match('/already exists|duplicate/i', $e->getMessage())) {
+                    throw $e;
+                }
+            }
+        }
+
+        $slugHandle = $this->firstSlugHandle($type);
+
+        if ($type->localizable && $slugHandle !== null) {
+            $slugs = DB::table($tableName)
+                ->whereNull('translation_group')
+                ->whereNotNull($slugHandle)
+                ->where($slugHandle, '!=', '')
+                ->distinct()
+                ->pluck($slugHandle);
+
+            foreach ($slugs as $slug) {
+                $rootId = DB::table($tableName)->where($slugHandle, $slug)->min('id');
+                if (is_string($rootId)) {
+                    DB::table($tableName)
+                        ->whereNull('translation_group')
+                        ->where($slugHandle, $slug)
+                        ->update(['translation_group' => $rootId]);
+                }
+            }
+        }
+
+        // Everything left (no slug, non-localizable types) is its own group.
+        DB::table($tableName)
+            ->whereNull('translation_group')
+            ->update(['translation_group' => DB::raw('id')]);
+    }
+
+    private function firstSlugHandle(ContentType $type): ?string
+    {
+        foreach ($type->fields as $field) {
+            if ($field->type instanceof SlugField) {
+                return $field->handle;
+            }
+        }
+
+        return null;
     }
 
     public function dropTable(ContentType $type): void

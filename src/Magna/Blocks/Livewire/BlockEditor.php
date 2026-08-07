@@ -7,8 +7,12 @@ namespace Magna\Blocks\Livewire;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Modelable;
+use Livewire\Attributes\On;
 use Livewire\Component;
+use Magna\Blocks\BlockField;
 use Magna\Blocks\BlockRegistry;
+use Magna\Media\Media;
+use Magna\Media\MediaUrlResolver;
 use RuntimeException;
 
 /**
@@ -328,6 +332,139 @@ class BlockEditor extends Component
             return;
         }
         $this->sections[$sectionIndex]['columns'][$columnIndex]['blocks'][$blockIndex]['data'][$fieldHandle] = $value;
+    }
+
+    // ── Repeater fields ───────────────────────────────────────────────────────
+
+    public function addRepeaterItem(int $sectionIndex, int $columnIndex, int $blockIndex, string $fieldHandle): void
+    {
+        $field = $this->repeaterField($sectionIndex, $columnIndex, $blockIndex, $fieldHandle);
+        if ($field === null) {
+            return;
+        }
+
+        $items = $this->sections[$sectionIndex]['columns'][$columnIndex]['blocks'][$blockIndex]['data'][$fieldHandle] ?? [];
+        if (! is_array($items) || ! array_is_list($items)) {
+            $items = [];
+        }
+
+        if (count($items) >= BlockField::MAX_REPEATER_ITEMS) {
+            return;
+        }
+
+        $item = [];
+        foreach ($field->fields as $itemField) {
+            $item[$itemField->handle] = $itemField->default
+                ?? ($itemField->type === 'boolean' ? false : '');
+        }
+
+        $items[] = $item;
+        $this->sections[$sectionIndex]['columns'][$columnIndex]['blocks'][$blockIndex]['data'][$fieldHandle] = $items;
+    }
+
+    public function removeRepeaterItem(int $sectionIndex, int $columnIndex, int $blockIndex, string $fieldHandle, int $itemIndex): void
+    {
+        if ($this->repeaterField($sectionIndex, $columnIndex, $blockIndex, $fieldHandle) === null) {
+            return;
+        }
+
+        $items = $this->sections[$sectionIndex]['columns'][$columnIndex]['blocks'][$blockIndex]['data'][$fieldHandle] ?? [];
+        if (! is_array($items) || ! isset($items[$itemIndex])) {
+            return;
+        }
+
+        array_splice($items, $itemIndex, 1);
+        $this->sections[$sectionIndex]['columns'][$columnIndex]['blocks'][$blockIndex]['data'][$fieldHandle] = array_values($items);
+    }
+
+    /**
+     * The block's repeater field definition for a handle, or null when the
+     * block/field is unknown or not a repeater (guards Livewire calls).
+     */
+    private function repeaterField(int $sectionIndex, int $columnIndex, int $blockIndex, string $fieldHandle): ?BlockField
+    {
+        $block = $this->sections[$sectionIndex]['columns'][$columnIndex]['blocks'][$blockIndex] ?? null;
+        if (! is_array($block)) {
+            return null;
+        }
+
+        $definition = app(BlockRegistry::class)->get($block['block']);
+        if ($definition === null) {
+            return null;
+        }
+
+        $field = $definition->field($fieldHandle);
+
+        return $field !== null && $field->type === 'repeater' ? $field : null;
+    }
+
+    // ── Media fields ──────────────────────────────────────────────────────────
+
+    /**
+     * Receive a selection from the global media-picker modal
+     * (<livewire:magna-media-picker />). The blade dispatches
+     * magna:open-media-picker with target "block-field:{si}:{ci}:{bi}:{handle}";
+     * the id echoed back here is the Media ULID block views resolve
+     * (see resources/views/blocks/image.blade.php — media is stored by id,
+     * never by disk path, so documents stay portable).
+     */
+    #[On('magna:media-selected')]
+    public function onMediaSelected(string $path, string $url, string $disk, string $target, string $id = ''): void
+    {
+        if (! str_starts_with($target, 'block-field:')) {
+            return; // a different picker consumer's selection
+        }
+
+        $parts = explode(':', $target);
+        if (count($parts) !== 5 || $id === '') {
+            return;
+        }
+
+        [, $si, $ci, $bi, $fieldHandle] = $parts;
+        if (! ctype_digit($si) || ! ctype_digit($ci) || ! ctype_digit($bi) || $fieldHandle === '') {
+            return;
+        }
+
+        $this->updateBlockData((int) $si, (int) $ci, (int) $bi, $fieldHandle, $id);
+    }
+
+    public function clearMediaField(int $sectionIndex, int $columnIndex, int $blockIndex, string $fieldHandle): void
+    {
+        $this->updateBlockData($sectionIndex, $columnIndex, $blockIndex, $fieldHandle, null);
+    }
+
+    /**
+     * Thumbnail URL for a stored media value (Media ULID), or null when the
+     * value is empty, unknown, or not an image. Used by the editor blade for
+     * the field preview.
+     */
+    public function mediaThumbUrl(mixed $mediaId): ?string
+    {
+        $media = $this->findMedia($mediaId);
+        if ($media === null || ! $media->isImage()) {
+            return null;
+        }
+
+        return app(MediaUrlResolver::class)->publicUrl($media, 'thumb');
+    }
+
+    /** Human label for a stored media value, or null when unresolvable. */
+    public function mediaLabel(mixed $mediaId): ?string
+    {
+        $media = $this->findMedia($mediaId);
+
+        return $media !== null
+            ? (filled($media->title) ? (string) $media->title : $media->original_filename)
+            : null;
+    }
+
+    private function findMedia(mixed $mediaId): ?Media
+    {
+        if (! is_string($mediaId) || $mediaId === '') {
+            return null;
+        }
+
+        return Media::query()->find($mediaId);
     }
 
     // ── Serialise & save ──────────────────────────────────────────────────────

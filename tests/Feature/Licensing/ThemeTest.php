@@ -18,46 +18,24 @@ use Symfony\Component\Filesystem\Filesystem;
  * boot code, and a broken one must never be able to hide the others.
  */
 beforeEach(function (): void {
-    $this->themeRoot = base_path('themes');
+    // Fully isolated themes directory per test (parallel-safe) — the repo's
+    // real themes/ now ships first-party themes (magna/launch), so tests
+    // must never assume it is empty or write into it.
+    $this->themeRoot = storage_path('framework/testing/themes-'.uniqid());
     $this->files = new Filesystem;
+    $this->files->mkdir($this->themeRoot, 0755);
 
-    // Tests run against the real themes/ directory, so remember what was
-    // there and put it back afterwards rather than assuming it is empty.
-    //
-    // Snapshot at {vendor}/{theme} depth, not {vendor}: these fixtures all
-    // live under themes/acme/, so a vendor-level snapshot treats that whole
-    // directory as pre-existing the moment one fixture survives (an
-    // interrupted run, a crashed test) and never cleans anything inside it
-    // again. The leftovers then show up as extra themes in every later run —
-    // which is exactly how this suite started failing.
-    $this->preExisting = is_dir($this->themeRoot) ? (array) glob($this->themeRoot.'/*/*') : [];
-    $this->preExistingVendors = is_dir($this->themeRoot) ? (array) glob($this->themeRoot.'/*') : [];
+    config(['magna.themes_path' => $this->themeRoot]);
 });
 
 afterEach(function (): void {
-    foreach ((array) glob($this->themeRoot.'/*/*') as $path) {
-        if (! in_array($path, $this->preExisting, true)) {
-            $this->files->remove($path);
-        }
-    }
-
-    // Drop vendor directories this suite created, so themes/ is left the way
-    // it was found. Never touch one that was already there.
-    foreach ((array) glob($this->themeRoot.'/*') as $vendorDir) {
-        if (
-            ! in_array($vendorDir, $this->preExistingVendors, true)
-            && is_dir($vendorDir)
-            && (glob($vendorDir.'/*') ?: []) === []
-        ) {
-            $this->files->remove($vendorDir);
-        }
-    }
+    $this->files->remove($this->themeRoot);
 });
 
 function writeTheme(string $name, array $overrides = []): string
 {
     $files = new Filesystem;
-    $dir = base_path('themes/'.$name);
+    $dir = app(ThemeManager::class)->directory().'/'.$name;
     $files->mkdir($dir, 0755);
 
     $manifest = array_merge([
@@ -81,7 +59,7 @@ it('discovers installed themes and ignores unreadable ones', function (): void {
 
     // Broken JSON: skipped, not fatal — an admin has to be able to see the
     // list in order to remove the thing that is broken.
-    $broken = base_path('themes/acme/broken');
+    $broken = app(ThemeManager::class)->directory().'/acme/broken';
     (new Filesystem)->mkdir($broken, 0755);
     file_put_contents($broken.'/theme.json', '{not json');
 
@@ -117,7 +95,7 @@ it('activates, deactivates and removes a theme', function (): void {
     // Removing the active theme must clear the setting too — otherwise the
     // site points at a directory that no longer exists.
     expect(ThemeSettings::get()->active)->toBeNull()
-        ->and(is_dir(base_path('themes/acme/clean')))->toBeFalse();
+        ->and(is_dir(app(ThemeManager::class)->directory().'/acme/clean'))->toBeFalse();
 });
 
 it('refuses to activate a theme built for another core version', function (): void {
@@ -167,7 +145,7 @@ it('installs a licensed theme into themes/ and leaves it inactive', function ():
     @unlink($zipPath);
 
     expect($message)->toContain('Aurora')
-        ->and(is_file(base_path('themes/acme/aurora/theme.json')))->toBeTrue()
+        ->and(is_file(app(ThemeManager::class)->directory().'/acme/aurora/theme.json'))->toBeTrue()
         // Buying a theme must not silently change what a live site presents.
         ->and(ThemeSettings::get()->active)->toBeNull()
         // And nothing about a theme may end up in the plugin registry.
@@ -204,5 +182,5 @@ it('refuses a theme archive that is not the product the licence covers', functio
 
     @unlink($zipPath);
 
-    expect(is_dir(base_path('themes/acme/other')))->toBeFalse();
+    expect(is_dir(app(ThemeManager::class)->directory().'/acme/other'))->toBeFalse();
 });

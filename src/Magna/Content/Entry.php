@@ -19,6 +19,10 @@ use Magna\Content\Exceptions\SchemaException;
  * @property string $id
  * @property EntryStatus $status
  * @property string $locale
+ * @property string|null $translation_group
+ * @property string|null $parent_id
+ * @property int $position
+ * @property string|null $path
  * @property Carbon|null $published_at
  * @property Carbon|null $unpublish_at
  * @property string|null $author_id

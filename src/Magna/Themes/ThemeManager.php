@@ -26,7 +26,11 @@ class ThemeManager
     /** Absolute path of the themes directory. */
     public function directory(): string
     {
-        return base_path('themes');
+        $configured = config('magna.themes_path');
+
+        return is_string($configured) && $configured !== ''
+            ? $configured
+            : base_path('themes');
     }
 
     public function pathFor(string $name): string

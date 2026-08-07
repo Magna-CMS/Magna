@@ -599,7 +599,9 @@ it('EntryManager round-trips a blocks_data column through create → read', func
                     'span' => 12,
                     'settings' => [],
                     'blocks' => [
-                        ['id' => 'blk-rt', 'block' => 'text', 'settings' => [], 'data' => ['content' => 'Hello world']],
+                        // 'body' is the text block's real (required) field handle —
+                        // save-path validation now enforces block field rules.
+                        ['id' => 'blk-rt', 'block' => 'text', 'settings' => [], 'data' => ['body' => 'Hello world']],
                     ],
                 ],
             ],
@@ -624,5 +626,5 @@ it('EntryManager round-trips a blocks_data column through create → read', func
     expect($readTree)->toBeArray()
         ->and($readTree[0]['id'])->toBe('sec-rt')
         ->and($readTree[0]['settings']['tokenOverrides']['color-brand'])->toBe('#6366f1')
-        ->and($readTree[0]['columns'][0]['blocks'][0]['data']['content'])->toBe('Hello world');
+        ->and($readTree[0]['columns'][0]['blocks'][0]['data']['body'])->toBe('Hello world');
 });

@@ -30,9 +30,10 @@ class RoleSeeder extends Seeder
             'description' => 'Full administrative access via explicit grants.',
         ]);
         // blocks.raw_html deliberately NOT granted to 'editor' below — see
-        // PageTreeValidator::RAW_HTML_BLOCK_HANDLES: it's a distinct,
+        // PageTreeAuthorizer::RAW_HTML_BLOCK_HANDLES: it's a distinct,
         // escalated-trust permission from ordinary content editing, since
-        // the html/text block types render content unescaped.
+        // the html block renders content unescaped and unsanitized (the
+        // text block is sanitized and needs no gate).
         $admin->grant('panel.access', 'users.*', 'roles.*', 'settings.*', 'plugins.*', 'audit.*', 'blocks.preview', 'blocks.raw_html');
 
         $editor = Role::query()->updateOrCreate(['handle' => 'editor'], [

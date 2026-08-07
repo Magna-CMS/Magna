@@ -14,12 +14,24 @@ use LogicException;
  * @property string $entry_type
  * @property string $entry_id
  * @property array<string, mixed> $payload
+ * @property string $kind
+ * @property string|null $label
+ * @property string|null $schema_version
  * @property string|null $author_id
  * @property Carbon $created_at
  */
 class Revision extends Model
 {
     use HasUlids;
+
+    /** Why a snapshot exists. Labeled revisions are pruning-exempt. */
+    public const KIND_SAVE = 'save';
+
+    public const KIND_PUBLISH = 'publish';
+
+    public const KIND_RESTORE_POINT = 'restore_point';
+
+    public const KIND_AUTOSAVE = 'autosave';
 
     public const UPDATED_AT = null;
 
@@ -29,6 +41,9 @@ class Revision extends Model
         'entry_type',
         'entry_id',
         'payload',
+        'kind',
+        'label',
+        'schema_version',
         'author_id',
     ];
 

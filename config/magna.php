@@ -32,6 +32,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Themes directory
+    |--------------------------------------------------------------------------
+    | Where installed theme packages live (themes/{vendor}/{name}). Only
+    | overridden in tests; production installs use the repository default.
+    */
+    'themes_path' => env('MAGNA_THEMES_PATH'),
+
+    /*
+    |--------------------------------------------------------------------------
     | API Token Expiry (days)
     |--------------------------------------------------------------------------
     */

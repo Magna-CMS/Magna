@@ -6,9 +6,23 @@
     "fields": [
         {
             "handle": "items",
-            "type": "json",
-            "label": "FAQ items (JSON array: [{question, answer}])",
-            "required": false
+            "type": "repeater",
+            "label": "FAQ items",
+            "required": false,
+            "fields": [
+                {
+                    "handle": "question",
+                    "type": "text",
+                    "label": "Question",
+                    "required": true
+                },
+                {
+                    "handle": "answer",
+                    "type": "textarea",
+                    "label": "Answer",
+                    "required": true
+                }
+            ]
         }
     ]
 }

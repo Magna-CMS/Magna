@@ -155,11 +155,20 @@ class MediaPickerModal extends Component
     {
         $url = Storage::disk($disk)->url($path);
 
+        // Include the media id so hosts can store a stable reference (block
+        // documents store media by ULID, not by disk path). Additive event
+        // field — existing listeners that don't declare it are unaffected.
+        $media = Media::query()
+            ->where('path', $path)
+            ->where('disk', $disk)
+            ->first();
+
         $this->dispatch('magna:media-selected',
             path: $path,
             url: $url,
             disk: $disk,
             target: $this->target,
+            id: $media !== null ? $media->id : '',
         );
 
         $this->open = false;

@@ -18,10 +18,14 @@ use Magna\Blocks\Contracts\ProvidesOptions;
  *   options?: array<string, string>,
  *   optionsFrom?: string,
  *   multiple?: bool,
+ *   fields?: list<mixed>,
  * }
  */
 final class BlockField
 {
+    /** Repeater safety cap — a document field is not a data import. */
+    public const MAX_REPEATER_ITEMS = 100;
+
     public function __construct(
         public readonly string $handle,
         public readonly string $type,
@@ -32,6 +36,8 @@ final class BlockField
         public readonly array $options,
         public readonly ?string $optionsFrom,
         public readonly bool $multiple,
+        /** @var list<BlockField> Item fields when type === 'repeater' */
+        public readonly array $fields = [],
     ) {}
 
     /**
@@ -60,6 +66,21 @@ final class BlockField
             ? $data['optionsFrom']
             : null;
 
+        $itemFields = [];
+        if ($type === 'repeater' && isset($data['fields']) && is_array($data['fields'])) {
+            foreach ($data['fields'] as $itemFieldRaw) {
+                if (is_array($itemFieldRaw)) {
+                    $itemField = self::fromArray($itemFieldRaw);
+                    if ($itemField->type === 'repeater') {
+                        throw new \InvalidArgumentException(
+                            "Repeater field \"{$handle}\" must not nest another repeater."
+                        );
+                    }
+                    $itemFields[] = $itemField;
+                }
+            }
+        }
+
         return new self(
             handle: $handle,
             type: $type,
@@ -69,7 +90,120 @@ final class BlockField
             options: $options,
             optionsFrom: $optionsFrom,
             multiple: isset($data['multiple']) && (bool) $data['multiple'],
+            fields: $itemFields,
         );
+    }
+
+    /**
+     * Validate a present, non-bound value against this field's type rules.
+     * Requiredness and `$bind` handling live in BlockDefinition::validate();
+     * only the new typed fields validate values — legacy free-form types
+     * (text, textarea, richtext, json, select, number, media, url) keep
+     * their historical tolerance so existing stored content never starts
+     * failing saves retroactively.
+     *
+     * @return list<string>
+     */
+    public function validateValue(mixed $value): array
+    {
+        return match ($this->type) {
+            'alignment' => in_array($value, ['left', 'center', 'right'], true)
+                ? []
+                : ["The {$this->label} field must be left, center, or right."],
+            'color' => $this->validateColor($value),
+            'icon' => is_string($value) && preg_match('/^[a-z0-9:.-]+$/', $value) === 1
+                ? []
+                : ["The {$this->label} field must be an icon name (lowercase letters, digits, dashes)."],
+            'link' => $this->validateLink($value),
+            'repeater' => $this->validateRepeater($value),
+            default => [],
+        };
+    }
+
+    /** @return list<string> */
+    private function validateColor(mixed $value): array
+    {
+        $valid = is_string($value) && (
+            preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $value) === 1
+            || preg_match('/^token:[a-z][a-z0-9-]*$/', $value) === 1
+        );
+
+        return $valid
+            ? []
+            : ["The {$this->label} field must be a hex color (#rrggbb) or a design-token reference (token:name)."];
+    }
+
+    /** @return list<string> */
+    private function validateLink(mixed $value): array
+    {
+        // Entry-reference shape (the builder's page/entry link picker).
+        if (is_array($value)) {
+            $type = $value['entry_type'] ?? null;
+            $id = $value['entry_id'] ?? null;
+
+            return is_string($type) && $type !== '' && is_string($id) && $id !== ''
+                ? []
+                : ["The {$this->label} field's entry link needs entry_type and entry_id."];
+        }
+
+        if (! is_string($value) || $value === '') {
+            return ["The {$this->label} field must be a URL or an entry link."];
+        }
+
+        // Relative paths and fragments are fine; absolute URLs must carry an
+        // allowed scheme (matches Support\SafeUrl).
+        if (str_starts_with($value, '/') || str_starts_with($value, '#')) {
+            return [];
+        }
+
+        $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+
+        return in_array($scheme, ['http', 'https', 'mailto', 'tel'], true)
+            ? []
+            : ["The {$this->label} field's URL scheme must be http, https, mailto, or tel."];
+    }
+
+    /** @return list<string> */
+    private function validateRepeater(mixed $value): array
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return ["The {$this->label} field must be a list of items."];
+        }
+
+        if (count($value) > self::MAX_REPEATER_ITEMS) {
+            return ["The {$this->label} field exceeds ".self::MAX_REPEATER_ITEMS.' items.'];
+        }
+
+        $errors = [];
+        foreach ($value as $index => $item) {
+            if (! is_array($item)) {
+                $errors[] = "The {$this->label} field's item #{$index} must be an object.";
+
+                continue;
+            }
+
+            foreach ($this->fields as $itemField) {
+                $itemValue = $item[$itemField->handle] ?? null;
+
+                if (is_array($itemValue) && array_key_exists('$bind', $itemValue)) {
+                    continue;
+                }
+
+                if ($itemField->required && ($itemValue === null || $itemValue === '' || $itemValue === [])) {
+                    $errors[] = "The {$this->label} field's item #{$index} is missing {$itemField->label}.";
+
+                    continue;
+                }
+
+                if ($itemValue !== null) {
+                    foreach ($itemField->validateValue($itemValue) as $message) {
+                        $errors[] = "The {$this->label} field's item #{$index}: {$message}";
+                    }
+                }
+            }
+        }
+
+        return $errors;
     }
 
     /**

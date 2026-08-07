@@ -15,6 +15,12 @@ final class ContentType
         public readonly bool $localizable,
         public readonly bool $draftable,
         public readonly array $fields,
+        /**
+         * Hierarchical types get structural columns (parent_id, position,
+         * path) on their generated table; the path column is the joined
+         * ancestor slugs and drives nested URL resolution.
+         */
+        public readonly bool $hierarchical = false,
     ) {}
 
     /**
@@ -46,7 +52,7 @@ final class ContentType
             throw new SchemaException("Content type \"{$handle}\" \"fields\" must be an array.");
         }
 
-        $reserved = ['id', 'status', 'locale', 'published_at', 'unpublish_at', 'author_id', 'draft_of', 'created_at', 'updated_at'];
+        $reserved = ['id', 'status', 'locale', 'translation_group', 'published_at', 'unpublish_at', 'author_id', 'draft_of', 'created_at', 'updated_at', 'parent_id', 'position', 'path'];
 
         /** @var list<Field> $fields */
         $fields = [];
@@ -67,6 +73,7 @@ final class ContentType
             localizable: $localizable,
             draftable: $draftable,
             fields: $fields,
+            hierarchical: isset($data['hierarchical']) && (bool) $data['hierarchical'],
         );
     }
 
@@ -174,6 +181,7 @@ final class ContentType
             'displayName' => $this->displayName,
             'localizable' => $this->localizable,
             'draftable' => $this->draftable,
+            'hierarchical' => $this->hierarchical,
             'fields' => array_map(fn (Field $f): array => $f->toArray(), $this->fields),
         ];
     }

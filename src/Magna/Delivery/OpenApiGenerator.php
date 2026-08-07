@@ -278,6 +278,7 @@ final class OpenApiGenerator
                         ['name' => 'with', 'in' => 'query', 'schema' => ['type' => 'string']],
                         ['name' => 'preview', 'in' => 'query', 'schema' => ['type' => 'integer', 'enum' => [0, 1]]],
                         ['name' => 'preview_token', 'in' => 'query', 'schema' => ['type' => 'string']],
+                        ['name' => 'resolve', 'in' => 'query', 'schema' => ['type' => 'integer', 'enum' => [0, 1]], 'description' => 'Attach _resolved data (entry lists, sanitized richtext, menus) to every block in blocks fields'],
                     ],
                     'responses' => [
                         '200' => ['description' => 'OK'],
@@ -366,6 +367,7 @@ final class OpenApiGenerator
             ['name' => 'filter', 'in' => 'query', 'style' => 'deepObject', 'explode' => true, 'schema' => ['type' => 'object'], 'description' => 'Filters: filter[field][op]=value'],
             ['name' => 'preview', 'in' => 'query', 'schema' => ['type' => 'integer', 'enum' => [0, 1]]],
             ['name' => 'preview_token', 'in' => 'query', 'schema' => ['type' => 'string']],
+            ['name' => 'resolve', 'in' => 'query', 'schema' => ['type' => 'integer', 'enum' => [0, 1]], 'description' => 'Attach _resolved data (entry lists, sanitized richtext, menus) to every block in blocks fields'],
         ];
     }
 

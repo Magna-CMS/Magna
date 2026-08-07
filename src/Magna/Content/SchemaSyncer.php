@@ -55,6 +55,14 @@ class SchemaSyncer
     {
         $diff = $this->differ->diffAll($registry);
 
+        // Structural columns (hierarchy) sit outside the field differ: a type
+        // that turned hierarchical after its table was created gets the
+        // columns backfilled here. No-op (one hasColumn check) otherwise,
+        // and never destructive — the columns are only ever added.
+        foreach ($registry->all() as $type) {
+            $this->generator->addHierarchyColumns($type);
+        }
+
         if ($diff->isEmpty()) {
             return $diff;
         }

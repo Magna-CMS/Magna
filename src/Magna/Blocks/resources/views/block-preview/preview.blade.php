@@ -57,7 +57,7 @@
                         @if($def)
                             <div class="magna-block" data-block-id="{{ $block->id }}" data-handle="{{ $block->block }}">
                                 @include('magna::blocks.' . $block->block, [
-                                    'block' => $block->toArray(),
+                                    'block' => $resolver->viewPayload($block),
                                     'definition' => $def,
                                 ])
                             </div>

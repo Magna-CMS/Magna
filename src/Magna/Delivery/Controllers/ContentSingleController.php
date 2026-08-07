@@ -11,6 +11,7 @@ use Magna\Content\Entry;
 use Magna\Content\EntryStatus;
 use Magna\Content\FieldTypes\RelationField;
 use Magna\Content\SchemaRegistry;
+use Magna\Delivery\BlocksDocumentResolution;
 use Magna\Delivery\EntryTransformer;
 use Magna\Delivery\ETagService;
 use Magna\Delivery\PreviewTokenService;
@@ -31,6 +32,7 @@ final class ContentSingleController extends DeliveryController
         private readonly ETagService $etag,
         private readonly PreviewTokenService $previewTokens,
         private readonly ResponseCacheService $responseCache,
+        private readonly BlocksDocumentResolution $blocksResolution,
     ) {}
 
     public function __invoke(Request $request, string $type, string $id): Response
@@ -175,6 +177,10 @@ final class ContentSingleController extends DeliveryController
             : [];
 
         $data = $this->transformer->transformOne($entry, $contentType, $fields, $relations, $mediaCache, $keys);
+
+        if ($request->boolean('resolve')) {
+            $data = $this->blocksResolution->apply($data, $contentType);
+        }
 
         $body = ['data' => $data];
         $json = json_encode($body);

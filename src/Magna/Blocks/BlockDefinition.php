@@ -99,8 +99,23 @@ final class BlockDefinition
         foreach ($this->fields as $field) {
             $value = $data[$field->handle] ?? null;
 
+            // A field binding ({"$bind": "entry.title"}) resolves at render
+            // time and satisfies requiredness — validating the literal here
+            // would false-fail every bound field.
+            if (is_array($value) && array_key_exists('$bind', $value)) {
+                continue;
+            }
+
             if ($field->required && ($value === null || $value === '' || $value === [])) {
                 $errors[$field->handle][] = "The {$field->label} field is required.";
+
+                continue;
+            }
+
+            if ($value !== null) {
+                foreach ($field->validateValue($value) as $message) {
+                    $errors[$field->handle][] = $message;
+                }
             }
         }
 

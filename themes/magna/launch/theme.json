@@ -1,0 +1,12 @@
+{
+    "name": "magna/launch",
+    "displayName": "Launch",
+    "description": "The Magna default theme: clean, editorial, and fast. Versatile enough for a bakery, a startup, or a law firm — tokens do the personalization.",
+    "version": "0.1.0",
+    "author": "Magna Team",
+    "license": "MIT",
+    "compat": {
+        "magna": "^1.0"
+    },
+    "tags": ["multi-purpose", "editorial", "default"]
+}
