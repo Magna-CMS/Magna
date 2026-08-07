@@ -45,6 +45,7 @@ class LicenseInstaller
 
     public function __construct(
         private readonly LicenseClient $client,
+        private readonly DownloadGrantClient $grants,
         private readonly LicenseStore $store,
         private readonly PluginManager $plugins,
         private readonly PackageExtractor $extractor,
@@ -161,7 +162,7 @@ class LicenseInstaller
             throw new RuntimeException('No licence for '.$productSlug.' is active on this site.');
         }
 
-        $grant = $this->client->downloadUrl($entry->token);
+        $grant = $this->grants->grant($entry->token);
 
         if ($grant === null) {
             // Carry the marketplace's own words. "Did not authorise a download"
@@ -169,7 +170,7 @@ class LicenseInstaller
             // review, a lapsed entitlement, an outage and a signature that did
             // not verify — five different fixes behind one message nobody could
             // act on.
-            $reason = $this->client->lastDownloadError();
+            $reason = $this->grants->lastError();
 
             throw new RuntimeException(
                 'The licence server did not authorise a download for '.$productSlug.

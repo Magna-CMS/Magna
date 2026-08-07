@@ -33,9 +33,6 @@ use Throwable;
  */
 class LicenseClient
 {
-    /** Set by downloadUrl() so a caller can say which refusal it hit. */
-    private ?string $lastDownloadError = null;
-
     /** How long the account page's read-only data is reused. */
     private const PAGE_CACHE_SECONDS = 60;
 
@@ -430,66 +427,6 @@ class LicenseClient
             'token' => $token,
             'fingerprint' => InstallFingerprint::derive(),
         ]));
-    }
-
-    /**
-     * Trade an activation token for a short-lived, single-use download grant.
-     *
-     * @return array<array-key, mixed>|null
-     */
-    public function downloadUrl(string $token): ?array
-    {
-        $this->lastDownloadError = null;
-
-        $response = $this->post('/license/download-url', [
-            'token' => $token,
-            'fingerprint' => InstallFingerprint::derive(),
-        ]);
-
-        // Every refusal used to collapse into the same null: a token the
-        // marketplace does not recognise, a package that was never approved, an
-        // entitlement that lapsed, an unreachable server, a response that failed
-        // signature verification. The panel then said "the licence server did
-        // not authorise a download" for all five, which is unfalsifiable from
-        // the outside — the reason has to survive the trip.
-        if ($response === null) {
-            $this->lastDownloadError = 'the licence server could not be reached';
-
-            return null;
-        }
-
-        if (! $response->successful()) {
-            $message = $response->json('message');
-            $code = $response->json('error');
-
-            $this->lastDownloadError = is_string($message) && $message !== ''
-                ? $message.(is_string($code) && $code !== '' ? ' ('.$code.')' : '')
-                : 'the licence server answered '.$response->status();
-
-            return null;
-        }
-
-        $payload = $this->signed($response);
-
-        if ($payload === null) {
-            $this->lastDownloadError = 'the response could not be verified against the licence key this build carries';
-
-            return null;
-        }
-
-        $grant = is_array($payload['download'] ?? null) ? $payload['download'] : null;
-
-        if ($grant === null) {
-            $this->lastDownloadError = 'the response carried no download grant';
-        }
-
-        return $grant;
-    }
-
-    /** Why the last downloadUrl() call came back empty, or null when it did not. */
-    public function lastDownloadError(): ?string
-    {
-        return $this->lastDownloadError;
     }
 
     /** Release this site's seat on a licence. */
