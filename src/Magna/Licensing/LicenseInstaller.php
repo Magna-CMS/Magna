@@ -325,12 +325,15 @@ class LicenseInstaller
             // failed update, and for a paid plugin it reads as a licence problem.
             $this->versions->record($manifest->name, $manifest->version);
 
-            if (! $isUpdate) {
-                // A freshly installed licensed plugin is enabled right away —
-                // the admin explicitly asked for it from their own wallet,
-                // which is the deliberate action a bundled plugin lacks.
-                $this->plugins->enable($manifest->name);
-            }
+            // On an update as well as a first install. enable() is the one place
+            // that runs a plugin's migrations and registers its permissions, and
+            // skipping it on update meant an update was applied as files only:
+            // new code against an old schema, which surfaces on the next request
+            // as "no such table" for a migration that never ran. A first install
+            // is also switched on here, because the admin asked for it from their
+            // own wallet — the deliberate action a bundled plugin lacks — and the
+            // record above already carries enabled for an update.
+            $this->plugins->enable($manifest->name);
 
             return $isUpdate
                 ? $manifest->name.' updated to '.$manifest->version.'.'
