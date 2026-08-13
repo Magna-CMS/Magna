@@ -20,7 +20,14 @@ class SecurityHeadersMiddleware
         $response = $next($request);
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'DENY');
+
+        // DENY is the default, not a mandate: a response that already set
+        // its own framing policy did so deliberately (the Pages builder
+        // canvas frames itself same-origin) and appending over it here
+        // would make that opt-in impossible — this middleware runs LAST.
+        if (! $response->headers->has('X-Frame-Options')) {
+            $response->headers->set('X-Frame-Options', 'DENY');
+        }
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 

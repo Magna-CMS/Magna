@@ -142,8 +142,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [RefreshDatabaseContentTypes::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // api/* always answers JSON; everywhere else the client decides via
+        // its Accept header (Laravel's own default, which this callback
+        // REPLACES rather than extends — dropping expectsJson() here silently
+        // turned every failed validate() on a web-group JSON client, e.g.
+        // the Pages builder SPA, into a 302 redirect with session errors).
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
 
         // Reporting must never be the thing that kills the request.
