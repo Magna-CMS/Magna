@@ -1,0 +1,8 @@
+{
+    "name": "addonvendor/pages-kit",
+    "displayName": "Pages Kit for Addon Host",
+    "version": "0.1.0",
+    "type": "magna-theme-addon",
+    "extends": "addonhost/base",
+    "pairsWith": ["magna/pages"]
+}

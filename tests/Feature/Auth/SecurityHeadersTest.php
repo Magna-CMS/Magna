@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
+use Magna\Auth\Http\Middleware\AdminCspMiddleware;
 
 it('attaches security headers to web responses', function (): void {
     // "/" redirects guests to the panel login; assert on the 200 login page.
@@ -39,4 +40,24 @@ it('login page has security headers', function (): void {
     $this->get(route('auth.login'))
         ->assertHeader('X-Content-Type-Options', 'nosniff')
         ->assertHeader('X-Frame-Options', 'DENY');
+});
+
+it('serves the admin panel itself under the CSP', function (): void {
+    // The middleware existed for months attached to nothing - this pins it
+    // to the real panel so it cannot silently fall off again.
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy', '');
+
+    expect($csp)->toContain("default-src 'self'")
+        ->and($csp)->toContain("object-src 'none'")
+        ->and($csp)->toContain("form-action 'self'");
+});
+
+it('lets a response with its own policy keep it', function (): void {
+    Route::get('/_test_own_csp', function () {
+        return response('ok', 200, ['Content-Security-Policy' => "frame-ancestors 'self'"]);
+    })->middleware(['web', AdminCspMiddleware::class]);
+
+    $csp = $this->get('/_test_own_csp')->headers->get('Content-Security-Policy', '');
+
+    expect($csp)->toBe("frame-ancestors 'self'");
 });

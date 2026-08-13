@@ -1,0 +1,8 @@
+{
+    "name": "addonvendor/star-kit",
+    "displayName": "Star Kit",
+    "version": "0.1.0",
+    "type": "magna-theme-addon",
+    "extends": "*",
+    "pairsWith": ["magna/pages"]
+}

@@ -158,3 +158,30 @@ it('never renders unregistered blocks on the public page', function (): void {
         ->assertSee('Still here')
         ->assertDontSee('vanished_plugin_block');
 });
+
+it('hides sections per device through visibility settings', function (): void {
+    $author = pagesRenderingSetup();
+
+    $entry = app(EntryManager::class)->create('page', [
+        'title' => 'Responsive', 'slug' => 'responsive',
+        'blocks_data' => [[
+            'id' => 'sec-resp', 'type' => 'section',
+            'settings' => ['visibility' => ['desktop' => true, 'tablet' => false, 'mobile' => false]],
+            'columns' => [[
+                'id' => 'col-resp', 'span' => 12, 'settings' => [],
+                'blocks' => [['id' => 'blk-resp', 'block' => 'heading', 'settings' => [], 'data' => ['text' => 'Desktop only']]],
+            ]],
+        ]],
+    ], $author->id);
+    app(EntryManager::class)->publish($entry, actorId: $author->id);
+
+    $html = $this->get('/responsive')->assertOk()->getContent();
+
+    // Hidden devices get their classes; visible ones do not. Space-prefixed
+    // form asserts the CLASS ATTRIBUTE — the utility stylesheet's selectors
+    // are dot-prefixed and must not satisfy (or break) these assertions.
+    expect($html)->toContain(' magna-hide-tablet')
+        ->and($html)->toContain(' magna-hide-mobile')
+        ->and($html)->not->toContain(' magna-hide-desktop')
+        ->and($html)->toContain('@media (max-width: 767.98px)');
+});

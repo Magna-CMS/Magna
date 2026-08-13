@@ -27,7 +27,7 @@ $root = dirname(__DIR__);
  * caught, reported as a failing test and scrolled past. A process that stops is
  * a process that cannot delete anything.
  */
-$refuse = static function (string $reason, string $remedy) use ($root): never {
+$refuse = static function (string $reason, string $remedy): never {
     fwrite(STDERR, PHP_EOL.str_repeat('=', 78).PHP_EOL);
     fwrite(STDERR, 'REFUSING TO RUN TESTS'.PHP_EOL.PHP_EOL);
     fwrite(STDERR, $reason.PHP_EOL.PHP_EOL);

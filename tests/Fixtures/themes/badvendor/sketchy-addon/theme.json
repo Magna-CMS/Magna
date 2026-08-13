@@ -1,0 +1,8 @@
+{
+    "name": "badvendor/sketchy-addon",
+    "displayName": "Sketchy Addon",
+    "version": "0.1.0",
+    "type": "magna-theme-addon",
+    "extends": "*",
+    "pairsWith": ["magna/pages"]
+}
