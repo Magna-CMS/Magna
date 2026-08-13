@@ -11,6 +11,7 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Magna\Blocks\BlockField;
 use Magna\Blocks\BlockRegistry;
+use Magna\Blocks\Contracts\GuardsDocumentEdits;
 use Magna\Media\Media;
 use Magna\Media\MediaUrlResolver;
 use RuntimeException;
@@ -58,6 +59,12 @@ class BlockEditor extends Component
     /** Whether the entry is currently published (affects autosave path) */
     public bool $isPublished = false;
 
+    /**
+     * Who else holds this document's edit lock, or null when we do (or when
+     * no lock provider is installed). Set at mount; save() re-checks live.
+     */
+    public ?string $lockedBy = null;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     /**
@@ -72,6 +79,14 @@ class BlockEditor extends Component
         $source = $blocksData !== '' ? $blocksData : $this->blocksData;
         $decoded = json_decode($source, true) ?: [];
         $this->sections = $this->normalizeTokenOverridesForEditor($decoded);
+
+        // Share the document lock with the visual builder when a provider
+        // is installed (magna/pages binds one) — two editors, one lock.
+        if ($entryId !== '' && app()->bound(GuardsDocumentEdits::class)) {
+            $lock = app(GuardsDocumentEdits::class)
+                ->acquire($entryId, auth()->user());
+            $this->lockedBy = $lock['mine'] ? null : $lock['holderName'];
+        }
     }
 
     /**
@@ -506,6 +521,25 @@ class BlockEditor extends Component
      */
     public function save(): void
     {
+        // Re-checked live, not from the mount-time flag: the lock may have
+        // been taken over (or gone stale and been reacquired) while this
+        // screen sat open. Refusing here keeps the stale serialisation out
+        // of the modelable property, so a form save cannot overwrite what
+        // the lock holder is editing.
+        if ($this->entryId !== '' && app()->bound(GuardsDocumentEdits::class)) {
+            $guard = app(GuardsDocumentEdits::class);
+            if (! $guard->holds($this->entryId, auth()->user())) {
+                $lock = $guard->acquire($this->entryId, auth()->user());
+                if (! $lock['mine']) {
+                    $this->lockedBy = $lock['holderName'];
+                    $this->saveStatus = 'Not saved — '.($lock['holderName'] ?? 'another editor').' is editing this page.';
+
+                    return;
+                }
+                $this->lockedBy = null;
+            }
+        }
+
         $this->saveStatus = 'Saving…';
         $this->blocksData = $this->serialise();
         $this->dispatch('blockEditorUpdated', blocksData: $this->blocksData);

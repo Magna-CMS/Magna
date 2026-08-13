@@ -3,6 +3,7 @@
     "label": "HTML",
     "icon": "heroicon-o-code-bracket",
     "category": "content",
+    "requiresPermission": "blocks.raw_html",
     "fields": [
         {
             "handle": "content",

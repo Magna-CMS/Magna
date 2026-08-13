@@ -18,6 +18,14 @@
      @endif
 >
 
+    {{-- Shared document lock (§E2): the visual builder holds this page. --}}
+    @if($lockedBy !== null)
+        <div class="mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+             role="alert">
+            {{ $lockedBy }} is editing this page in the builder — changes here will not save.
+        </div>
+    @endif
+
     {{-- Header bar --}}
     <div class="flex items-center justify-between rounded-t-lg border border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-white/10 dark:bg-white/5">
         <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">Block Editor</span>
