@@ -21,6 +21,14 @@ final class ContentType
          * ancestor slugs and drives nested URL resolution.
          */
         public readonly bool $hierarchical = false,
+        /**
+         * §C4 publishability boundary: whether this type's entries may be
+         * mounted on the public site at all (collection archive/single
+         * pages). Default OFF — a type opts into public rendering in its
+         * schema; nothing renders publicly by accident. Field-level
+         * exposure is a second, separate opt-in (publicOnFrontend).
+         */
+        public readonly bool $publiclyRenderable = false,
     ) {}
 
     /**
@@ -74,6 +82,7 @@ final class ContentType
             draftable: $draftable,
             fields: $fields,
             hierarchical: isset($data['hierarchical']) && (bool) $data['hierarchical'],
+            publiclyRenderable: isset($data['publiclyRenderable']) && (bool) $data['publiclyRenderable'],
         );
     }
 
@@ -182,6 +191,7 @@ final class ContentType
             'localizable' => $this->localizable,
             'draftable' => $this->draftable,
             'hierarchical' => $this->hierarchical,
+            'publiclyRenderable' => $this->publiclyRenderable,
             'fields' => array_map(fn (Field $f): array => $f->toArray(), $this->fields),
         ];
     }

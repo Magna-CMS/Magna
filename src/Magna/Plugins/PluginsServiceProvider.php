@@ -6,6 +6,7 @@ namespace Magna\Plugins;
 
 use Illuminate\Support\ServiceProvider;
 use Magna\Contracts\RegistersCommands;
+use Magna\Frontend\FrontendPageRegistry;
 use Magna\Install\Installer;
 use Magna\Marketplace\ComposerRunner;
 use Magna\Marketplace\ProcessComposerRunner;
@@ -23,6 +24,10 @@ class PluginsServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // Public pages plugins contribute (ProvidesFrontendPages) — the
+        // Pages plugin's router and menu picker read this.
+        $this->app->singleton(FrontendPageRegistry::class);
+
         $this->app->singleton(PluginDiscovery::class, function (): PluginDiscovery {
             return new PluginDiscovery($this->app->basePath());
         });
@@ -45,6 +50,7 @@ class PluginsServiceProvider extends ServiceProvider
                 new PluginFileRemover($this->app->basePath()),
                 new PluginMigrator,
                 new PluginRegistry($this->app->make(PluginDiscovery::class)),
+                new PluginContractWirer($this->app),
             );
         });
 

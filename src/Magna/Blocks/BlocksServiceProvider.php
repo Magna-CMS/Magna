@@ -29,6 +29,12 @@ class BlocksServiceProvider extends ServiceProvider
 
         $this->app->singleton(PageTreeAuthorizer::class);
 
+        // Plugin data feeds for the Pages Loop block (RegistersDataSources).
+        $this->app->singleton(DataSources\DataSourceRegistry::class);
+
+        // Plugin dynamic tags for page bindings (RegistersDynamicTags).
+        $this->app->singleton(DynamicTags\DynamicTagRegistry::class);
+
         $this->app->singleton(Resolution\BlockDataResolver::class, function (): Resolution\BlockDataResolver {
             $resolver = new Resolution\BlockDataResolver;
 

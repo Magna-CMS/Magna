@@ -86,6 +86,17 @@ final class Field
         );
     }
 
+    /**
+     * §C4 field-level exposure: whether this field's value may appear on
+     * the public site (collection templates, bindings). Default OFF — PII
+     * and internal fields stay private unless the schema says otherwise;
+     * encrypted fields are never public regardless of the flag.
+     */
+    public function publicOnFrontend(): bool
+    {
+        return ! $this->encrypted && ($this->rawData['publicOnFrontend'] ?? false) === true;
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {

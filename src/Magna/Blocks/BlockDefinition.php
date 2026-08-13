@@ -11,6 +11,15 @@ final class BlockDefinition
 {
     /**
      * @param  list<BlockField>  $fields
+     * @param  list<string>  $inlineFields  Field handles this block exposes for editing on the
+     *                                      canvas, in the order it wants them offered. Empty
+     *                                      means "the first eligible field", which is what every
+     *                                      block did before the declaration existed.
+     * @param  string|null  $requiresPermission  Permission needed to insert this block, if any
+     * @param  string|null  $sourcePlugin  Plugin that registered this block (null = core).
+     *                                     Stamped by the contract wirer, never by block.json —
+     *                                     provenance is a fact about registration, not a claim
+     *                                     a definition file gets to make about itself.
      */
     public function __construct(
         public readonly string $handle,
@@ -18,7 +27,25 @@ final class BlockDefinition
         public readonly string $icon,
         public readonly string $category,
         public readonly array $fields,
+        public readonly array $inlineFields = [],
+        public readonly ?string $requiresPermission = null,
+        public readonly ?string $sourcePlugin = null,
     ) {}
+
+    /** An identical definition attributed to the given plugin. */
+    public function withSourcePlugin(string $plugin): self
+    {
+        return new self(
+            handle: $this->handle,
+            label: $this->label,
+            icon: $this->icon,
+            category: $this->category,
+            fields: $this->fields,
+            inlineFields: $this->inlineFields,
+            requiresPermission: $this->requiresPermission,
+            sourcePlugin: $plugin,
+        );
+    }
 
     /**
      * @param  array<mixed, mixed>  $data
@@ -45,12 +72,34 @@ final class BlockDefinition
             }
         }
 
+        // Which fields may be edited on the canvas. A handle naming a field
+        // this block does not have is dropped here rather than shipped to a
+        // builder that would then look for it.
+        $handles = array_map(static fn (BlockField $field): string => $field->handle, $fields);
+        $inlineFields = [];
+        if (isset($data['inlineFields']) && is_array($data['inlineFields'])) {
+            foreach ($data['inlineFields'] as $candidate) {
+                if (is_string($candidate) && in_array($candidate, $handles, true)) {
+                    $inlineFields[] = $candidate;
+                }
+            }
+        }
+
+        // Declared per block rather than hardcoded by handle in the
+        // authorizer: a plugin's own dangerous block needs the same gate the
+        // core `html` block gets, and only its definition knows that.
+        $requiresPermission = isset($data['requiresPermission']) && is_string($data['requiresPermission']) && $data['requiresPermission'] !== ''
+            ? $data['requiresPermission']
+            : null;
+
         return new self(
             handle: $handle,
             label: $label,
             icon: $icon,
             category: $category,
             fields: $fields,
+            inlineFields: $inlineFields,
+            requiresPermission: $requiresPermission,
         );
     }
 

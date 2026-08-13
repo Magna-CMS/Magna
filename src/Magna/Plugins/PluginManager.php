@@ -10,12 +10,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Magna\Blocks\BlockRegistry;
-use Magna\Content\SchemaRegistry;
-use Magna\Contracts\DecoratesDeliveryResponse;
-use Magna\Contracts\ExtendsEntryForm;
-use Magna\Contracts\RegistersAdminNavigation;
-use Magna\Contracts\RegistersBlocks;
 use Magna\Licensing\LicenseGate;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\Exceptions\DependencyException;
@@ -41,6 +35,7 @@ class PluginManager
         private readonly PluginFileRemover $fileRemover,
         private readonly PluginMigrator $migrator,
         private readonly PluginRegistry $registry,
+        private readonly PluginContractWirer $contractWirer,
     ) {}
 
     /**
@@ -331,7 +326,7 @@ class PluginManager
         $plugin->boot();
         $this->routes->loadRoutes($plugin);
         $this->routes->registerPermissions($manifest);
-        $this->dispatchContractsFor($plugin);
+        $this->contractWirer->wire($plugin);
         $this->contentTypes->syncSchemas($plugin);
         $this->contentTypes->persist($plugin);
     }
@@ -511,70 +506,12 @@ class PluginManager
     {
         foreach ($this->booted as $name => $plugin) {
             try {
-                $this->dispatchContractsFor($plugin);
+                $this->contractWirer->wire($plugin);
             } catch (Throwable $e) {
                 // A plugin whose nav/schema registration threw must not block the panel.
                 unset($this->booted[$name]);
                 logger()->error("Plugin [{$name}] removed after contract dispatch failed: {$e->getMessage()}");
             }
         }
-    }
-
-    private function dispatchContractsFor(Plugin $plugin): void
-    {
-        if ($plugin instanceof RegistersAdminNavigation) {
-            $this->app->instance(
-                'magna.nav.'.$plugin->getManifest()->name,
-                $plugin->adminNavigation(),
-            );
-        }
-
-        // Load plugin content type schemas from schemas/ directory.
-        $schemasDir = $plugin->getBasePath().'/schemas';
-        if (is_dir($schemasDir)) {
-            /** @var SchemaRegistry $schemaRegistry */
-            $schemaRegistry = $this->app->make(SchemaRegistry::class);
-            $schemaRegistry->loadFromDirectory($schemasDir);
-        }
-
-        // Wire RegistersBlocks: load plugin block definitions into the BlockRegistry.
-        if ($plugin instanceof RegistersBlocks) {
-            /** @var BlockRegistry $blockRegistry */
-            $blockRegistry = $this->app->make(BlockRegistry::class);
-            foreach ($plugin->blocks() as $definition) {
-                $blockRegistry->register($definition);
-            }
-        }
-
-        // Wire ExtendsEntryForm: accumulate plugins in the container so the
-        // Filament admin EntryResource (Magna\Admin\Resources\EntryResource)
-        // can merge their form components.
-        if ($plugin instanceof ExtendsEntryForm) {
-            /** @var list<ExtendsEntryForm> $current */
-            $current = $this->app->bound('magna.entry_form_plugins')
-                ? $this->app->make('magna.entry_form_plugins')
-                : [];
-            $current[] = $plugin;
-            $this->app->instance('magna.entry_form_plugins', $current);
-        }
-
-        // Wire DecoratesDeliveryResponse: accumulate plugins in the container so
-        // EntryTransformer can inject their data into delivery API responses.
-        if ($plugin instanceof DecoratesDeliveryResponse) {
-            /** @var list<DecoratesDeliveryResponse> $current */
-            $current = $this->app->bound('magna.delivery_decorators')
-                ? $this->app->make('magna.delivery_decorators')
-                : [];
-            $current[] = $plugin;
-            $this->app->instance('magna.delivery_decorators', $current);
-        }
-
-        // The remaining capability contracts are dispatched where their target
-        // surface is actually built, not here:
-        //   - RegistersDashboardWidgets / RegistersSettingsPages → the Filament
-        //     panel in AdminServiceProvider + AdminPanelProvider.
-        //   - RegistersWebhookEvents → WebhookServiceProvider (event registry).
-        // dispatchContractsFor() only wires the container-backed contracts
-        // (navigation, blocks, entry-form extensions, delivery decorators).
     }
 }

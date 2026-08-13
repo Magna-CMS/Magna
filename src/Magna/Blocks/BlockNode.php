@@ -60,6 +60,32 @@ final class BlockNode
         );
     }
 
+    /**
+     * A copy of this node with different data — the render-time seam for
+     * binding resolution, which must never mutate the stored document. The
+     * raw array is overlaid too, so tolerant serialisation of the copy
+     * carries the resolved values while every unknown key survives.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function withData(array $data): self
+    {
+        $raw = $this->raw;
+        if (array_key_exists('data', $raw)) {
+            $raw['data'] = $data;
+        }
+
+        return new self(
+            id: $this->id,
+            block: $this->block,
+            settings: $this->settings,
+            data: $data,
+            children: $this->children,
+            raw: $raw,
+            childrenByRawIndex: $this->childrenByRawIndex,
+        );
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {
