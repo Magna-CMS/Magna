@@ -70,6 +70,53 @@ function phpCodeWithoutComments(string $source): string
     return $code;
 }
 
+/**
+ * Whether this source derives an install identity itself.
+ *
+ * Extracted from the sweep so the RULE can be tested directly: a guard
+ * that only ever runs over whatever happens to be in plugins-dev is a
+ * guard whose precision nobody can check.
+ */
+function derivesInstallIdentity(string $php): bool
+{
+    $source = phpCodeWithoutComments($php);
+
+    // The client-side tell: hashing the application key into an identity.
+    // (The marketplace plugin is the server half — it receives fingerprints
+    // and hashes tokens, which is a different thing.)
+    if (! str_contains($source, 'app.key')) {
+        return false;
+    }
+
+    // Actual delegation, not a docblock that merely names the class — that
+    // distinction matters: this guard was once fooled by its own comment.
+    if (preg_match('/InstallFingerprint::derive\s*\(/', $source) === 1) {
+        return false;
+    }
+
+    // HMAC is SIGNING, not identity: the key is a parameter by construction
+    // and what comes out is per-message. A plugin signing its own OAuth
+    // state with the app key uses Laravel's key the way Laravel intends,
+    // and flagging it taught the only lesson a false positive ever teaches —
+    // how to ignore the guard.
+    $withoutSigning = (string) preg_replace('/\bhash_hmac\s*\(/', 'SIGNING(', $source);
+
+    // What is left is an identity tell only when the app key is among what
+    // is being hashed. Checked over the STATEMENT rather than with one
+    // balanced-parenthesis pattern, because the key usually arrives through
+    // a call of its own — `hash('sha256', config('app.key').gethostname())`
+    // — and a pattern that tried to span that swallowed the key with it.
+    foreach (preg_split('/;/', $withoutSigning) ?: [] as $statement) {
+        if (preg_match('/\b(hash|md5|sha1|crc32)\s*\(/i', $statement) === 1
+            && preg_match('/app\.key|appKey/i', $statement) === 1
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 it('has no plugin deriving its own install fingerprint', function (): void {
     $files = pluginSourceFiles();
 
@@ -80,24 +127,7 @@ it('has no plugin deriving its own install fingerprint', function (): void {
     $offenders = [];
 
     foreach ($files as $path) {
-        // Comments must not count either way: this guard first read its own
-        // explanatory docblock as if it were an implementation.
-        $source = phpCodeWithoutComments((string) file_get_contents($path));
-
-        // The client-side tell: hashing the application key into an identity.
-        // (The marketplace plugin is the server half — it receives
-        // fingerprints and hashes tokens, which is a different thing.)
-        if (! str_contains($source, 'app.key')) {
-            continue;
-        }
-
-        if (! preg_match('/\b(hash|md5|sha1|crc32)\s*\(/', $source)) {
-            continue;
-        }
-
-        // Actual delegation, not a docblock that merely names the class —
-        // that distinction matters: this guard was fooled by its own comment.
-        if (preg_match('/InstallFingerprint::derive\s*\(/', $source)) {
+        if (! derivesInstallIdentity((string) file_get_contents($path))) {
             continue;
         }
 
@@ -110,4 +140,53 @@ it('has no plugin deriving its own install fingerprint', function (): void {
         .'Magna\Support\InstallFingerprint::derive() instead — the marketplace '
         .'matches licences against the fingerprint Account Centre registered.'
     );
+});
+
+/**
+ * The guard was narrowed after it flagged a plugin for HMAC-signing its own
+ * OAuth state with the app key — signing, not identity. A narrowed guard is
+ * worth nothing unless it still catches what it was written for, so both
+ * shapes are asserted here directly rather than left to whatever happens to
+ * be in plugins-dev today.
+ */
+it('still catches a plugin hashing the app key into an identity', function (): void {
+    $offending = <<<'PHP'
+    <?php
+    class Fingerprint {
+        public function id(): string {
+            return hash('sha256', config('app.key').gethostname());
+        }
+    }
+    PHP;
+
+    expect(derivesInstallIdentity($offending))->toBeTrue();
+});
+
+it('does not flag a plugin signing with the app key', function (): void {
+    $signing = <<<'PHP'
+    <?php
+    class State {
+        public function sign(string $payload): string {
+            return hash_hmac('sha256', $payload, (string) config('app.key'));
+        }
+        public function cacheKey(string $nonce): string {
+            return 'plugin:state:'.hash('sha256', $nonce);
+        }
+    }
+    PHP;
+
+    expect(derivesInstallIdentity($signing))->toBeFalse();
+});
+
+it('does not flag a plugin that delegates to the shared helper', function (): void {
+    $delegating = <<<'PHP'
+    <?php
+    class Licence {
+        public function id(): string {
+            return \Magna\Support\InstallFingerprint::derive(config('app.key'));
+        }
+    }
+    PHP;
+
+    expect(derivesInstallIdentity($delegating))->toBeFalse();
 });
