@@ -93,8 +93,42 @@ class ThemeManager
     public function active(): ?ThemeManifest
     {
         $name = ThemeSettings::get()->active;
+        $theme = is_string($name) && $name !== '' ? $this->find($name) : null;
 
-        return is_string($name) && $name !== '' ? $this->find($name) : null;
+        // An addon can never BE the theme, even if the setting says so.
+        return $theme !== null && ! $theme->isAddon() ? $theme : null;
+    }
+
+    /**
+     * The theme addons that apply right now: installed, compatible, and
+     * extending either the active theme by name or any theme ("*").
+     * Ordered by precedence (§C8): specific `extends` beats "*", then
+     * higher manifest priority, then name — deterministic across requests.
+     *
+     * @return list<ThemeManifest>
+     */
+    public function activeAddons(): array
+    {
+        $activeTheme = $this->active()?->name;
+
+        $addons = [];
+        foreach ($this->installed() as $manifest) {
+            if (! $manifest->isAddon()
+                || ! $manifest->isCompatibleWith(MagnaServiceProvider::VERSION)
+            ) {
+                continue;
+            }
+            if ($manifest->extends === '*' || $manifest->extends === $activeTheme) {
+                $addons[] = $manifest;
+            }
+        }
+
+        usort($addons, function (ThemeManifest $a, ThemeManifest $b): int {
+            return [$a->extends === '*' ? 1 : 0, -$a->priority, $a->name]
+                <=> [$b->extends === '*' ? 1 : 0, -$b->priority, $b->name];
+        });
+
+        return $addons;
     }
 
     /**
@@ -112,6 +146,10 @@ class ThemeManager
 
         if ($theme === null) {
             throw new InvalidThemeException('That theme is not installed.');
+        }
+
+        if ($theme->isAddon()) {
+            throw new InvalidThemeException('"'.$theme->displayName.'" is a theme addon — it applies automatically alongside its host theme and cannot be activated as the theme.');
         }
 
         if (! $theme->isCompatibleWith(MagnaServiceProvider::VERSION)) {

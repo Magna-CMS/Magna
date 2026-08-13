@@ -44,6 +44,7 @@ use Magna\Admin\Widgets\EntryCounts;
 use Magna\Admin\Widgets\RecentActivity;
 use Magna\Admin\Widgets\UpcomingScheduleWidget;
 use Magna\Auth\Filament\Login;
+use Magna\Auth\Http\Middleware\AdminCspMiddleware;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
 use Magna\Plugins\Plugin;
 
@@ -98,7 +99,10 @@ class AdminPanelProvider extends PanelProvider
             //   authMiddleware is REQUIRED — without it every panel page is
             //   publicly accessible. Authenticate redirects guests to ->login().
             ->authGuard('web')
-            ->middleware(['web'])
+            // AdminCsp actually ON the panel — the middleware existed and
+            // was aliased for months while attached to nothing, so the
+            // admin ran with no Content-Security-Policy at all.
+            ->middleware(['web', AdminCspMiddleware::class])
             // S1-06: EnsureTwoFactorEnrolled forces any authenticated user
             // whose role requires 2FA, but who hasn't confirmed enrollment
             // yet, to the mandatory setup page before reaching any other

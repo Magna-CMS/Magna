@@ -75,6 +75,10 @@ class ThemesPage extends Page
         $themes = app(ThemeManager::class);
         $installed = $themes->installed();
         $activeName = $themes->active()?->name;
+        $activeAddonNames = array_map(
+            fn (ThemeManifest $a): string => $a->name,
+            $themes->activeAddons(),
+        );
 
         return [
             'installed' => array_map(
@@ -88,7 +92,21 @@ class ThemesPage extends Page
                     'homepage' => $t->homepage,
                     'active' => $t->name === $activeName,
                 ],
-                array_values($installed),
+                array_values(array_filter($installed, fn (ThemeManifest $t): bool => ! $t->isAddon())),
+            ),
+            // Addons apply automatically alongside their host — this list
+            // shows WHAT applies and, for the inactive ones, why not.
+            'addons' => array_map(
+                fn (ThemeManifest $a): array => [
+                    'name' => $a->name,
+                    'display_name' => $a->displayName,
+                    'description' => $a->description,
+                    'version' => $a->version,
+                    'extends' => (string) $a->extends,
+                    'pairs_with' => $a->pairsWith,
+                    'applies' => in_array($a->name, $activeAddonNames, true),
+                ],
+                array_values(array_filter($installed, fn (ThemeManifest $t): bool => $t->isAddon())),
             ),
             // Anything already on disk is not for sale again.
             'available' => array_values(array_filter(

@@ -21,7 +21,18 @@ use Throwable;
  */
 final class ThemeManifest
 {
-    /** @param list<string> $tags */
+    /** A full theme (layout shell + tokens + block views). */
+    public const TYPE_THEME = 'magna-theme';
+
+    /** An addon: styles a paired plugin's blocks inside a host theme (§5). */
+    public const TYPE_ADDON = 'magna-theme-addon';
+
+    /**
+     * @param  list<string>  $tags
+     * @param  string|null  $extends  Addon only: host theme name, or "*" for theme-agnostic
+     * @param  list<string>  $pairsWith  Addon only: plugins whose blocks it may style
+     * @param  int  $priority  Addon only: tie-break between addons (higher wins)
+     */
     public function __construct(
         public readonly string $name,
         public readonly string $displayName,
@@ -33,7 +44,16 @@ final class ThemeManifest
         public readonly ?string $screenshot = null,
         public readonly array $tags = [],
         public readonly ?string $homepage = null,
+        public readonly string $type = self::TYPE_THEME,
+        public readonly ?string $extends = null,
+        public readonly array $pairsWith = [],
+        public readonly int $priority = 0,
     ) {}
+
+    public function isAddon(): bool
+    {
+        return $this->type === self::TYPE_ADDON;
+    }
 
     /** The file a theme package is recognised by. */
     public const FILENAME = 'theme.json';
@@ -65,6 +85,25 @@ final class ThemeManifest
             $tags = array_values(array_filter($data['tags'], 'is_string'));
         }
 
+        $type = ($data['type'] ?? null) === self::TYPE_ADDON ? self::TYPE_ADDON : self::TYPE_THEME;
+
+        $extends = null;
+        $pairsWith = [];
+        $priority = 0;
+        if ($type === self::TYPE_ADDON) {
+            $extends = $data['extends'] ?? null;
+            if (! is_string($extends) || ($extends !== '*' && preg_match('#^[a-z0-9]([a-z0-9_-]*[a-z0-9])?/[a-z0-9]([a-z0-9_-]*[a-z0-9])?$#', $extends) !== 1)) {
+                throw new InvalidThemeException('Addon "'.$name.'" needs "extends": a host theme name or "*".');
+            }
+            if (is_array($data['pairsWith'] ?? null)) {
+                $pairsWith = array_values(array_filter($data['pairsWith'], 'is_string'));
+            }
+            if ($pairsWith === []) {
+                throw new InvalidThemeException('Addon "'.$name.'" needs "pairsWith": the plugins it styles.');
+            }
+            $priority = is_int($data['priority'] ?? null) ? $data['priority'] : 0;
+        }
+
         return new self(
             name: $name,
             displayName: is_string($data['displayName'] ?? null) && $data['displayName'] !== '' ? $data['displayName'] : $name,
@@ -76,6 +115,10 @@ final class ThemeManifest
             screenshot: is_string($data['screenshot'] ?? null) && $data['screenshot'] !== '' ? $data['screenshot'] : null,
             tags: $tags,
             homepage: is_string($data['homepage'] ?? null) && $data['homepage'] !== '' ? $data['homepage'] : null,
+            type: $type,
+            extends: $extends,
+            pairsWith: $pairsWith,
+            priority: $priority,
         );
     }
 

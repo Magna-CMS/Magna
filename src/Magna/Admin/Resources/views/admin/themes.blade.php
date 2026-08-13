@@ -107,6 +107,51 @@
         </div>
     @endif
 
+    @if (count($addons) > 0)
+        <div class="mt-8">
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Theme addons</h2>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Addons style a paired plugin's blocks inside their host theme. They apply automatically — no activation.</p>
+
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+                @foreach ($addons as $addon)
+                    <div class="bg-white dark:bg-gray-900/60 rounded-xl border {{ $addon['applies'] ? 'border-primary-300 dark:border-primary-500/40' : 'border-gray-200 dark:border-white/10' }} p-4 flex flex-col">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-gray-900 dark:text-white">{{ $addon['display_name'] }}</div>
+                                <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">v{{ $addon['version'] }}</div>
+                            </div>
+                            @if ($addon['applies'])
+                                <span class="shrink-0 rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:text-primary-400">Applies</span>
+                            @else
+                                <span class="shrink-0 rounded-full bg-gray-100 dark:bg-white/5 px-2 py-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400" title="Its host theme is not active">Waiting for {{ $addon['extends'] }}</span>
+                            @endif
+                        </div>
+
+                        @if ($addon['description'] !== '')
+                            <p class="text-[13px] text-gray-500 dark:text-gray-400 flex-1 leading-relaxed mt-3">{{ $addon['description'] }}</p>
+                        @endif
+
+                        <div class="flex flex-wrap gap-1 mt-3">
+                            <span class="rounded bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] text-gray-600 dark:text-gray-400">{{ $addon['extends'] === '*' ? 'Any theme' : 'For '.$addon['extends'] }}</span>
+                            @foreach ($addon['pairs_with'] as $plugin)
+                                <span class="rounded bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] text-gray-600 dark:text-gray-400">Styles {{ $plugin }}</span>
+                            @endforeach
+                        </div>
+
+                        <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-white/5">
+                            <span class="font-mono text-[11px] text-gray-400 dark:text-gray-500">{{ $addon['name'] }}</span>
+                            <button
+                                wire:click="remove('{{ $addon['name'] }}')"
+                                wire:confirm="Delete this addon's files from the site?"
+                                class="text-xs font-semibold text-gray-500 hover:text-danger-600 dark:text-gray-400 dark:hover:text-danger-400 transition-colors"
+                            >Remove</button>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
 @else
 
     @if (count($available) > 0)

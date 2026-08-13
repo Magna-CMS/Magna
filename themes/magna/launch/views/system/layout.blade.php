@@ -140,8 +140,17 @@
 @endif
 
 <main id="main">
-    @include('magna-pages::partials.sections')
+    @if(!empty($mainHtml))
+        {{-- Plugin frontend page: pre-rendered main slot. --}}
+        <div class="l-wrap">{!! $mainHtml !!}</div>
+    @else
+        @include('magna-pages::partials.sections')
+    @endif
 </main>
+
+@if(!empty($popupsHtml))
+    {!! $popupsHtml !!}
+@endif
 
 @if(!empty($footerPartHtml))
     <footer class="l-footer l-footer--custom">{!! $footerPartHtml !!}</footer>
