@@ -145,6 +145,11 @@ it('ships the container flag and the depth cap to the builder', function (): voi
         ->and(collect($payload['registry'])->firstWhere('handle', 'heading')['container'])->toBeFalse()
         // Mirrored in TypeScript it would be a second source of truth.
         ->and($payload['maxBlockDepth'])->toBe(PageTreeValidator::MAX_BLOCK_DEPTH);
+
+    // And what a fresh instance starts with, so the builder never seeds a
+    // block the save would refuse for a missing required field.
+    expect(collect($payload['registry'])->firstWhere('handle', 'button')['seed'])
+        ->toMatchArray(['label' => 'Label', 'url' => '#']);
 });
 
 // ── Rendering ────────────────────────────────────────────────────────────────

@@ -129,6 +129,66 @@ final class BlockDefinition
     }
 
     /**
+     * The data a freshly inserted instance of this block starts with.
+     *
+     * Every save validates required fields, so a block whose required
+     * field has no default is a block the builder cannot insert at all —
+     * the server refuses the very first patch that adds it. The seed is
+     * computed HERE, from the schema, and shipped in the bootstrap payload
+     * rather than reconstructed in TypeScript: only this side knows what
+     * an `optionsFrom` select actually offers on this installation, and a
+     * second implementation would decide differently the day they drifted.
+     *
+     * A declared default always wins. Otherwise a required field is seeded
+     * only where the schema itself says what a valid value looks like —
+     * the field's own label for free text, the first option a select
+     * offers, a fragment for a link that goes nowhere yet. Types with no
+     * neutral value (media, colour, icon) are left absent on purpose: the
+     * block author declares a default, rather than this guessing one and
+     * shipping it to every page.
+     *
+     * @return array<string, mixed>
+     */
+    public function seedData(): array
+    {
+        $data = [];
+
+        foreach ($this->fields as $field) {
+            if ($field->default !== null) {
+                $data[$field->handle] = $field->default;
+
+                continue;
+            }
+
+            if (! $field->required) {
+                continue;
+            }
+
+            $seed = $this->seedFor($field);
+            if ($seed !== null) {
+                $data[$field->handle] = $seed;
+            }
+        }
+
+        return $data;
+    }
+
+    /** A placeholder the schema itself justifies, or null to leave it absent. */
+    private function seedFor(BlockField $field): mixed
+    {
+        return match ($field->type) {
+            'text', 'textarea', 'richtext' => $field->label,
+            'select' => array_key_first($field->resolveOptions()),
+            // Valid everywhere SafeUrl and the link validator look, and
+            // visibly unfinished, which is what a placeholder should be.
+            'url', 'link' => '#',
+            'number' => 0,
+            'alignment' => 'left',
+            default => null,
+        };
+    }
+
+    /**
      * Return the field with the given handle, or null if not found.
      */
     public function field(string $handle): ?BlockField
