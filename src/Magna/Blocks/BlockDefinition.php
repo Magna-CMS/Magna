@@ -20,6 +20,10 @@ final class BlockDefinition
      *                                     Stamped by the contract wirer, never by block.json —
      *                                     provenance is a fact about registration, not a claim
      *                                     a definition file gets to make about itself.
+     * @param  bool  $container  Whether this block holds nested blocks in `children`
+     *                           (docs/magna-pages/02-BLOCK-SYSTEM.md §"Nested layout blocks").
+     *                           Declared per block rather than hardcoded by handle, so a
+     *                           plugin's own layout block nests on the same terms core's does.
      */
     public function __construct(
         public readonly string $handle,
@@ -30,6 +34,7 @@ final class BlockDefinition
         public readonly array $inlineFields = [],
         public readonly ?string $requiresPermission = null,
         public readonly ?string $sourcePlugin = null,
+        public readonly bool $container = false,
     ) {}
 
     /** An identical definition attributed to the given plugin. */
@@ -44,6 +49,7 @@ final class BlockDefinition
             inlineFields: $this->inlineFields,
             requiresPermission: $this->requiresPermission,
             sourcePlugin: $plugin,
+            container: $this->container,
         );
     }
 
@@ -100,6 +106,7 @@ final class BlockDefinition
             fields: $fields,
             inlineFields: $inlineFields,
             requiresPermission: $requiresPermission,
+            container: ($data['container'] ?? false) === true,
         );
     }
 

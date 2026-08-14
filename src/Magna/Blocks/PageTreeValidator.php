@@ -200,19 +200,59 @@ final class PageTreeValidator
             }
         }
 
-        $children = $blockRaw['children'] ?? null;
-        if (is_array($children)) {
-            foreach ($children as $childIndex => $childRaw) {
-                if (is_array($childRaw)) {
-                    $this->validateBlock(
-                        $childRaw,
-                        "{$location}, child #{$childIndex}",
-                        depth: $depth + 1,
-                        seenIds: $seenIds,
-                        errors: $errors,
-                    );
-                }
+        $this->validateChildren($blockRaw, $handle, $blockId, $location, $depth, $seenIds, $errors);
+    }
+
+    /**
+     * Validate a block's nested `children`, then recurse into each one.
+     *
+     * The SHAPE is checked, not the parent's appetite for children: any
+     * block may legally carry them (the tolerant-reader rule — a document
+     * keeps constructs this build cannot edit), and it is the block
+     * library that decides which handles actually render them. What is
+     * refused here is a `children` key that is not a list of block
+     * objects, because nothing downstream — the walk in
+     * {@see PageTreeAuthorizer}, the renderer, the patch applier — can
+     * make sense of that, and each would fail differently.
+     *
+     * @param  array<mixed, mixed>  $blockRaw
+     * @param  list<string>  $seenIds
+     * @param  list<string>  $errors
+     */
+    private function validateChildren(
+        array $blockRaw,
+        string $handle,
+        string $blockId,
+        string $location,
+        int $depth,
+        array &$seenIds,
+        array &$errors,
+    ): void {
+        if (! array_key_exists('children', $blockRaw)) {
+            return;
+        }
+
+        $children = $blockRaw['children'];
+        if (! is_array($children) || ($children !== [] && ! array_is_list($children))) {
+            $errors[] = "Block '{$handle}' (id: {$blockId}) children must be an array of blocks.";
+
+            return;
+        }
+
+        foreach ($children as $childIndex => $childRaw) {
+            if (! is_array($childRaw)) {
+                $errors[] = "Block '{$handle}' (id: {$blockId}) child #{$childIndex} must be an object.";
+
+                continue;
             }
+
+            $this->validateBlock(
+                $childRaw,
+                "{$location}, child #{$childIndex}",
+                depth: $depth + 1,
+                seenIds: $seenIds,
+                errors: $errors,
+            );
         }
     }
 

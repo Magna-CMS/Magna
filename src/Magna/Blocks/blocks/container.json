@@ -1,0 +1,21 @@
+{
+    "handle": "container",
+    "label": "Container",
+    "icon": "heroicon-o-square-3-stack-3d",
+    "category": "layout",
+    "container": true,
+    "fields": [
+        {
+            "handle": "tag",
+            "type": "select",
+            "label": "HTML element",
+            "default": "div",
+            "options": {
+                "div": "Div",
+                "section": "Section",
+                "article": "Article",
+                "aside": "Aside"
+            }
+        }
+    ]
+}
