@@ -6,6 +6,7 @@ namespace Magna\Plugins;
 
 use Illuminate\Contracts\Foundation\Application;
 use Magna\Blocks\BlockRegistry;
+use Magna\Blocks\Conditions\DisplayConditionRegistry;
 use Magna\Blocks\DataSources\DataSourceRegistry;
 use Magna\Blocks\DynamicTags\DynamicTagRegistry;
 use Magna\Content\SchemaRegistry;
@@ -15,6 +16,7 @@ use Magna\Contracts\ProvidesFrontendPages;
 use Magna\Contracts\RegistersAdminNavigation;
 use Magna\Contracts\RegistersBlocks;
 use Magna\Contracts\RegistersDataSources;
+use Magna\Contracts\RegistersDisplayConditions;
 use Magna\Contracts\RegistersDynamicTags;
 use Magna\Frontend\FrontendPageRegistry;
 
@@ -79,6 +81,15 @@ class PluginContractWirer
             $dynamicTags = $this->app->make(DynamicTagRegistry::class);
             foreach ($plugin->dynamicTags() as $tag) {
                 $dynamicTags->register($tag);
+            }
+        }
+
+        // Wire RegistersDisplayConditions: plugin show/hide rules for nodes.
+        if ($plugin instanceof RegistersDisplayConditions) {
+            /** @var DisplayConditionRegistry $displayConditions */
+            $displayConditions = $this->app->make(DisplayConditionRegistry::class);
+            foreach ($plugin->displayConditions() as $condition) {
+                $displayConditions->register($condition);
             }
         }
 
