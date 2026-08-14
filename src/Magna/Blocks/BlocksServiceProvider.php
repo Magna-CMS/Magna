@@ -35,6 +35,35 @@ class BlocksServiceProvider extends ServiceProvider
         // Plugin dynamic tags for page bindings (RegistersDynamicTags).
         $this->app->singleton(DynamicTags\DynamicTagRegistry::class);
 
+        /*
+         * Plugin show/hide rules for page nodes (RegistersDisplayConditions).
+         *
+         * A singleton, like the two registries above and for the same reason:
+         * plugins fill it once at enable-time, and a fresh instance per
+         * resolve would be empty — which fails closed, so every conditioned
+         * node would quietly vanish rather than error.
+         */
+        $this->app->singleton(Conditions\DisplayConditionRegistry::class);
+
+        /*
+         * What one render may spend on plugin resolvers.
+         *
+         * `scoped` rather than `singleton` on purpose: under Octane the
+         * container survives the request, and a singleton would carry one
+         * page's spending into the next — refusing resolvers on a page that
+         * had asked for nothing yet.
+         */
+        $this->app->scoped(Resolution\ResolverBudget::class, function (): Resolution\ResolverBudget {
+            $budget = config('magna.render_budget');
+            $budget = is_array($budget) ? $budget : [];
+
+            return new Resolution\ResolverBudget(
+                maxInvocations: is_numeric($budget['max_resolvers'] ?? null) ? (int) $budget['max_resolvers'] : 200,
+                maxMilliseconds: is_numeric($budget['max_milliseconds'] ?? null) ? (int) $budget['max_milliseconds'] : 750,
+                slowMilliseconds: is_numeric($budget['slow_milliseconds'] ?? null) ? (int) $budget['slow_milliseconds'] : 250,
+            );
+        });
+
         $this->app->singleton(Resolution\BlockDataResolver::class, function (): Resolution\BlockDataResolver {
             $resolver = new Resolution\BlockDataResolver;
 

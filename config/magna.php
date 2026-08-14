@@ -164,4 +164,31 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Render budget
+    |--------------------------------------------------------------------------
+    | What one page render may spend on plugin resolvers — dynamic tags and
+    | data sources, which are third-party code running inside a visitor's
+    | request. A resolver that throws already degrades to a gap; these are the
+    | ceilings for one that is merely slow, and for a page that asks for more
+    | of them than anybody intended.
+    |
+    | Past either ceiling the remaining resolvers are refused, the page renders
+    | the same gaps it would for a resolver that failed, and the result is NOT
+    | cached — a degraded copy in the shared cache would outlive the slow
+    | minute that produced it.
+    |
+    | Enforcement happens between invocations. A single resolver that hangs for
+    | ever is the web server's timeout to deal with; PHP cannot interrupt it.
+    */
+    'render_budget' => [
+        'max_resolvers' => (int) env('MAGNA_RENDER_MAX_RESOLVERS', 200),
+        'max_milliseconds' => (int) env('MAGNA_RENDER_MAX_MS', 750),
+
+        // One call above this is logged by name, so a plugin author hears
+        // about it long before the ceiling starts refusing work.
+        'slow_milliseconds' => (int) env('MAGNA_RENDER_SLOW_MS', 250),
+    ],
+
 ];
