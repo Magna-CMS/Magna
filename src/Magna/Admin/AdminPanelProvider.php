@@ -40,6 +40,7 @@ use Magna\Admin\Resources\EntryResource;
 use Magna\Admin\Resources\MediaResource;
 use Magna\Admin\Resources\RoleResource;
 use Magna\Admin\Resources\UserResource;
+use Magna\Admin\Support\InitialsAvatarProvider;
 use Magna\Admin\Widgets\EntryCounts;
 use Magna\Admin\Widgets\RecentActivity;
 use Magna\Admin\Widgets\UpcomingScheduleWidget;
@@ -91,6 +92,11 @@ class AdminPanelProvider extends PanelProvider
                     950 => '#0b0f19',
                 ],
             ])
+            // Filament's stock provider points the no-photo avatar at
+            // ui-avatars.com, which the panel CSP blocks — it rendered as a
+            // broken image. InitialsAvatarProvider draws the same initials
+            // inline, with no third-party request.
+            ->defaultAvatarProvider(InitialsAvatarProvider::class)
             ->defaultThemeMode(ThemeMode::Dark)
             ->darkMode(true)
             ->font('Inter')
