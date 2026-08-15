@@ -234,6 +234,121 @@ it('renders an empty container as an empty wrapper, not a hole in the page', fun
     expect($html)->not->toContain('outline: 1px dashed');
 });
 
+// ── Laying the children out ──────────────────────────────────────────────────
+
+it('lays a container out as a flex row when the editor asks for one', function (): void {
+    $author = containerSetup();
+    containerPage($author, 'container-row', containerDocument([
+        containerNode(
+            'box-1',
+            [containerChild('blk-1', 'Left'), containerChild('blk-2', 'Right')],
+            'div',
+            ['style' => ['direction' => 'row', 'childGap' => '16px', 'alignItems' => 'center']],
+        ),
+    ]));
+
+    $html = $this->get('/container-row')->assertOk()->getContent();
+
+    // Without display:flex none of the rest means anything, so it is
+    // derived rather than asked for — an editor setting a direction is not
+    // also expected to know they need a display.
+    expect($html)->toContain('magna-n-box-1')
+        ->and($html)->toContain('display:flex')
+        ->and($html)->toContain('flex-direction:row')
+        ->and($html)->toContain('gap:16px')
+        ->and($html)->toContain('align-items:center');
+});
+
+it('stacks by default, so a gap alone behaves the way it reads', function (): void {
+    $author = containerSetup();
+    containerPage($author, 'container-gap', containerDocument([
+        containerNode('box-1', [containerChild('blk-1', 'One')], 'div', [
+            'style' => ['childGap' => '8px'],
+        ]),
+    ]));
+
+    $html = $this->get('/container-gap')->assertOk()->getContent();
+
+    expect($html)->toContain('display:flex')
+        ->and($html)->toContain('flex-direction:column')
+        ->and($html)->toContain('gap:8px');
+});
+
+it('leaves a container that arranges nothing as a plain block', function (): void {
+    $author = containerSetup();
+    containerPage($author, 'container-plain', containerDocument([
+        containerNode('box-1', [containerChild('blk-1', 'One')], 'div', [
+            'style' => ['paddingTop' => '20px'],
+        ]),
+    ]));
+
+    $html = $this->get('/container-plain')->assertOk()->getContent();
+
+    // Padding is not a reason to become a flex container.
+    expect($html)->toContain('padding-top:20px')
+        ->and($html)->not->toContain('display:flex');
+});
+
+it('refuses a layout value its own vocabulary does not offer', function (): void {
+    $author = containerSetup();
+    containerPage($author, 'container-bogus', containerDocument([
+        containerNode('box-1', [containerChild('blk-1', 'One')], 'div', [
+            'style' => ['direction' => 'diagonal'],
+        ]),
+    ]));
+
+    $html = $this->get('/container-bogus')->assertOk()->getContent();
+
+    // A select's options ARE the vocabulary, so nothing is emitted — and
+    // with nothing emitted the container never becomes a flex box either.
+    expect($html)->not->toContain('diagonal')
+        ->and($html)->not->toContain('display:flex');
+});
+
+it('gives layout controls to a container and withholds them from other blocks', function (): void {
+    $author = containerSetup();
+    $page = containerPage($author, 'container-controls', containerDocument([]), publish: false);
+
+    $payload = $this->actingAs($author)
+        ->getJson(url('/pages-builder/'.$page->getKey()))
+        ->assertOk()
+        ->json();
+
+    $containerKeys = array_column($payload['styleControls']['container'], 'key');
+    $blockKeys = array_column($payload['styleControls']['block'], 'key');
+
+    expect($containerKeys)->toContain('direction')
+        ->and($containerKeys)->toContain('childGap')
+        ->and($containerKeys)->toContain('alignItems')
+        // Everything an ordinary block may style, a container may too.
+        ->and($containerKeys)->toContain('paddingTop')
+        ->and($containerKeys)->toContain('fontSize')
+        // A heading offered a gap is offered a control that does nothing.
+        ->and($blockKeys)->not->toContain('direction')
+        ->and($blockKeys)->not->toContain('childGap');
+});
+
+it('lays a container out per device, without leaving the shared cache', function (): void {
+    $author = containerSetup();
+    containerPage($author, 'container-responsive', containerDocument([
+        containerNode('box-1', [containerChild('blk-1', 'One')], 'div', [
+            'style' => ['direction' => ['$responsive' => ['base' => 'row', 'mobile' => 'column']]],
+        ]),
+    ]));
+
+    $first = $this->get('/container-responsive')->assertOk()
+        ->assertHeader('X-Magna-Cache', 'miss')->getContent();
+
+    expect($first)->toContain('flex-direction:row')
+        ->and($first)->toContain('@media (max-width: 767.98px)')
+        ->and($first)->toContain('flex-direction:column !important');
+
+    // One body for every visitor: the renderer emits all breakpoints and
+    // lets the browser choose, which is what keeps the page cacheable.
+    expect($this->get('/container-responsive')->assertOk()
+        ->assertHeader('X-Magna-Cache', 'hit')->getContent())->toBe($first);
+});
+
 it('falls back to a div for a tag the allowlist does not name', function (): void {
     $author = containerSetup();
     containerPage($author, 'container-tag', containerDocument([
