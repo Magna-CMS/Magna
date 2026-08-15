@@ -47,7 +47,15 @@ class AdminCspMiddleware
             "style-src 'self' 'unsafe-inline'",                // Filament inline styles
             "img-src 'self' data: blob:",
             "font-src 'self' data:",
-            "connect-src 'self'",                              // Livewire XHR only ever talks home
+            // 'self' alone does NOT cover blob: — and the file uploader (FilePond)
+            // fetches its own object URLs to build previews and to hand the file
+            // to its processing worker. Without blob: here that fetch fails with
+            // a bare "Failed to fetch", so the uploader hangs on its spinner:
+            // no thumbnail for an existing photo, and new uploads never process.
+            // blob: URLs are same-origin and minted by the page itself, so this
+            // opens no new exfiltration path — connect-src still blocks foreign origins.
+            "connect-src 'self' blob:",                        // Livewire XHR + uploader object URLs
+            "worker-src 'self' blob:",                         // FilePond builds its workers from blob: URLs
             "frame-src 'self'",                                // preview/canvas iframes are same-origin
             "frame-ancestors 'none'",
             "form-action 'self'",

@@ -52,6 +52,18 @@ it('serves the admin panel itself under the CSP', function (): void {
         ->and($csp)->toContain("form-action 'self'");
 });
 
+// The file uploader fetches its own object URLs to build previews and to feed
+// its processing worker. connect-src 'self' does not cover blob:, so dropping
+// blob: here makes every upload field hang on its spinner - no thumbnail for an
+// existing file, and new uploads never finish processing.
+it('allows blob: object URLs the file uploader depends on', function (): void {
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy', '');
+
+    expect($csp)->toContain('connect-src \'self\' blob:')
+        ->and($csp)->toContain('worker-src \'self\' blob:')
+        ->and($csp)->toContain('img-src \'self\' data: blob:');
+});
+
 it('lets a response with its own policy keep it', function (): void {
     Route::get('/_test_own_csp', function () {
         return response('ok', 200, ['Content-Security-Policy' => "frame-ancestors 'self'"]);
