@@ -9,10 +9,14 @@ declare(strict_types=1);
  * offers — and the spam traps stay quiet about tripping.
  */
 
+use Filament\Facades\Filament;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Livewire\Livewire;
 use Magna\Auth\Role;
 use Magna\Content\EntryManager;
+use Magna\Forms\Filament\Pages\FormsPage;
+use Magna\Forms\Filament\Pages\SubmissionsPage;
 use Magna\Forms\FormSubmissionHandler;
 use Magna\Forms\Models\Form;
 use Magna\Forms\Models\Submission;
@@ -169,6 +173,30 @@ it('swallows honeypot hits and instant posts without storing or telling', functi
 
     expect(Submission::query()->count())->toBe(0);
     Mail::assertNothingSent();
+});
+
+it('renders the Forms and Submissions admin pages', function (): void {
+    $user = formsSetup();
+    $form = contactForm();
+    Submission::query()->create([
+        'form_id' => $form->id,
+        'data' => ['name' => 'Ada', 'email' => 'ada@example.com', 'message' => 'Hello'],
+    ]);
+
+    Filament::setCurrentPanel(Filament::getPanel('magna'));
+    $this->actingAs($user);
+
+    // Mounting selects the first form, so the editor panel renders too —
+    // this compiles the whole view, fields grid included.
+    Livewire::test(FormsPage::class)
+        ->assertOk()
+        ->assertSee('Contact')
+        ->assertSee('1 submissions')
+        ->assertSee('Save form');
+
+    Livewire::test(SubmissionsPage::class)
+        ->assertOk()
+        ->assertSee('ada@example.com');
 });
 
 it('renders a gap when the chosen form was deleted', function (): void {
