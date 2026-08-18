@@ -62,7 +62,35 @@ class LoginThrottle
 
     public function hit(string $identifier): void
     {
-        foreach ($this->scopes($identifier) as $scope => $maxAttempts) {
+        $this->recordHits($this->scopes($identifier));
+    }
+
+    /**
+     * Count a failure against the IP scope only, never the identity scope.
+     *
+     * Used for a failed captcha/bot check: counting a captcha failure against
+     * the identity scope would let anyone who knows an administrator's email
+     * lock that account out at will by posting garbage tokens — a denial of
+     * service with no password guessing involved. The IP scope still sees the
+     * spray, so the attacker's own address is what gets locked.
+     */
+    public function hitIp(string $identifier): void
+    {
+        $ipScopes = array_filter(
+            $this->scopes($identifier),
+            static fn (string $scope): bool => str_starts_with($scope, 'ip:'),
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        $this->recordHits($ipScopes);
+    }
+
+    /**
+     * @param  array<string, int>  $scopes  cache-key scope => attempts allowed
+     */
+    private function recordHits(array $scopes): void
+    {
+        foreach ($scopes as $scope => $maxAttempts) {
             $attemptsKey = $this->attemptsKey($scope);
             $cached = Cache::get($attemptsKey, 0);
             $attempts = (is_int($cached) ? $cached : 0) + 1;

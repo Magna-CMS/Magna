@@ -10,14 +10,18 @@ use Magna\Blocks\Conditions\DisplayConditionRegistry;
 use Magna\Blocks\DataSources\DataSourceRegistry;
 use Magna\Blocks\DynamicTags\DynamicTagRegistry;
 use Magna\Content\SchemaRegistry;
+use Magna\Contracts\CaptchaSurface;
 use Magna\Contracts\DecoratesDeliveryResponse;
 use Magna\Contracts\ExtendsEntryForm;
+use Magna\Contracts\LoginCheck;
 use Magna\Contracts\ProvidesFrontendPages;
 use Magna\Contracts\RegistersAdminNavigation;
 use Magna\Contracts\RegistersBlocks;
+use Magna\Contracts\RegistersCaptchaSurfaces;
 use Magna\Contracts\RegistersDataSources;
 use Magna\Contracts\RegistersDisplayConditions;
 use Magna\Contracts\RegistersDynamicTags;
+use Magna\Contracts\RegistersLoginChecks;
 use Magna\Frontend\FrontendPageRegistry;
 
 /**
@@ -123,6 +127,36 @@ class PluginContractWirer
                 : [];
             $current[] = $plugin;
             $this->app->instance('magna.delivery_decorators', $current);
+        }
+
+        // Wire RegistersLoginChecks: accumulate pre-authentication checks the
+        // login seam runs before credentials are verified. Accumulation order is
+        // boot order (dependency-ordered, deterministic); the checks are AND-ed
+        // — any one denying denies the attempt — so order does not affect the
+        // security outcome. Only enabled plugins are wired.
+        if ($plugin instanceof RegistersLoginChecks) {
+            /** @var list<class-string<LoginCheck>|LoginCheck> $current */
+            $current = $this->app->bound('magna.auth.login_checks')
+                ? $this->app->make('magna.auth.login_checks')
+                : [];
+            foreach ($plugin->loginChecks() as $check) {
+                $current[] = $check;
+            }
+            $this->app->instance('magna.auth.login_checks', $current);
+        }
+
+        // Wire RegistersCaptchaSurfaces: accumulate the captcha-protectable
+        // surfaces plugins expose, so a security plugin can enumerate them for
+        // per-surface toggles without hardcoding which plugins exist.
+        if ($plugin instanceof RegistersCaptchaSurfaces) {
+            /** @var list<CaptchaSurface> $current */
+            $current = $this->app->bound('magna.captcha.surfaces')
+                ? $this->app->make('magna.captcha.surfaces')
+                : [];
+            foreach ($plugin->captchaSurfaces() as $surface) {
+                $current[] = $surface;
+            }
+            $this->app->instance('magna.captcha.surfaces', $current);
         }
     }
 }

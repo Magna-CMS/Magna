@@ -51,6 +51,7 @@ class PluginsServiceProvider extends ServiceProvider
                 new PluginMigrator,
                 new PluginRegistry($this->app->make(PluginDiscovery::class)),
                 new PluginContractWirer($this->app),
+                new PluginSettingsPurger,
             );
         });
 

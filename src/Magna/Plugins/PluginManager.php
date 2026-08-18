@@ -36,6 +36,7 @@ class PluginManager
         private readonly PluginMigrator $migrator,
         private readonly PluginRegistry $registry,
         private readonly PluginContractWirer $contractWirer,
+        private readonly PluginSettingsPurger $settingsPurger,
     ) {}
 
     /**
@@ -275,6 +276,12 @@ class PluginManager
 
             if ($purge) {
                 $this->contentTypes->purge($record);
+                // The plugin's own tables are gone; its settings live in core's
+                // shared `settings` table keyed by group and would otherwise be
+                // orphaned — including any encrypted secrets. Remove the groups
+                // the manifest declares under uninstall.settingsGroups (core
+                // groups are refused defensively).
+                $this->settingsPurger->purge($record);
                 // Dropping a plugin's tables while leaving its rows in the
                 // migrations ledger makes the purge irreversible in the worst
                 // way: enable() re-runs migrate, every migration is already

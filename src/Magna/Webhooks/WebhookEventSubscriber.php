@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Magna\Webhooks;
 
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Events\Dispatcher;
 use Magna\Content\Events\EntryCreated;
 use Magna\Content\Events\EntryDeleted;
@@ -13,16 +12,15 @@ use Magna\Content\Events\EntryUnpublished;
 use Magna\Content\Events\EntryUpdated;
 use Magna\Media\Events\MediaCreated;
 use Magna\Media\Events\MediaDeleted;
-use Magna\Webhooks\Jobs\DispatchWebhookJob;
 
 /**
- * Bridges core events to the webhook delivery pipeline.
- *
- * Subscribes to all supported webhook trigger events, matches active
- * subscriptions, creates delivery records, and dispatches jobs.
+ * Bridges core content/media events to the webhook delivery pipeline via the
+ * shared WebhookDispatcher.
  */
 class WebhookEventSubscriber
 {
+    public function __construct(private readonly WebhookDispatcher $dispatcher) {}
+
     /** @return array<class-string, string> */
     public function subscribe(Dispatcher $events): array
     {
@@ -101,26 +99,6 @@ class WebhookEventSubscriber
     /** @param array<string, mixed> $data */
     private function dispatch(string $eventKey, array $data): void
     {
-        /** @var Collection<int, WebhookSubscription> $subscriptions */
-        $subscriptions = WebhookSubscription::query()->where('active', true)->get();
-
-        foreach ($subscriptions as $subscription) {
-            if (! $subscription->subscribesTo($eventKey)) {
-                continue;
-            }
-
-            $delivery = WebhookDelivery::create([
-                'subscription_id' => $subscription->id,
-                'event' => $eventKey,
-                'payload' => array_merge($data, [
-                    'event' => $eventKey,
-                    'timestamp' => now()->toIso8601String(),
-                ]),
-                'status' => 'pending',
-                'attempts' => 0,
-            ]);
-
-            DispatchWebhookJob::dispatch($delivery->id);
-        }
+        $this->dispatcher->fire($eventKey, $data);
     }
 }

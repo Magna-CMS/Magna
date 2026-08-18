@@ -16,6 +16,7 @@ class WebhookServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(WebhookDispatcher::class);
         $this->app->singleton(WebhookEventSubscriber::class);
     }
 

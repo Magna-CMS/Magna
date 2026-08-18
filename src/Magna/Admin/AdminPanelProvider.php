@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Admin;
 
 use Filament\Enums\ThemeMode;
+use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Navigation\MenuItem;
 use Filament\Navigation\NavigationItem;
@@ -47,6 +48,7 @@ use Magna\Admin\Widgets\UpcomingScheduleWidget;
 use Magna\Auth\Filament\Login;
 use Magna\Auth\Http\Middleware\AdminCspMiddleware;
 use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
+use Magna\Contracts\LoginCheck;
 use Magna\Plugins\Plugin;
 
 class AdminPanelProvider extends PanelProvider
@@ -99,7 +101,15 @@ class AdminPanelProvider extends PanelProvider
             ->defaultAvatarProvider(InitialsAvatarProvider::class)
             ->defaultThemeMode(ThemeMode::Dark)
             ->darkMode(true)
-            ->font('Inter')
+            // Local provider: Filament's stock Bunny CDN stylesheet is blocked
+            // by the panel CSP (style-src 'self'); the published local Inter
+            // assets under public/fonts serve the same family without a
+            // third-party request.
+            ->font(
+                'Inter',
+                url: asset('fonts/filament/filament/inter/index.css'),
+                provider: LocalFontProvider::class,
+            )
             ->viteTheme('resources/css/filament/magna/theme.css')
             // ── Auth ──────────────────────────────────────────────────────────
             //   authMiddleware is REQUIRED — without it every panel page is
@@ -151,6 +161,14 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::TOPBAR_START,
                 fn (): View => view('filament.magna.topbar-mobile-brand'),
+            )
+            // Render any registered login-check widgets (captcha, …) beneath the
+            // sign-in form. Each check names a Blade view; a check whose provider
+            // is disabled renders nothing, so this is inert until a plugin such
+            // as Magna Defence turns captcha on.
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
+                fn (): HtmlString => $this->renderLoginCheckWidgets(),
             )
             // ── User menu ────────────────────────────────────────────────────
             //   Make the account row (the user's name + avatar at the top of the
@@ -409,6 +427,47 @@ class AdminPanelProvider extends PanelProvider
     private function pluginSurface(): PluginPanelSurface
     {
         return new PluginPanelSurface($this->app);
+    }
+
+    /**
+     * Concatenated markup of every registered login check's widget for the
+     * admin-login surface. Each check names a Blade view; the view self-gates
+     * (a disabled provider renders nothing), so this is empty until a plugin
+     * turns captcha on. Never throws — a broken check view must not take the
+     * login page down.
+     */
+    private function renderLoginCheckWidgets(): HtmlString
+    {
+        $checks = $this->app->bound('magna.auth.login_checks')
+            ? $this->app->make('magna.auth.login_checks')
+            : [];
+
+        if (! is_array($checks)) {
+            return new HtmlString('');
+        }
+
+        $html = '';
+
+        foreach ($checks as $check) {
+            $instance = is_string($check) ? $this->app->make($check) : $check;
+
+            if (! $instance instanceof LoginCheck || $instance->surface() !== Login::SURFACE) {
+                continue;
+            }
+
+            $view = $instance->view();
+            if ($view === null) {
+                continue;
+            }
+
+            try {
+                $html .= view($view)->render();
+            } catch (\Throwable) {
+                // A plugin's broken widget view must not break sign-in.
+            }
+        }
+
+        return new HtmlString($html);
     }
 
     /**

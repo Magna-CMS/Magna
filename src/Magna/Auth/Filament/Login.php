@@ -10,7 +10,10 @@ use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Magna\Auth\LoginThrottle;
+use Magna\Contracts\FailMode;
+use Magna\Contracts\LoginCheck;
 use Magna\Users\User;
+use Throwable;
 
 /**
  * The single sign-in page for the panel. Filament's default login only checks
@@ -29,6 +32,13 @@ use Magna\Users\User;
  */
 class Login extends BaseLogin
 {
+    /**
+     * Token from a rendered login check's widget (e.g. Turnstile), set by the
+     * widget's JS via `@this.set('captchaToken', …)`. A plain Livewire property
+     * rather than a form field so it is not part of the validated form schema.
+     */
+    public ?string $captchaToken = null;
+
     public function authenticate(): ?LoginResponse
     {
         $throttle = app(LoginThrottle::class);
@@ -43,6 +53,11 @@ class Login extends BaseLogin
                 ]),
             ]);
         }
+
+        // Pre-authentication checks (captcha, …) run after the local lockout
+        // check — so a locked-out attacker never triggers an outbound provider
+        // call — and before any credential work.
+        $this->runLoginChecks($data + ['captcha_token' => $this->captchaToken]);
 
         // Peek at the credentials WITHOUT logging in. If they belong to a
         // 2FA-enrolled user who may access the panel, divert to the challenge
@@ -84,5 +99,52 @@ class Login extends BaseLogin
         }
 
         return $response;
+    }
+
+    /** The surface identifier the admin panel login is registered under. */
+    public const SURFACE = 'magna.admin.login';
+
+    /**
+     * Run every registered login check for this surface before credentials are
+     * verified. A check denies by throwing ValidationException (rethrown to the
+     * form) and permits by returning — it can never turn a denial into an
+     * approval, because the real login still runs afterwards. An *unexpected*
+     * throwable from a check is a bug: it is reported and then handled per the
+     * check's declared fail mode — Open continues (availability first; the
+     * remaining gates still stand), Closed denies.
+     *
+     * @param  array<string, mixed>  $state
+     */
+    private function runLoginChecks(array $state): void
+    {
+        $checks = app()->bound('magna.auth.login_checks')
+            ? app('magna.auth.login_checks')
+            : [];
+
+        if (! is_array($checks)) {
+            return;
+        }
+
+        foreach ($checks as $check) {
+            $instance = is_string($check) ? app($check) : $check;
+
+            if (! $instance instanceof LoginCheck || $instance->surface() !== self::SURFACE) {
+                continue;
+            }
+
+            try {
+                $instance->assert($state, request());
+            } catch (ValidationException $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                report($e);
+
+                if ($instance->failMode() === FailMode::Closed) {
+                    throw ValidationException::withMessages([
+                        'data.email' => __('Sign-in checks could not be completed. Please try again.'),
+                    ]);
+                }
+            }
+        }
     }
 }

@@ -20,6 +20,8 @@ use Magna\Auth\Http\Middleware\EnsureTwoFactorEnrolled;
 use Magna\Auth\Http\Middleware\ForceHttpsMiddleware;
 use Magna\Auth\Http\Middleware\MagnaApiMiddleware;
 use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
+use Magna\Captcha\NullCaptcha;
+use Magna\Contracts\CaptchaProvider;
 use Magna\Settings\SecuritySettings;
 use Magna\Users\User;
 
@@ -31,6 +33,13 @@ class AuthServiceProvider extends ServiceProvider
         $this->app->singleton(TwoFactorService::class);
         $this->app->singleton(LoginThrottle::class);
         $this->app->singleton(ApiKeyService::class);
+
+        // The default captcha provider: no provider, every attempt passes, so a
+        // site with no captcha plugin behaves normally. A plugin such as Magna
+        // Defence rebinds this contract to a real provider (and refuses to let a
+        // second plugin silently replace it). Bound, not a singleton, so nothing
+        // caches the null provider if it is resolved before Defence boots.
+        $this->app->bind(CaptchaProvider::class, NullCaptcha::class);
     }
 
     public function boot(): void

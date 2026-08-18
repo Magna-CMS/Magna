@@ -6,6 +6,7 @@ namespace Magna\Auth\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Magna\Contracts\CaptchaProvider;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -41,9 +42,17 @@ class AdminCspMiddleware
             return $response;
         }
 
+        // When a captcha provider is enabled, its widget loads a remote script
+        // inside an iframe. Cloudflare Turnstile is the only host this opens, and
+        // only while captcha is on — a disabled provider leaves the policy
+        // exactly as it was. frame-ancestors stays 'none': the widget is framed
+        // BY the panel (frame-src), it does not frame the panel, so clickjacking
+        // protection is untouched.
+        $captchaHost = $this->captchaEnabled() ? ' https://challenges.cloudflare.com' : '';
+
         $csp = implode('; ', [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Livewire inline + Alpine eval; nonce step staged (§C5)
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'".$captchaHost, // Livewire inline + Alpine eval; nonce step staged (§C5)
             "style-src 'self' 'unsafe-inline'",                // Filament inline styles
             "img-src 'self' data: blob:",
             "font-src 'self' data:",
@@ -56,7 +65,7 @@ class AdminCspMiddleware
             // opens no new exfiltration path — connect-src still blocks foreign origins.
             "connect-src 'self' blob:",                        // Livewire XHR + uploader object URLs
             "worker-src 'self' blob:",                         // FilePond builds its workers from blob: URLs
-            "frame-src 'self'",                                // preview/canvas iframes are same-origin
+            "frame-src 'self'".$captchaHost,                   // preview/canvas iframes are same-origin; Turnstile iframe when enabled
             "frame-ancestors 'none'",
             "form-action 'self'",
             "base-uri 'self'",
@@ -66,5 +75,19 @@ class AdminCspMiddleware
         $response->headers->set('Content-Security-Policy', $csp);
 
         return $response;
+    }
+
+    /**
+     * Whether a real captcha provider is bound and switched on. Resolved from
+     * the container and guarded — CSP must never fail a request, so any error
+     * (no binding during early boot, DB unavailable) is treated as "off".
+     */
+    private function captchaEnabled(): bool
+    {
+        try {
+            return app(CaptchaProvider::class)->enabled();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
