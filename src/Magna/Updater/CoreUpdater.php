@@ -24,12 +24,18 @@ use Throwable;
  * fail-with-message pattern, progress written to cache for the UI to read.
  *
  * Scope note: this overlays source code only (src/Magna, app, bootstrap,
- * routes, database/migrations) — never composer.json/composer.lock/vendor/.
- * A customer's vendor/ may contain plugin packages added by
- * PluginInstaller's own `composer require` calls that the core release's
- * composer.json knows nothing about; overlaying it wholesale would silently
- * drop them. A core release that changes its own Composer dependencies is
- * therefore not yet a "one-click" case — see docs/updates-architecture.md.
+ * routes, database/migrations) plus the plugin SDK — never
+ * composer.json/composer.lock, and never the rest of vendor/. A customer's
+ * vendor/ may contain plugin packages added by PluginInstaller's own
+ * `composer require` calls that the core release's composer.json knows
+ * nothing about; overlaying it wholesale would silently drop them. A core
+ * release that changes its own Composer dependencies is therefore not yet a
+ * "one-click" case — see docs/updates-architecture.md.
+ *
+ * The SDK is the exception, and deliberately so: it is core's contract surface
+ * that merely happens to live under vendor/. Shipping core without it meant a
+ * plugin written against a new contract could not be enabled on an updated
+ * site, because the interface it implements had never arrived.
  *
  * Also out of scope for the same reason: a generic, cross-driver DB
  * dump/restore. Rollback restores the file-level snapshot only; if
@@ -48,7 +54,25 @@ class CoreUpdater
         'bootstrap',
         'routes',
         'database/migrations',
+        // The SDK travels with core, because it is core's own contract surface
+        // under a vendor path rather than a third-party dependency. Leaving it
+        // behind is what made a plugin built against a newer contract
+        // uninstallable on an updated site: core arrived, the interface it
+        // names did not, and enabling the plugin died with
+        // `Interface "Magna\Contracts\…" not found`. Its namespaces are
+        // registered at boot by PluginAutoloader, so a contract in a namespace
+        // the site's vendor/composer maps predate still resolves.
+        self::SDK_PATH,
     ];
+
+    /**
+     * The one vendor path core owns outright.
+     *
+     * Safe to overlay where the rest of vendor/ is not: it holds no customer
+     * packages, no state and no configuration — only the interfaces and value
+     * objects plugins are compiled against.
+     */
+    public const SDK_PATH = 'vendor/magna-cms/plugin-sdk';
 
     /**
      * `$zipUrl` comes straight from Update Manager's `/updates` response

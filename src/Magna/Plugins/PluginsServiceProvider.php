@@ -19,6 +19,7 @@ use Magna\Plugins\Commands\PluginListCommand;
 use Magna\Plugins\Commands\PluginMakeCommand;
 use Magna\Plugins\Commands\PluginUninstallCommand;
 use Magna\Plugins\Commands\PluginValidateCommand;
+use Magna\Updater\CoreUpdater;
 
 class PluginsServiceProvider extends ServiceProvider
 {
@@ -68,6 +69,18 @@ class PluginsServiceProvider extends ServiceProvider
         /** @var PluginManager $manager */
         $manager = $this->app->make(PluginManager::class);
 
+        // Before any plugin boots, because a plugin's entry class names these
+        // contracts in its `implements` clause — PHP resolves those the moment
+        // the class loads, so a missing one is a fatal, not a missing feature.
+        //
+        // Needed because a core update ships a newer SDK into vendor/ but
+        // cannot regenerate vendor/composer's maps: on a host with no Composer
+        // binary there is nothing to run. A contract in a namespace those maps
+        // predate would therefore be on disk and still unloadable. Registering
+        // the SDK's own PSR-4 rules here closes that, exactly as it already
+        // does for a plugin dropped in as a zip.
+        $this->registerSdkNamespaces();
+
         // Enabled plugins live in the database; skip until installed so a fresh
         // unzip (possibly with no database driver yet) renders the installer
         // rather than 500ing while querying the plugins table.
@@ -90,6 +103,29 @@ class PluginsServiceProvider extends ServiceProvider
 
             $this->registerPluginCommands($manager);
         }
+    }
+
+    /**
+     * Teach the running autoloader where the SDK's contracts live.
+     *
+     * Composer already knows on any install where `composer install` has run
+     * since the SDK last changed. This is for the install that was updated
+     * from an archive instead: CoreUpdater lays the new SDK down inside
+     * vendor/ but cannot regenerate vendor/composer's maps, because a host
+     * with no Composer binary has nothing to regenerate them with.
+     */
+    private function registerSdkNamespaces(): void
+    {
+        $sdk = $this->app->basePath(CoreUpdater::SDK_PATH);
+
+        // Absent when the SDK is required from somewhere other than vendor/ —
+        // a path repository during development, for instance, where Composer's
+        // own maps are regenerated on every install and this is unnecessary.
+        if (! is_dir($sdk)) {
+            return;
+        }
+
+        $this->app->make(PluginAutoloader::class)->register($sdk);
     }
 
     /**
