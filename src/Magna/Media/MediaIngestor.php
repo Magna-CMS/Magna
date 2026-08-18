@@ -30,6 +30,21 @@ class MediaIngestor
         'image/avif',
         'image/svg+xml',
         'application/pdf',
+        // Media & document types for the Blog plugin's video / audio / file blocks.
+        // These are stored verbatim (not re-encoded); only rasters and SVG are
+        // processed for safety.
+        'video/mp4',
+        'video/webm',
+        'video/ogg',
+        'audio/mpeg',
+        'audio/ogg',
+        'audio/wav',
+        'audio/webm',
+        'application/zip',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     ];
 
     /**
@@ -51,9 +66,20 @@ class MediaIngestor
     {
         $s = MediaSettings::get();
 
+        // Video and audio reuse the document size cap (raise
+        // MediaSettings::max_document_upload_bytes if larger files are needed).
+        if (str_starts_with($mime, 'video/') || str_starts_with($mime, 'audio/')) {
+            return $s->max_document_upload_bytes;
+        }
+
         return match ($mime) {
             'image/svg+xml' => $s->max_svg_upload_bytes,
-            'application/pdf' => $s->max_document_upload_bytes,
+            'application/pdf',
+            'application/zip',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => $s->max_document_upload_bytes,
             default => $s->max_image_upload_bytes,
         };
     }
@@ -67,6 +93,18 @@ class MediaIngestor
         'image/avif' => 'avif',
         'image/svg+xml' => 'svg',
         'application/pdf' => 'pdf',
+        'video/mp4' => 'mp4',
+        'video/webm' => 'webm',
+        'video/ogg' => 'ogv',
+        'audio/mpeg' => 'mp3',
+        'audio/ogg' => 'oga',
+        'audio/wav' => 'wav',
+        'audio/webm' => 'weba',
+        'application/zip' => 'zip',
+        'application/msword' => 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.ms-excel' => 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
     ];
 
     public function __construct(
