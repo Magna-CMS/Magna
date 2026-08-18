@@ -25,6 +25,7 @@ use Magna\Marketplace\PluginInstaller;
 use Magna\Marketplace\PluginInstallStarter;
 use Magna\Marketplace\PluginListing;
 use Magna\Plugins\Exceptions\PluginCompatibilityException;
+use Magna\Plugins\Exceptions\PluginNotFoundException;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
@@ -230,6 +231,12 @@ class PluginsPage extends Page
             Notification::make()->title('Incompatible plugin')->body($e->getMessage())->danger()->send();
         } catch (Throwable $e) {
             Notification::make()->title('Failed to enable plugin')->body($e->getMessage())->danger()->send();
+
+            // A failed install rolls its record back, but this component still
+            // renders the list from before — offering Enable/Uninstall for a
+            // plugin that no longer exists. Re-query so the ghost row is gone
+            // without the admin needing a hard refresh.
+            $this->refreshPlugins();
         }
     }
 
@@ -720,6 +727,13 @@ class PluginsPage extends Page
                     Notification::make()->title('Plugin uninstalled.')->success()->send();
                     $url = static::getUrl();
                     $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+                } catch (PluginNotFoundException) {
+                    // The record is already gone — typically a failed install
+                    // that rolled itself back while this page still showed the
+                    // row. The outcome the admin wanted is already true; the
+                    // "run composer require" wording would only mislead here.
+                    Notification::make()->title('Plugin already removed — refreshing the list.')->success()->send();
+                    $this->refreshPlugins();
                 } catch (Throwable $e) {
                     Notification::make()->title('Uninstall failed')->body($e->getMessage())->danger()->send();
                 } finally {
@@ -742,6 +756,10 @@ class PluginsPage extends Page
                     Notification::make()->title('Plugin purged.')->success()->send();
                     $url = static::getUrl();
                     $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+                } catch (PluginNotFoundException) {
+                    // See uninstallAction(): the row was stale, nothing to purge.
+                    Notification::make()->title('Plugin already removed — refreshing the list.')->success()->send();
+                    $this->refreshPlugins();
                 } catch (Throwable $e) {
                     Notification::make()->title('Purge failed')->body($e->getMessage())->danger()->send();
                 } finally {

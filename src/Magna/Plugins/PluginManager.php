@@ -100,6 +100,14 @@ class PluginManager
             } catch (Throwable $e) {
                 $record->update(['enabled' => false, 'disabled_at' => now()]);
                 logger()->error("Plugin [{$record->name}] auto-disabled: class or files missing. {$e->getMessage()}");
+
+                // A cached Filament panel still advertises this plugin's pages
+                // and widgets, but its routes will never register now — every
+                // cached nav item or dashboard widget that calls getUrl()
+                // throws RouteNotFoundException and takes the whole panel down
+                // with it. Manual disable() clears the cache; the automatic
+                // path must too.
+                $this->invalidateAdminPanelCache();
             }
         }
 
@@ -112,6 +120,11 @@ class PluginManager
             } catch (Throwable $e) {
                 unset($this->booted[$name]);
                 logger()->error("Plugin [{$name}] auto-disabled during boot: {$e->getMessage()}");
+
+                // Same stale-cache hazard as the register() pass: the plugin's
+                // panel components may be cached but its routes are not
+                // registered this request.
+                $this->invalidateAdminPanelCache();
             }
         }
 
