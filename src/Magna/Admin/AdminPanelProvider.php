@@ -123,7 +123,7 @@ class AdminPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
             // Filament defaults the sidebar to a wide 20rem; trim it so the
             // content area (dashboard, tables) gets that space back.
-            ->sidebarWidth('16rem')
+            ->sidebarWidth('14rem')
             ->maxContentWidth('full')
             // brandName intentionally omitted: the brand logo view already
             // renders the "Magna" wordmark, so setting brandName too would
