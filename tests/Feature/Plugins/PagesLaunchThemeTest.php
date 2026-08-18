@@ -96,3 +96,27 @@ it('keeps rendering unstyled-by-theme blocks through the core fallback', functio
 
     $this->get('/fallback')->assertOk()->assertSee('magna-block--divider', false);
 });
+
+it('neutralises a javascript: menu URL in the header nav', function (): void {
+    $author = launchSetup();
+    $entryManager = app(EntryManager::class);
+
+    $page = $entryManager->create('page', ['title' => 'Nav Safe', 'slug' => 'nav-safe', 'blocks_data' => []], $author->id);
+    $entryManager->publish($page, actorId: $author->id);
+
+    app(MenuManager::class)->syncItems(
+        app(MenuManager::class)->create('primary', 'Primary'),
+        [
+            ['label' => 'Fine', 'type' => 'url', 'url' => '/about'],
+            ['label' => 'Evil', 'type' => 'url', 'url' => 'javascript:alert(1)'],
+            ['label' => 'Sneaky', 'type' => 'url', 'url' => " java\tscript:alert(2)"],
+        ],
+    );
+
+    $html = (string) $this->get('/nav-safe')->assertOk()->getContent();
+
+    expect($html)->toContain('href="/about"')          // legitimate URL intact
+        ->and($html)->toContain('Evil')                // item renders, defanged
+        ->and($html)->not->toContain('javascript:alert')
+        ->and($html)->not->toContain('script:alert');
+});

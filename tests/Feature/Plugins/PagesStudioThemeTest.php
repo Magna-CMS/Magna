@@ -10,6 +10,7 @@ declare(strict_types=1);
  */
 
 use Magna\Content\EntryManager;
+use Magna\Pages\Menus\MenuManager;
 use Magna\Plugins\PluginManager;
 use Magna\Testing\PluginTestCase;
 use Magna\Themes\ThemeManager;
@@ -94,4 +95,26 @@ it('renders the Loop block through the paired addon as Studio cards', function (
         ->and($html)->toContain('href="/beta"')
         // ...and its additive token joined the theme's variables.
         ->and($html)->toContain('--color-loop-card:#292524');
+});
+
+it('neutralises a javascript: menu URL in the header nav', function (): void {
+    $author = studioSetup();
+    $entryManager = app(EntryManager::class);
+
+    $page = $entryManager->create('page', ['title' => 'Nav Safe', 'slug' => 'nav-safe', 'blocks_data' => []], $author->id);
+    $entryManager->publish($page, actorId: $author->id);
+
+    app(MenuManager::class)->syncItems(
+        app(MenuManager::class)->create('primary', 'Primary'),
+        [
+            ['label' => 'Fine', 'type' => 'url', 'url' => '/about'],
+            ['label' => 'Evil', 'type' => 'url', 'url' => 'javascript:alert(1)'],
+        ],
+    );
+
+    $html = (string) $this->get('/nav-safe')->assertOk()->getContent();
+
+    expect($html)->toContain('href="/about"')
+        ->and($html)->toContain('Evil')
+        ->and($html)->not->toContain('javascript:alert');
 });

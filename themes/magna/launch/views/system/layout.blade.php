@@ -130,7 +130,7 @@
                 <nav class="l-nav" aria-label="Primary">
                     <ul>
                         @foreach($headerMenu as $item)
-                            <li><a href="{{ $item['url'] }}" @if(!empty($item['target'])) target="{{ $item['target'] }}" rel="noopener noreferrer" @endif>{{ $item['label'] }}</a></li>
+                            <li><a href="{{ \Magna\Blocks\Support\SafeUrl::sanitize($item['url'] ?? null) }}" @if(!empty($item['target'])) target="{{ $item['target'] }}" rel="noopener noreferrer" @endif>{{ $item['label'] }}</a></li>
                         @endforeach
                     </ul>
                 </nav>

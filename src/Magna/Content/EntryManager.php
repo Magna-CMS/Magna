@@ -195,9 +195,20 @@ class EntryManager
         $copy = clone $entry;
         $handle = $entry->getHandle();
         $id = $entry->id;
+        $type = $handle !== null ? $this->registry->get($handle) : null;
 
-        DB::transaction(function () use ($entry, $handle, $id): void {
+        DB::transaction(function () use ($entry, $handle, $id, $type): void {
             $entry->delete();
+
+            // Deleting a hierarchical parent must not strand its children: a
+            // dangling parent_id makes every later save of a child throw
+            // ("The selected parent does not exist") and leaves stale paths
+            // resolving under the deleted slug. Promote direct children to
+            // the deleted entry's parent and rewrite their subtrees, inside
+            // the same transaction so a path collision rolls the delete back.
+            if ($type !== null) {
+                $this->hierarchy->promoteChildrenOf($entry, $type);
+            }
 
             // Stage 13 (S5-04): magna_relations can't carry a real foreign
             // key (from_id/to_id point into dynamic magna_entries_{type}
@@ -302,7 +313,15 @@ class EntryManager
                     $entry->setAttribute($field->handle, $payload[$field->handle]);
                 }
             }
+
+            // A restored slug changes the entry's URL: recompute the
+            // materialized path against the current parent, re-assert the
+            // path is free, and rewrite descendants — the same lifecycle
+            // update() runs. A collision throws and rolls the whole restore
+            // back, restore-point snapshot included.
+            $this->hierarchy->applyOnSave($entry, $type, []);
             $entry->save();
+            $this->hierarchy->cascadeDescendants($entry, $type);
         });
 
         event(new EntryUpdated($entry, $actorId));
@@ -496,7 +515,14 @@ class EntryManager
                 $published->setAttribute($field->handle, $draft->getAttribute($field->handle));
             }
             $published->published_at = now();
+
+            // The draft may carry a changed slug: recompute the published
+            // entry's path against its current parent, re-assert the path is
+            // free, and rewrite descendants — the same lifecycle update()
+            // runs. A collision throws and rolls the whole publish back.
+            $this->hierarchy->applyOnSave($published, $type, []);
             $published->save();
+            $this->hierarchy->cascadeDescendants($published, $type);
 
             // Remove the draft.
             $draft->delete();

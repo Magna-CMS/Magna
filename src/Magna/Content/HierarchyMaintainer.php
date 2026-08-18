@@ -65,6 +65,33 @@ class HierarchyMaintainer
     }
 
     /**
+     * Re-parent a deleted entry's direct children onto its own parent (or
+     * the root when it had none) and rewrite their subtree paths. Called
+     * after the parent row is gone — inside the caller's transaction — so a
+     * child whose slug matches the deleted parent's can take over the freed
+     * URL without a false collision, and a real collision rolls the whole
+     * delete back.
+     *
+     * @throws SchemaException
+     */
+    public function promoteChildrenOf(Entry $deleted, ContentType $type): void
+    {
+        if (! $type->hierarchical) {
+            return;
+        }
+
+        $parentId = $deleted->parent_id;
+
+        foreach (Entry::type($type->handle)->where('parent_id', $deleted->getKey())->get() as $child) {
+            $this->applyOnSave($child, $type, [
+                'parent_id' => is_string($parentId) ? $parentId : null,
+            ]);
+            $child->save();
+            $this->cascadeDescendants($child, $type);
+        }
+    }
+
+    /**
      * @throws SchemaException
      */
     private function pathFor(Entry $entry, ContentType $type): ?string

@@ -18,13 +18,28 @@ final class SafeUrl
     private const ALLOWED_SCHEMES = ['http', 'https', 'mailto', 'tel'];
 
     /**
-     * Return the URL unchanged if its scheme is safe, or '#' if it is not.
+     * Return the URL (whitespace-normalised) if its scheme is safe, or '#'
+     * if it is not.
      *
      * Relative URLs (no scheme, or starting with '/', '#', './') pass through.
      */
     public static function sanitize(mixed $url, string $fallback = '#'): string
     {
         if (! is_string($url) || $url === '') {
+            return $fallback;
+        }
+
+        // Browsers preprocess an href before parsing its scheme (WHATWG URL
+        // spec): leading/trailing C0 controls and spaces are stripped, and
+        // every tab, LF, and CR is removed wherever it appears. That makes
+        // " javascript:x" and "java\tscript:x" executable even though
+        // parse_url() reports no scheme for them. Mirror the browser's
+        // preprocessing, allowlist the scheme of the CLEANED value, and
+        // return the cleaned value — so the scheme we checked is the scheme
+        // the browser will act on.
+        $url = str_replace(["\t", "\n", "\r"], '', trim($url, "\x00..\x20"));
+
+        if ($url === '') {
             return $fallback;
         }
 
