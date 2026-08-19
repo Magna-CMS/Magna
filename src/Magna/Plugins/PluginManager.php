@@ -176,16 +176,20 @@ class PluginManager
 
         $this->migrator->run($info->basePath);
 
-        // Stage 11 (S11-03): the PluginRecord write, permission
-        // registration, and content-type persistence are dependent DML
-        // steps — if the last one (persistPluginContentTypes) throws, the
+        // Stage 11 (S11-03): the PluginRecord write and permission
+        // registration are dependent DML steps — if a later one throws, the
         // earlier ones were previously left committed, so the plugin would
-        // show as "enabled" in the admin list while missing the content
-        // types it's supposed to provide, with no clean way to recover
-        // short of manual DB surgery. The migrator is DDL and stays
-        // outside — MySQL auto-commits DDL regardless, so wrapping it
-        // would only be misleading (same caveat already accepted in
-        // SchemaSyncer for the same reason).
+        // show as "enabled" in the admin list while missing what it is
+        // supposed to provide, with no clean way to recover short of manual
+        // DB surgery.
+        //
+        // Only DML belongs in here. MySQL commits implicitly on DDL, so a
+        // single CREATE TABLE inside this closure ends the transaction and
+        // the commit that follows throws "There is no active transaction" —
+        // reported to the operator as a failed enable, on an enable that
+        // actually worked. The migrator was already kept outside for that
+        // reason; the content-type tables now are too, in
+        // activateContentTypes().
         $plugin = DB::transaction(function () use ($name, $info): Plugin {
             $record = PluginRecord::updateOrCreate(
                 ['name' => $name],
@@ -205,6 +209,10 @@ class PluginManager
 
             return $plugin;
         });
+
+        // After the transaction, because creating a content type is DDL — see
+        // activateContentTypes().
+        $this->activateContentTypes($plugin);
 
         $this->booted[$name] = $plugin;
 
@@ -347,8 +355,29 @@ class PluginManager
         $this->routes->loadRoutes($plugin);
         $this->routes->registerPermissions($manifest);
         $this->contractWirer->wire($plugin);
+    }
+
+    /**
+     * The content-type half of activation, kept out of the transaction.
+     *
+     * `syncSchemas()` creates the `magna_entries_*` tables, and MySQL commits
+     * implicitly on DDL. Run inside a transaction, the first table a plugin
+     * creates ends it — and the commit that followed then failed with
+     * "There is no active transaction", reported to the operator as
+     * "Failed to enable plugin" even though everything had in fact been
+     * written. That is the same caveat the migrator is already kept outside
+     * for; this step was simply missed.
+     *
+     * `persist()` is ordinary DML and keeps its own transaction, so the
+     * content_types rows still land together or not at all.
+     */
+    private function activateContentTypes(Plugin $plugin): void
+    {
         $this->contentTypes->syncSchemas($plugin);
-        $this->contentTypes->persist($plugin);
+
+        DB::transaction(function () use ($plugin): void {
+            $this->contentTypes->persist($plugin);
+        });
     }
 
     /**
