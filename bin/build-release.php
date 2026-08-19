@@ -708,6 +708,14 @@ Options -Indexes
     RewriteRule ^(\.env|\.git|composer\.(json|lock)|artisan) - [F,L]
     RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|schemas|src|storage|tests|vendor)(/|$) - [F,L]
 
+    # Strip trailing slashes here, while REQUEST_URI is still the client's.
+    # Laravel's own trailing-slash redirect in public/.htaccess captures
+    # %{REQUEST_URI} — which, after the forwarder below has run, is the
+    # internally rewritten /public/... path. It then answered /erp/ with a
+    # 301 to /public/erp, leaking the internal layout as the browser URL.
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.+)/$ /$1 [R=301,L]
+
     # Forward everything else into public/ where the real front controller lives.
     RewriteCond %{REQUEST_URI} !^/public/
     RewriteRule ^(.*)$ public/$1 [L]
