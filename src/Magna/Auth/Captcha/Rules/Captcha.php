@@ -29,6 +29,16 @@ use Magna\Contracts\CaptchaProvider;
  */
 final class Captcha implements ValidationRule
 {
+    /**
+     * Run even when the attribute is missing or null. Consumers attach this as
+     * ['nullable', ..., new Captcha(...)] so a captcha-disabled site accepts
+     * requests without the field — but Laravel skips non-implicit rules for an
+     * absent attribute, which turned "omit captcha_token from the POST body"
+     * into a complete bypass. The provider decides what a null token means:
+     * disabled passes, enabled denies with missing-input-response.
+     */
+    public bool $implicit = true;
+
     /** Turnstile tokens are ~2KB; reject anything larger before any network call. */
     private const MAX_TOKEN_BYTES = 2048;
 
