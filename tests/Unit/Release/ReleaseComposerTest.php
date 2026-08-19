@@ -114,3 +114,51 @@ it('never ships require-dev', function (): void {
     expect($result)->not->toHaveKey('require-dev')
         ->and($result['require'])->toHaveKey('laravel/framework');
 });
+
+// v1.3.19 shipped composer.json with `"url": "C:/Users/.../magna-plugin-sdk"`,
+// so every Composer command on a released site died with "The `url` supplied
+// for the path (…) repository does not exist" — including the `composer
+// require` the Marketplace runs, which is why no plugin could be installed.
+it('ships no path repositories and no build-machine urls for a plain release', function (): void {
+    $result = release_publicise_path_repositories(
+        workingCopyComposer(),
+        fakeResolver(),
+        static fn (string $url): ?string => str_contains($url, 'magna-plugin-sdk') ? '^1.0' : null,
+    );
+
+    $types = array_column($result['repositories'], 'type');
+
+    expect($types)->not->toContain('path')
+        ->and($types)->toContain('composer')                        // untouched
+        ->and($result['require']['magna-cms/plugin-sdk'])->toBe('^1.0');
+});
+
+it('falls back to any published version when a path source declares no line', function (): void {
+    $result = release_publicise_path_repositories(
+        workingCopyComposer(),
+        fakeResolver(),
+        static fn (string $url): ?string => null,
+    );
+
+    expect($result['require']['magna-cms/plugin-sdk'])->toBe('*');
+});
+
+it('leaves a public version constraint alone', function (): void {
+    $composer = workingCopyComposer();
+    $composer['require']['magna-cms/plugin-sdk'] = '^1.3';
+
+    $result = release_publicise_path_repositories(
+        $composer,
+        fakeResolver(),
+        static fn (string $url): ?string => '^9.9',
+    );
+
+    expect($result['require']['magna-cms/plugin-sdk'])->toBe('^1.3');
+});
+
+it('reads the public constraint from a source version or its branch alias', function (): void {
+    expect(release_public_constraint(['version' => 'v2.4.1']))->toBe('^2.4')
+        ->and(release_public_constraint(['extra' => ['branch-alias' => ['dev-main' => '1.x-dev']]]))->toBe('^1.0')
+        ->and(release_public_constraint(['extra' => ['branch-alias' => ['dev-next' => '2.3.x-dev']]]))->toBe('^2.3')
+        ->and(release_public_constraint([]))->toBeNull();
+});

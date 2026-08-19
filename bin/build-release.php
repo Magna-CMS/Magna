@@ -267,13 +267,24 @@ $composerJson = release_filter_path_repositories(
     static fn (string $url): ?string => path_repo_package_name($root, $url),
 );
 
-// Rewrite every remaining path repository to an absolute path in copy mode.
-// PLUGIN_SDK_PATH can override the sibling SDK location; everything else
-// resolves relative to $root. The committed composer.json carries no path
-// repositories (every public package resolves from Packagist), so this loop
-// only does work when a local working copy has wired some in.
+// A plain release ships no path sources at all: everything it still requires
+// is public, so the local wiring is dropped and the branch constraints that
+// went with it are swapped for the stable ranges those packages publish under.
+// Absolute build-machine URLs used to be written here instead, which broke
+// every Composer command on the target — see release_publicise_path_repositories().
+if (! $hub) {
+    $composerJson = release_publicise_path_repositories(
+        $composerJson,
+        static fn (string $url): ?string => path_repo_package_name($root, $url),
+        static fn (string $url): ?string => path_repo_public_constraint($root, $url),
+    );
+}
+
+// A hub keeps its path repositories, so each source travels inside the archive
+// and the URL stays relative to the deployment root. PLUGIN_SDK_PATH can
+// override the sibling SDK location; everything else resolves relative to $root.
 $sdkOverride = getenv('PLUGIN_SDK_PATH') ?: null;
-foreach (($composerJson['repositories'] ?? []) as $i => $repo) {
+foreach ($hub ? ($composerJson['repositories'] ?? []) : [] as $i => $repo) {
     if (($repo['type'] ?? null) !== 'path' || ! isset($repo['url'])) {
         continue;
     }
@@ -289,35 +300,21 @@ foreach (($composerJson['repositories'] ?? []) as $i => $repo) {
         fail("Path repository source not found: {$url} (resolved {$abs}). Check plugins-dev/ / PLUGIN_SDK_PATH.");
     }
 
-    // A hub keeps its path repositories, so the source has to travel inside
-    // the archive and the URL has to stay relative to the deployment root.
-    // Absolute build-machine URLs would break every Composer command on the
-    // target — including the `composer require` the Marketplace runs to
-    // install a plugin, which re-resolves the whole tree and would drop any
-    // package it cannot find a source for.
-    if ($hub) {
-        $relative = release_bundle_relative_path(path_repo_package_name($root, $abs), $abs);
+    $relative = release_bundle_relative_path(path_repo_package_name($root, $abs), $abs);
 
-        // Its own exclusion list, not the archive-wide one: that list drops
-        // anything named "docs" or "plugins-dev" (meaningful at the app root,
-        // wrong inside a package) and keeps "dist"/"bin" (a plugin's own
-        // release zips and build tooling, which must not ship).
-        $bundleExcludes = [
-            '.git', '.github', '.gitignore', '.gitattributes', 'node_modules',
-            'vendor', 'tests', 'dist', 'bin', 'storage', '.env',
-            'phpunit.xml', 'phpunit.xml.dist', '.phpunit.result.cache',
-        ];
-        copy_tree($abs, $stage.'/'.$relative, $bundleExcludes, []);
-        $composerJson['repositories'][$i]['url'] = $relative;
-        $composerJson['repositories'][$i]['options']['symlink'] = false;
-        say("  bundled path repo source -> {$relative}");
-
-        continue;
-    }
-
-    $composerJson['repositories'][$i]['url'] = str_replace('\\', '/', $abs);
+    // Its own exclusion list, not the archive-wide one: that list drops
+    // anything named "docs" or "plugins-dev" (meaningful at the app root,
+    // wrong inside a package) and keeps "dist"/"bin" (a plugin's own
+    // release zips and build tooling, which must not ship).
+    $bundleExcludes = [
+        '.git', '.github', '.gitignore', '.gitattributes', 'node_modules',
+        'vendor', 'tests', 'dist', 'bin', 'storage', '.env',
+        'phpunit.xml', 'phpunit.xml.dist', '.phpunit.result.cache',
+    ];
+    copy_tree($abs, $stage.'/'.$relative, $bundleExcludes, []);
+    $composerJson['repositories'][$i]['url'] = $relative;
     $composerJson['repositories'][$i]['options']['symlink'] = false;
-    say('  rewired path repo -> '.str_replace('\\', '/', $abs));
+    say("  bundled path repo source -> {$relative}");
 }
 
 $composerJson = release_drop_require_dev($composerJson);
@@ -511,13 +508,7 @@ say("Done. {$count} files, {$sizeMb} MB -> downloads/{$archiveName}", C_GREEN);
  */
 function path_repo_package_name(string $root, string $url): ?string
 {
-    // Absolute already? Both shapes occur: repositories are relative in a
-    // working copy ("plugins-dev/magna/docs") and absolute after the rewrite
-    // above ("/srv/src/..." on POSIX, "C:/Users/..." on Windows).
-    $isAbsolute = str_starts_with($url, '/') || preg_match('#^[A-Za-z]:[/\\\\]#', $url) === 1;
-    $dir = $isAbsolute ? $url : $root.'/'.ltrim($url, './');
-
-    $manifest = @file_get_contents(rtrim($dir, '/').'/composer.json');
+    $manifest = @file_get_contents(path_repo_dir($root, $url).'/composer.json');
     if ($manifest === false) {
         return null;
     }
@@ -525,6 +516,40 @@ function path_repo_package_name(string $root, string $url): ?string
     $decoded = json_decode($manifest, true);
 
     return is_array($decoded) && is_string($decoded['name'] ?? null) ? $decoded['name'] : null;
+}
+
+/**
+ * The public constraint a path-repository package is required at once the
+ * repository is gone, read from the source's own composer.json.
+ */
+function path_repo_public_constraint(string $root, string $url): ?string
+{
+    $manifest = @file_get_contents(path_repo_dir($root, $url).'/composer.json');
+    if ($manifest === false) {
+        return null;
+    }
+
+    $decoded = json_decode($manifest, true);
+
+    return is_array($decoded) ? release_public_constraint($decoded) : null;
+}
+
+/**
+ * Directory a `type: path` repository URL points at.
+ *
+ * Both shapes occur: repositories are relative in a working copy
+ * ("plugins-dev/magna/docs", "../magna-plugin-sdk") and absolute once the hub
+ * build has resolved them ("/srv/src/..." on POSIX, "C:/Users/..." on
+ * Windows). A sibling checkout reached through "../" has to resolve as a real
+ * path — trimming the dots off instead pointed it back inside the app root,
+ * where nothing lives, and the SDK repository then looked unidentifiable.
+ */
+function path_repo_dir(string $root, string $url): string
+{
+    $isAbsolute = str_starts_with($url, '/') || preg_match('#^[A-Za-z]:[/\\\\]#', $url) === 1;
+    $dir = $isAbsolute ? $url : $root.'/'.$url;
+
+    return rtrim(str_replace('\\', '/', realpath($dir) ?: $dir), '/');
 }
 
 /**
@@ -558,6 +583,26 @@ function verify_release(string $zipPath): void
     if ($missing !== []) {
         $zip->close();
         fail('Archive is missing required files: '.implode(', ', $missing));
+    }
+
+    // The shipped composer.json must be resolvable on the target. v1.3.19 and
+    // v1.3.20 both went out carrying a path repository pointing at the build
+    // machine's own SDK checkout, so every Composer command on a released site
+    // failed with "The `url` supplied for the path (…) repository does not
+    // exist" — including the `composer require` behind every plugin install.
+    $shippedComposer = json_decode((string) $zip->getFromName('composer.json'), true);
+    foreach (is_array($shippedComposer) ? ($shippedComposer['repositories'] ?? []) : [] as $repo) {
+        if (! is_array($repo) || ($repo['type'] ?? null) !== 'path') {
+            continue;
+        }
+
+        $url = str_replace('\\', '/', (string) ($repo['url'] ?? ''));
+        $isAbsolute = str_starts_with($url, '/') || preg_match('#^[A-Za-z]:/#', $url) === 1;
+
+        if ($isAbsolute || $zip->locateName(rtrim($url, '/').'/composer.json') === false) {
+            $zip->close();
+            fail("Archive composer.json has an unresolvable path repository: {$url}. Its source is not inside the archive.");
+        }
     }
 
     // Permission bits: scan every entry, flag any regular file whose stored
