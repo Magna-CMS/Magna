@@ -1,7 +1,7 @@
 <x-filament-panels::page>
 
 @assets
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0" rel="stylesheet">
+@include('magna::admin.partials.material-symbols-font')
 <style>
 .mli-msri {
     font-family: 'Material Symbols Rounded';
