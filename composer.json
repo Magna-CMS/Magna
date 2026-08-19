@@ -23,7 +23,7 @@
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
         "magna-cms/plugin-sdk": "^1.5",
-        "pragmarx/google2fa": "8.0",
+        "pragmarx/google2fa": "9.1.0",
         "spatie/laravel-backup": "^10.3",
         "symfony/filesystem": "^7.4"
     },
