@@ -62,8 +62,9 @@
         </div>
 
         {{-- Spacer + item count --}}
+        @php $toolbarCount = $activeSource === null ? $galleryItems->total() : $sourceTotal; @endphp
         <p class="text-sm text-slate-400 dark:text-slate-500 hidden sm:block flex-shrink-0">
-            {{ $galleryItems->total() }} {{ Str::plural('file', $galleryItems->total()) }}
+            {{ $toolbarCount }} {{ Str::plural('file', $toolbarCount) }}
         </p>
 
         {{-- View toggle --}}
@@ -107,6 +108,47 @@
             @endif
         </div>
     </div>
+
+    {{-- ─── Sources ─────────────────────────────────────────────────────────────
+         Files a plugin stores on its own disk are listed here alongside the
+         library's own. Listed, not served: a confidential source hands over
+         names and sizes, and the operator follows the link into the plugin to
+         actually open anything. Without this strip the library silently
+         under-reported what the installation was holding. --}}
+    @if(! empty($mediaSources))
+    <div class="flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+            wire:click="selectSource(null)"
+            @class([
+                'flex-shrink-0 px-3.5 py-2 text-xs font-bold rounded-xl border transition-all',
+                'bg-violet-500 text-white border-violet-500' => $activeSource === null,
+                'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400/40' => $activeSource !== null,
+            ])
+        >
+            Library
+        </button>
+        @foreach($mediaSources as $source)
+        <button
+            wire:key="media-source-{{ $source->key() }}"
+            wire:click="selectSource('{{ $source->key() }}')"
+            @class([
+                'flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border transition-all',
+                'bg-violet-500 text-white border-violet-500' => $activeSource !== null && $activeSource->key() === $source->key(),
+                'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400/40' => $activeSource === null || $activeSource->key() !== $source->key(),
+            ])
+        >
+            @if($source->isConfidential())
+            <span class="mli-msri text-sm" title="Confidential — listed here, opened in the owning plugin">lock</span>
+            @endif
+            {{ $source->label() }}
+        </button>
+        @endforeach
+    </div>
+    @endif
+
+    @if($activeSource !== null)
+    @include('magna::admin.media-source-panel')
+    @else
 
     {{-- ─── Folders (toggled from the toolbar) ──────────────────────────────── --}}
     @if($galleryFolders->isNotEmpty())
@@ -272,6 +314,8 @@
     <div x-show="viewMode === 'list'">
         {{ $this->table }}
     </div>
+
+    @endif {{-- end plugin-source check --}}
 
 </div>
 

@@ -16,6 +16,7 @@ use Magna\Admin\Resources\MediaResource;
 use Magna\Admin\Widgets\MediaStatsWidget;
 use Magna\Media\Media;
 use Magna\Media\MediaFolder;
+use Magna\Media\MediaSourceRegistry;
 use Magna\Media\MediaUrlResolver;
 
 class ListMedia extends ListRecords
@@ -29,6 +30,14 @@ class ListMedia extends ListRecords
 
     /** Active category filter (images|pdf|video|others) from the stats widget. */
     public ?string $categoryFilter = null;
+
+    /**
+     * Key of the plugin-owned source being listed; null shows the library
+     * itself. Plugins that store files outside the media table declare them
+     * through RegistersMediaSources, so the library can account for every file
+     * on the installation instead of only the ones it holds.
+     */
+    public ?string $sourceKey = null;
 
     /** Holds data for the in-grid preview modal; null = closed. */
     public ?array $galleryPreview = null;
@@ -172,9 +181,38 @@ class ListMedia extends ListRecords
         Notification::make()->title('Media moved to recycle bin.')->success()->send();
     }
 
+    /** Switch between the library itself and a plugin-owned source. */
+    public function selectSource(?string $key): void
+    {
+        $this->sourceKey = $key;
+        $this->resetPage('mpage');
+    }
+
     /** @return array<string, mixed> */
     protected function getViewData(): array
     {
+        $registry = app(MediaSourceRegistry::class);
+
+        // Only sources this user is allowed to know about, and the active one
+        // is resolved from that same list — a key typed into the query string
+        // must not reach a source whose tab would never have been drawn.
+        $sources = $registry->visible();
+        $activeSource = $this->sourceKey === null ? null : $registry->find($this->sourceKey);
+
+        if ($activeSource !== null) {
+            $page = max(1, (int) $this->getPage('mpage'));
+
+            return [
+                'galleryItems' => Media::query()->whereRaw('1 = 0')->paginate(24, ['*'], 'mpage'),
+                'galleryFolders' => collect(),
+                'mediaSources' => $sources,
+                'activeSource' => $activeSource,
+                'sourceItems' => $activeSource->items($page, 24, $this->gallerySearch),
+                'sourceTotal' => $activeSource->count(),
+                'sourcePage' => $page,
+            ];
+        }
+
         $query = Media::query()
             ->withoutTrashed()
             ->latest()
@@ -191,6 +229,11 @@ class ListMedia extends ListRecords
                 ->orderBy('name')
                 ->withCount('media')
                 ->get(),
+            'mediaSources' => $sources,
+            'activeSource' => null,
+            'sourceItems' => [],
+            'sourceTotal' => 0,
+            'sourcePage' => 1,
         ];
     }
 
