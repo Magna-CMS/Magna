@@ -63,6 +63,15 @@ class CoreUpdater
         // registered at boot by PluginAutoloader, so a contract in a namespace
         // the site's vendor/composer maps predate still resolves.
         self::SDK_PATH,
+        // A hub install resolves the SDK through a path repository rooted here,
+        // copied (not symlinked) into vendor/ by Composer. Refreshing only the
+        // vendor/ copy therefore lasts exactly until the next `composer require`
+        // — which every marketplace plugin install runs — and that re-copies the
+        // stale source straight back over it, reviving the missing-interface
+        // failure the SDK overlay exists to prevent. A core-only release carries
+        // no bundled/ directory, and overlay() skips paths the archive does not
+        // contain, so listing it here is a no-op outside a hub.
+        self::SDK_SOURCE_PATH,
     ];
 
     /**
@@ -73,6 +82,17 @@ class CoreUpdater
      * objects plugins are compiled against.
      */
     public const SDK_PATH = 'vendor/magna-cms/plugin-sdk';
+
+    /**
+     * Where a hub build stages the SDK's own source for its path repository.
+     *
+     * Composer installs that repository with `symlink: false`, so vendor/ holds
+     * a copy rather than a link — leaving this behind means Composer rebuilds
+     * the old SDK into vendor/ on the next install. Kept in step with
+     * `release_bundle_relative_path()` in bin/build-release.php, which is what
+     * decides this location when a hub archive is staged.
+     */
+    public const SDK_SOURCE_PATH = 'bundled/magna-cms/plugin-sdk';
 
     /**
      * `$zipUrl` comes straight from Update Manager's `/updates` response

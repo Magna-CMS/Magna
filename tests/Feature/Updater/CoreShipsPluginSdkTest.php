@@ -39,6 +39,29 @@ it('overlays the plugin SDK on update', function (): void {
     }
 });
 
+/**
+ * Refreshing vendor/ alone does not hold on a hub.
+ *
+ * A hub resolves the SDK through a path repository whose source is staged in
+ * the archive, and Composer installs it with `symlink: false` — vendor/ gets a
+ * copy. So the vendor overlay survives only until the next Composer run, and
+ * `composer require` is exactly what a marketplace plugin install performs.
+ * The old source is copied back over the new contracts, and enabling the
+ * plugin fails again on the interface that just disappeared.
+ *
+ * This was found live: a hub on 1.3.20 had 23 contracts under vendor/ and the
+ * original 10 under bundled/, one plugin install away from losing them.
+ */
+it('overlays the SDK source a hub rebuilds vendor from', function (): void {
+    expect(CoreUpdater::coreOwnedPaths())->toContain(CoreUpdater::SDK_SOURCE_PATH)
+        ->and(CoreUpdater::SDK_SOURCE_PATH)->toBe('bundled/magna-cms/plugin-sdk');
+
+    // Both halves of the same package, or the copy and its source drift apart
+    // again the moment one of them moves.
+    expect(CoreUpdater::SDK_SOURCE_PATH)->toEndWith('magna-cms/plugin-sdk')
+        ->and(CoreUpdater::SDK_PATH)->toEndWith('magna-cms/plugin-sdk');
+});
+
 it('loads an SDK contract in a namespace the dumped autoload maps have never seen', function (): void {
     $sdk = base_path(CoreUpdater::SDK_PATH);
     $manifest = $sdk.'/composer.json';
