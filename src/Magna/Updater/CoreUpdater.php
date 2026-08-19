@@ -54,6 +54,21 @@ class CoreUpdater
         'bootstrap',
         'routes',
         'database/migrations',
+        // The panel's compiled assets and the fonts they name. Code arrived on
+        // an update and these did not, which breaks in the least obvious way
+        // available: a Blade partial referencing a font this release added
+        // pointed at a file the update never delivered, the request 404'd, and
+        // every icon in the admin rendered as its own ligature name —
+        // "verified_user", "arrow_forward" — as plain text beside the
+        // headings. Nothing errored; the panel simply looked broken, and only
+        // on sites that had updated rather than installed fresh.
+        //
+        // Both directories are core's own build output: hashed asset bundles
+        // and font files, no customer content. Deliberately not `public`
+        // itself, which also holds uploads and the storage symlink and must
+        // survive an update untouched.
+        'public/build',
+        'public/fonts',
         // The SDK travels with core, because it is core's own contract surface
         // under a vendor path rather than a third-party dependency. Leaving it
         // behind is what made a plugin built against a newer contract
