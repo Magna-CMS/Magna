@@ -69,3 +69,18 @@ it('clears finished installs from the queue when polled', function (): void {
         ->call('pollInstalls')
         ->assertSet('installQueue', []);
 });
+
+// A manifest records "1.1.0" while the marketplace records the Composer tag
+// the release was published under, "v1.1.0". The card renders "v{version}"
+// either way, so a marketplace listing came out reading "vv1.1.0".
+it('shows one v on a marketplace version published under a v-prefixed tag', function (): void {
+    Http::fake([Marketplace::API_BASE.'/*' => Http::response([
+        ['package' => 'acme/forum', 'name' => 'Acme Forum', 'version' => 'v1.2.0', 'compat' => '^1.0'],
+    ])]);
+    $this->actingAs(pluginsAdmin());
+
+    Livewire::test(PluginsPage::class)
+        ->call('setTab', 'addnew')
+        ->assertSee('v1.2.0')
+        ->assertDontSee('vv1.2.0');
+});

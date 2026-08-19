@@ -642,6 +642,24 @@ class PluginsPage extends Page
         }
     }
 
+    /**
+     * Strips the leading "v" a version may carry, because the view adds its own.
+     *
+     * The two sources disagree: a manifest records `1.1.0` while the
+     * marketplace records the Composer tag it was published under, `v1.1.0`.
+     * The view renders "v{version}" either way, so a marketplace version came
+     * out as "vv1.1.0". Normalising here rather than in the view keeps every
+     * version this page hands out in one shape.
+     */
+    private static function displayVersion(?string $version): ?string
+    {
+        if ($version === null) {
+            return null;
+        }
+
+        return ltrim($version, 'vV');
+    }
+
     private function pendingDisplayName(): string
     {
         $plugin = collect($this->available)->firstWhere('name', $this->pendingPluginName ?? '');
@@ -840,7 +858,7 @@ class PluginsPage extends Page
             return [
                 'name' => $r->name,
                 'display_name' => $r->display_name,
-                'version' => $r->version,
+                'version' => self::displayVersion($r->version),
                 'enabled' => $r->enabled,
                 'description' => is_array($r->manifest) ? (string) ($r->manifest['description'] ?? '') : '',
                 'author' => is_array($r->manifest) ? (string) ($r->manifest['author'] ?? '') : '',
@@ -851,10 +869,10 @@ class PluginsPage extends Page
                 // (zip upload, manual copy), or the marketplace published one.
                 // The marketplace answer wins when both are present — it is
                 // the version the update button would actually fetch.
-                'update_version' => $marketplaceUpdates[$r->name]
+                'update_version' => self::displayVersion($marketplaceUpdates[$r->name]
                     ?? (isset($discoveredVersions[$r->name]) && $discoveredVersions[$r->name] !== $r->version
                         ? $discoveredVersions[$r->name]
-                        : null),
+                        : null)),
                 'settings_url' => $settingsUrl,
                 // magna.json's optional "icon" field, served through PluginIconController;
                 // null when the plugin declared none — the view falls back to a letter avatar.
@@ -862,7 +880,7 @@ class PluginsPage extends Page
                 // Set when a newer version exists that this site's licence
                 // does not entitle it to — rendered as a renew prompt rather
                 // than an Update button that cannot work.
-                'license_blocked_version' => $licenseBlocked[$r->name] ?? null,
+                'license_blocked_version' => self::displayVersion($licenseBlocked[$r->name] ?? null),
                 // Publisher trust from the marketplace listing, when this
                 // plugin is one the marketplace knows about. A plugin sitting
                 // in plugins-dev/ or installed by hand has no listing and
@@ -878,7 +896,7 @@ class PluginsPage extends Page
             ->map(fn (PluginListing $l): array => [
                 'name' => $l->package,
                 'display_name' => $l->name,
-                'version' => $l->version,
+                'version' => self::displayVersion($l->version),
                 'description' => $l->shortDescription,
                 'author' => $l->author ?? '',
                 'source' => 'Marketplace',
