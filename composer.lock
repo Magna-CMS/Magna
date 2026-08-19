@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3b5ac6cf4567db20dab8c8f1a3e9f689",
+    "content-hash": "0e153f8fd722f6132fb7cbcdcd0aa428",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -3901,16 +3901,16 @@
         },
         {
             "name": "magna-cms/plugin-sdk",
-            "version": "v1.3.0",
+            "version": "v1.5.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/Magna-CMS/Magna-Plugin-SDK.git",
-                "reference": "313d54187397f8b6692f102caf13b20bf17af7ce"
+                "reference": "36aedce89adc1b1abc43a6f7a03f0d5f51a2b78c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Magna-CMS/Magna-Plugin-SDK/zipball/313d54187397f8b6692f102caf13b20bf17af7ce",
-                "reference": "313d54187397f8b6692f102caf13b20bf17af7ce",
+                "url": "https://api.github.com/repos/Magna-CMS/Magna-Plugin-SDK/zipball/36aedce89adc1b1abc43a6f7a03f0d5f51a2b78c",
+                "reference": "36aedce89adc1b1abc43a6f7a03f0d5f51a2b78c",
                 "shasum": ""
             },
             "require": {
@@ -3931,6 +3931,7 @@
             },
             "autoload": {
                 "psr-4": {
+                    "Magna\\Captcha\\": "src/Captcha/",
                     "Magna\\Plugins\\": "src/Plugins/",
                     "Magna\\Admin\\Nav\\": "src/Nav/",
                     "Magna\\Contracts\\": "src/Contracts/"
@@ -3960,7 +3961,7 @@
                 "issues": "https://github.com/Magna-CMS/Magna-Plugin-SDK/issues",
                 "source": "https://github.com/Magna-CMS/Magna-Plugin-SDK"
             },
-            "time": "2026-07-27T09:55:06+00:00"
+            "time": "2026-08-19T15:36:13+00:00"
         },
         {
             "name": "masterminds/html5",
