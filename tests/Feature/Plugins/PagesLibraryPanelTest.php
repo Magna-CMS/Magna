@@ -152,6 +152,76 @@ it('gives every section of a list-shaped asset fresh ids', function (): void {
         ->and($node[0]['columns'][0]['blocks'][0]['id'])->not->toBe('blk-a');
 });
 
+it('previews an asset through the local renderer', function (): void {
+    $user = libraryPanelUser();
+    fakeHubCatalog();
+
+    // A live local render, not a hub screenshot: the preview shows the
+    // asset on THIS theme. Bare of parts, because the asset is the point.
+    $preview = $this->actingAs($user)->get(url('/pages-builder/library/hub-hero/preview'))
+        ->assertOk()
+        ->assertHeader('Content-Security-Policy', "frame-ancestors 'self'")
+        ->getContent();
+
+    expect($preview)->toContain('From the hub')
+        ->and($preview)->toContain('magna-section');
+});
+
+it('refuses to preview what the actor could not insert', function (): void {
+    $user = libraryPanelUser();
+    Http::fake([
+        Marketplace::API_BASE.'/library/hub-html' => Http::response([
+            'slug' => 'hub-html', 'name' => 'Raw HTML', 'kind' => 'pattern', 'version' => 1,
+            'requiredBlocks' => ['html'],
+            // The html block requires a permission this actor lacks, and a
+            // preview is a render: the same authorization wall applies
+            // BEFORE any hub markup reaches a browser.
+            'document' => [
+                'id' => 'sec-html', 'type' => 'section', 'settings' => [],
+                'columns' => [[
+                    'id' => 'col-html', 'span' => 12, 'settings' => [],
+                    'blocks' => [['id' => 'blk-html', 'block' => 'html', 'settings' => [], 'data' => ['markup' => '<script>alert(1)</script>']]],
+                ]],
+            ],
+        ]),
+    ]);
+
+    $response = $this->actingAs($user)->get(url('/pages-builder/library/hub-html/preview'))
+        ->assertStatus(422);
+
+    expect($response->getContent())->not->toContain('<script>alert(1)</script>');
+});
+
+it('previews a block-kind asset by scaffolding it into a section', function (): void {
+    $user = libraryPanelUser();
+    Http::fake([
+        Marketplace::API_BASE.'/library/hub-card' => Http::response([
+            'slug' => 'hub-card', 'name' => 'Hub card', 'kind' => 'block', 'version' => 1,
+            'requiredBlocks' => ['heading'],
+            'document' => ['id' => 'blk-card', 'block' => 'heading', 'settings' => [], 'data' => ['text' => 'Card preview', 'level' => 'h2']],
+        ]),
+    ]);
+
+    $preview = $this->actingAs($user)->get(url('/pages-builder/library/hub-card/preview'))
+        ->assertOk()
+        ->getContent();
+
+    expect($preview)->toContain('Card preview');
+});
+
+it('keeps a paid asset unseen without a licence, in preview as in instance', function (): void {
+    $user = libraryPanelUser();
+    Http::fake([
+        Marketplace::API_BASE.'/library/hub-paid' => Http::response([
+            'slug' => 'hub-paid', 'name' => 'Paid thing', 'kind' => 'pattern', 'version' => 1,
+            'requiredBlocks' => [], 'licenseRequired' => true, 'productSlug' => 'pro-kit',
+            'document' => ['id' => 'sec-paid', 'type' => 'section', 'settings' => [], 'columns' => []],
+        ]),
+    ]);
+
+    $this->actingAs($user)->get(url('/pages-builder/library/hub-paid/preview'))->assertStatus(402);
+});
+
 it('degrades to an empty library when the hub is unreachable', function (): void {
     $user = libraryPanelUser();
     Http::fake(fn () => throw new ConnectionException('refused'));
