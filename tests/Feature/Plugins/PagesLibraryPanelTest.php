@@ -231,3 +231,63 @@ it('degrades to an empty library when the hub is unreachable', function (): void
         ->assertJsonPath('assets', [])
         ->assertJsonPath('collections', []);
 });
+
+it('installs a library header as site chrome rather than into the page', function (): void {
+    $user = libraryPanelUser();
+    $user->roles()->first()?->grant('pages.design');
+    Http::fake([
+        Marketplace::API_BASE.'/library/hub-topbar' => Http::response([
+            'slug' => 'hub-topbar', 'name' => 'Hub topbar', 'kind' => 'part', 'role' => 'header',
+            'version' => 1, 'requiredBlocks' => ['heading'],
+            'document' => [[
+                'id' => 'sec-top', 'type' => 'section', 'settings' => [],
+                'columns' => [[
+                    'id' => 'col-top', 'span' => 12, 'settings' => [],
+                    'blocks' => [['id' => 'blk-top', 'block' => 'heading', 'settings' => [], 'data' => ['text' => 'Hub topbar']]],
+                ]],
+            ]],
+        ]),
+    ]);
+
+    $payload = $this->actingAs($user)->postJson(url('/pages-builder/library/hub-topbar/install-chrome'))
+        ->assertStatus(201)
+        ->json();
+
+    expect($payload['role'])->toBe('header');
+
+    $entry = Entry::type('pages_template')->find($payload['id']);
+    expect($entry?->getAttribute('kind'))->toBe('part')
+        ->and($entry?->getAttribute('role'))->toBe('header')
+        // Unpublished: installing a header must not change what visitors
+        // see until somebody chooses it.
+        ->and($entry?->getAttribute('status'))->not->toBe('published')
+        // And it never claims the slug the fallback rung depends on.
+        ->and($entry?->getAttribute('slug'))->not->toBe('header');
+});
+
+it('refuses to install an asset that is not chrome', function (): void {
+    $user = libraryPanelUser();
+    $user->roles()->first()?->grant('pages.design');
+    fakeHubCatalog();
+
+    // An ordinary pattern has no role, so there is nowhere for it to land
+    // as chrome, and saying so is better than guessing.
+    $this->actingAs($user)->postJson(url('/pages-builder/library/hub-hero/install-chrome'))
+        ->assertStatus(422);
+});
+
+it('needs the design permission to install site chrome', function (): void {
+    $user = libraryPanelUser(); // content + layout only
+    Http::fake([
+        Marketplace::API_BASE.'/library/hub-topbar' => Http::response([
+            'slug' => 'hub-topbar', 'name' => 'Hub topbar', 'kind' => 'part', 'role' => 'header',
+            'version' => 1, 'requiredBlocks' => [],
+            'document' => [['id' => 's', 'type' => 'section', 'settings' => [], 'columns' => []]],
+        ]),
+    ]);
+
+    // Chrome is the whole site, not one page: changing every page at once
+    // is a design decision, not a content one.
+    $this->actingAs($user)->postJson(url('/pages-builder/library/hub-topbar/install-chrome'))
+        ->assertForbidden();
+});
