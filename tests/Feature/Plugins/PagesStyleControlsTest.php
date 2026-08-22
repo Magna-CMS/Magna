@@ -215,9 +215,15 @@ it('keeps the descriptor table and the renderer in step', function (): void {
     // will actually emit — the whole point of one shipped table.
     foreach (StyleDescriptors::forBuilder() as $kind => $controls) {
         foreach ($controls as $control) {
-            $value = $control['control'] === 'select'
-                ? ($control['options'][1] ?? 'center')
-                : ($control['control'] === 'color' ? '#123456' : '10px');
+            // One representative value per control type. A control type
+            // added without a case here fails this test rather than
+            // silently going untested, which is the point of the guard.
+            $value = match ($control['control']) {
+                'select' => $control['options'][1] ?? 'center',
+                'color' => '#123456',
+                'image' => '/media/sample.jpg',
+                default => '10px',
+            };
 
             expect(StyleDescriptors::declarations([$control['key'] => $value], $kind))
                 ->not->toBe('', "no declaration for {$kind}.{$control['key']}");
