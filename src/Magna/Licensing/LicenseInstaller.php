@@ -47,6 +47,7 @@ class LicenseInstaller
         private readonly LicenseClient $client,
         private readonly DownloadGrantClient $grants,
         private readonly LicenseStore $store,
+        private readonly LicenseReactivator $reactivator,
         private readonly PluginManager $plugins,
         private readonly PackageExtractor $extractor,
         private readonly Filesystem $files,
@@ -163,6 +164,25 @@ class LicenseInstaller
         }
 
         $grant = $this->grants->grant($entry->token);
+
+        // A dead token is the one refusal an operator cannot act on — the
+        // right response is a fresh activation from the connected account,
+        // and the site can do that itself. Without this, the operator was
+        // shown "Activation token invalid or revoked", left to rediscover
+        // the re-add-the-licence-key ritual, and the update stayed one
+        // support call away from working. One repair, one retry: a second
+        // refusal is telling the truth about something re-activating cannot
+        // fix, and the reactivator's own throttle stops the loop regardless.
+        if ($grant === null
+            && in_array($this->grants->lastErrorCode(), ['invalid_token', 'fingerprint_mismatch'], true)
+            && $this->reactivator->refresh($productSlug)
+        ) {
+            $reissued = $this->store->get($productSlug);
+
+            if ($reissued !== null && $reissued->token !== $entry->token) {
+                $grant = $this->grants->grant($reissued->token);
+            }
+        }
 
         if ($grant === null) {
             // Carry the marketplace's own words. "Did not authorise a download"

@@ -27,12 +27,16 @@ class DownloadGrantClient
     /** Set by grant() so the caller can say which refusal it hit. */
     private ?string $lastError = null;
 
+    /** The marketplace's machine-readable code for that refusal, when it sent one. */
+    private ?string $lastErrorCode = null;
+
     /**
      * @return array<array-key, mixed>|null the grant, or null with lastError() set
      */
     public function grant(string $token): ?array
     {
         $this->lastError = null;
+        $this->lastErrorCode = null;
 
         try {
             $response = Http::timeout(Marketplace::REQUEST_TIMEOUT)->acceptJson()->asJson()
@@ -53,6 +57,7 @@ class DownloadGrantClient
             $this->lastError = is_string($message) && $message !== ''
                 ? $message.(is_string($code) && $code !== '' ? ' ('.$code.')' : '')
                 : 'the licence server answered '.$response->status();
+            $this->lastErrorCode = is_string($code) && $code !== '' ? $code : null;
 
             return null;
         }
@@ -78,6 +83,12 @@ class DownloadGrantClient
     public function lastError(): ?string
     {
         return $this->lastError;
+    }
+
+    /** The refusal's machine-readable code, for callers that can act on one. */
+    public function lastErrorCode(): ?string
+    {
+        return $this->lastErrorCode;
     }
 
     /**

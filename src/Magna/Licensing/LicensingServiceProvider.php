@@ -31,6 +31,7 @@ class LicensingServiceProvider extends ServiceProvider
         $this->app->singleton(LicenseClient::class);
         $this->app->singleton(LicenseGate::class);
         $this->app->singleton(LicenseGuard::class);
+        $this->app->singleton(LicenseReactivator::class);
         $this->app->singleton(LicenseEnforcer::class);
         $this->app->singleton(PackageExtractor::class);
         $this->app->singleton(LicenseInstaller::class);

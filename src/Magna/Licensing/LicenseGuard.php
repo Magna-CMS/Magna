@@ -40,8 +40,9 @@ class LicenseGuard
 
     public function __construct(
         private readonly LicenseStore $store,
-        private readonly LicenseClient $client,
         private readonly LicenseGate $gate,
+        private readonly LicenseReactivator $reactivator,
+        private readonly TokenVerifier $verifier = new TokenVerifier,
     ) {}
 
     public function check(string $productSlug): LicenseState
@@ -105,16 +106,41 @@ class LicenseGuard
     /** Force a live re-check now (System Info action, post-install confirmation). */
     public function refresh(LicenseEntry $entry): ?LicenseEntry
     {
-        $payload = $this->client->verify($entry->token);
+        $outcome = $this->verifier->outcome($entry->token);
 
-        if ($payload === null) {
-            return null;
+        if ($outcome->verified()) {
+            /** @var array<string, mixed> $payload */
+            $payload = $outcome->payload;
+            $updated = $entry->withVerifiedPayload($payload);
+            $this->store->put($updated);
+
+            return $updated;
         }
 
-        $updated = $entry->withVerifiedPayload($payload);
-        $this->store->put($updated);
+        // The marketplace answered and said the token is no good. Waiting
+        // will not change that answer — but the connected account still owns
+        // the licence, so a fresh activation can be minted without anybody
+        // typing a key. This is the call that was never made: a production
+        // site held a dead token for four days of daily heartbeats, each one
+        // reading the refusal as an outage and settling into grace, while
+        // the repair sat one method call away with nothing wired to it.
+        if ($outcome->repairable() && $this->reactivator->refresh($entry->productSlug)) {
+            $reissued = $this->store->get($entry->productSlug);
 
-        return $updated;
+            if ($reissued !== null && $reissued->token !== $entry->token) {
+                return $this->refresh($reissued);
+            }
+        }
+
+        if ($outcome->refused()) {
+            Log::warning('Licensing: the marketplace refused this site\'s activation token.', [
+                'product' => $entry->productSlug,
+                'code' => $outcome->refusalCode,
+                'repairable' => $outcome->repairable(),
+            ]);
+        }
+
+        return null;
     }
 
     /** Re-verify every licensed product — the scheduled heartbeat. */

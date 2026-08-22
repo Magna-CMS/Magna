@@ -419,14 +419,14 @@ class LicenseClient
     /**
      * The ~daily phone-home. Null means "could not confirm", not "invalid".
      *
+     * Callers that must tell those two apart use TokenVerifier directly —
+     * the guard's self-repair depends on the difference.
+     *
      * @return array<string, mixed>|null verified payload
      */
     public function verify(string $token): ?array
     {
-        return $this->signed($this->post('/license/verify', [
-            'token' => $token,
-            'fingerprint' => InstallFingerprint::derive(),
-        ]));
+        return (new TokenVerifier)->outcome($token)->payload;
     }
 
     /** Release this site's seat on a licence. */
