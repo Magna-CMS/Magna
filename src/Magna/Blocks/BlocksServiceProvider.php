@@ -23,6 +23,18 @@ class BlocksServiceProvider extends ServiceProvider
             return $registry;
         });
 
+        /*
+         * The icon vocabulary. A singleton like the block registry and for
+         * the same reason: plugins add to it at boot, and everything that
+         * draws an icon must be looking at the same list.
+         */
+        $this->app->singleton(Icons\IconRegistry::class, function (): Icons\IconRegistry {
+            $registry = new Icons\IconRegistry;
+            $registry->loadFromDirectory(__DIR__.'/resources/icons');
+
+            return $registry;
+        });
+
         $this->app->singleton(PageTreeValidator::class, function (): PageTreeValidator {
             return new PageTreeValidator(app(BlockRegistry::class));
         });

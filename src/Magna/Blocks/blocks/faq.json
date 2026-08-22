@@ -1,7 +1,7 @@
 {
     "handle": "faq",
     "label": "FAQ",
-    "icon": "heroicon-o-question-mark-circle",
+    "icon": "blocks:question",
     "category": "marketing",
     "fields": [
         {

@@ -1,7 +1,7 @@
 {
     "handle": "hero",
     "label": "Hero",
-    "icon": "heroicon-o-sparkles",
+    "icon": "blocks:hero",
     "category": "marketing",
     "fields": [
         {

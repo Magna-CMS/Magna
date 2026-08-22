@@ -1,7 +1,7 @@
 {
     "handle": "video",
     "label": "Video",
-    "icon": "heroicon-o-play-circle",
+    "icon": "blocks:video",
     "category": "media",
     "fields": [
         {

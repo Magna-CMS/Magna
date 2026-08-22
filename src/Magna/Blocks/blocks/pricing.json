@@ -1,7 +1,7 @@
 {
     "handle": "pricing",
     "label": "Pricing",
-    "icon": "heroicon-o-banknotes",
+    "icon": "blocks:tag",
     "category": "marketing",
     "fields": [
         {

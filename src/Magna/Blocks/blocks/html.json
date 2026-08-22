@@ -1,7 +1,7 @@
 {
     "handle": "html",
     "label": "HTML",
-    "icon": "heroicon-o-code-bracket",
+    "icon": "blocks:code",
     "category": "content",
     "requiresPermission": "blocks.raw_html",
     "fields": [

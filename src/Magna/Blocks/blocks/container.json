@@ -1,7 +1,7 @@
 {
     "handle": "container",
     "label": "Container",
-    "icon": "heroicon-o-square-3-stack-3d",
+    "icon": "blocks:columns",
     "category": "layout",
     "container": true,
     "fields": [

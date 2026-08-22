@@ -1,7 +1,7 @@
 {
     "handle": "features",
     "label": "Features",
-    "icon": "heroicon-o-check-badge",
+    "icon": "core:sparkles",
     "category": "marketing",
     "fields": [
         {

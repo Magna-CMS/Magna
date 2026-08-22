@@ -255,15 +255,17 @@ it('SectionNode::tokenOverrides() returns empty array when not set', function ()
 
 // ── BlockRegistry ────────────────────────────────────────────────────────────
 
-it('loads all 20 core blocks at boot', function (): void {
+it('loads all 21 core blocks at boot', function (): void {
     /** @var BlockRegistry $registry */
     $registry = app(BlockRegistry::class);
 
-    // 19 until `container` joined the standard library. The number is
-    // asserted so a block.json that fails to parse cannot disappear
-    // silently — update it deliberately when the library grows.
-    expect($registry->count())->toBe(20)
-        ->and($registry->has('container'))->toBeTrue();
+    // 19 until `container` joined the standard library, then 21 with
+    // `icon`. The number is asserted so a block.json that fails to parse
+    // cannot disappear silently — update it deliberately when the library
+    // grows, never to make a red test green.
+    expect($registry->count())->toBe(21)
+        ->and($registry->has('container'))->toBeTrue()
+        ->and($registry->has('icon'))->toBeTrue();
 });
 
 it('has() returns true for registered core blocks and false for unknown', function (): void {

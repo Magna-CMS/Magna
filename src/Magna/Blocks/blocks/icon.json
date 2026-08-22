@@ -1,0 +1,51 @@
+{
+    "handle": "icon",
+    "label": "Icon",
+    "icon": "core:star",
+    "category": "content",
+    "fields": [
+        {
+            "handle": "name",
+            "type": "icon",
+            "label": "Icon",
+            "required": true,
+            "default": "core:star"
+        },
+        {
+            "handle": "size",
+            "type": "select",
+            "label": "Size",
+            "required": false,
+            "default": "md",
+            "options": {
+                "sm": "Small",
+                "md": "Medium",
+                "lg": "Large",
+                "xl": "Extra large"
+            }
+        },
+        {
+            "handle": "url",
+            "type": "url",
+            "label": "Link",
+            "required": false
+        },
+        {
+            "handle": "target",
+            "type": "select",
+            "label": "Opens in",
+            "required": false,
+            "default": "_self",
+            "options": {
+                "_self": "This tab",
+                "_blank": "New tab"
+            }
+        },
+        {
+            "handle": "label",
+            "type": "text",
+            "label": "Accessible label",
+            "required": false
+        }
+    ]
+}

@@ -1,7 +1,7 @@
 {
     "handle": "heading",
     "label": "Heading",
-    "icon": "heroicon-o-h1",
+    "icon": "blocks:heading",
     "category": "content",
     "fields": [
         {

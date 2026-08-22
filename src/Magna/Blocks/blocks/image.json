@@ -1,7 +1,7 @@
 {
     "handle": "image",
     "label": "Image",
-    "icon": "heroicon-o-photo",
+    "icon": "core:image",
     "category": "media",
     "fields": [
         {

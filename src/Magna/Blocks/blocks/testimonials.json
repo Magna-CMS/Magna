@@ -1,7 +1,7 @@
 {
     "handle": "testimonials",
     "label": "Testimonials",
-    "icon": "heroicon-o-chat-bubble-left-right",
+    "icon": "core:chat",
     "category": "marketing",
     "fields": [
         {

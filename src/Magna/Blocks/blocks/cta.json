@@ -1,7 +1,7 @@
 {
     "handle": "cta",
     "label": "Call to Action",
-    "icon": "heroicon-o-megaphone",
+    "icon": "core:bolt",
     "category": "marketing",
     "fields": [
         {

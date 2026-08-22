@@ -1,7 +1,7 @@
 {
     "handle": "team",
     "label": "Team",
-    "icon": "heroicon-o-user-group",
+    "icon": "core:users",
     "category": "marketing",
     "fields": [
         {

@@ -413,7 +413,11 @@
                                 <button type="button"
                                         @click="$wire.addBlock(addBlockTarget.si, addBlockTarget.ci, '{{ $bDef['handle'] }}'); addBlockModal = false"
                                         class="flex flex-col items-center rounded-lg border border-gray-100 px-2 py-3 text-xs font-medium text-gray-700 hover:border-indigo-400 hover:bg-indigo-50 dark:border-white/10 dark:text-gray-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/30">
-                                    <x-dynamic-component :component="$bDef['icon']" class="mb-1.5 h-5 w-5 text-gray-500 dark:text-gray-400"/>
+                                    {{-- One icon vocabulary. A definition names an icon; the
+                                         registry is what turns that name into geometry, here as
+                                         on the rendered page. A name it does not know draws
+                                         nothing, which is a missing icon rather than a crash. --}}
+                                    {!! app(\Magna\Blocks\Icons\IconRegistry::class)->svg($bDef['icon'], null, 'mb-1.5 h-5 w-5 text-gray-500 dark:text-gray-400') !!}
                                     {{ $bDef['label'] }}
                                 </button>
                             @endforeach

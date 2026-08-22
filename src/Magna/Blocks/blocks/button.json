@@ -1,7 +1,7 @@
 {
     "handle": "button",
     "label": "Button",
-    "icon": "heroicon-o-cursor-arrow-rays",
+    "icon": "blocks:button",
     "category": "content",
     "fields": [
         {

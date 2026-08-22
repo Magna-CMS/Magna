@@ -1,7 +1,7 @@
 {
     "handle": "logos",
     "label": "Logo Bar",
-    "icon": "heroicon-o-building-office",
+    "icon": "blocks:grid",
     "category": "marketing",
     "fields": [
         {

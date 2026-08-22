@@ -1,7 +1,7 @@
 {
     "handle": "entries",
     "label": "Entries",
-    "icon": "heroicon-o-rectangle-stack",
+    "icon": "blocks:list",
     "category": "dynamic",
     "fields": [
         {
@@ -27,8 +27,8 @@
             "options": {
                 "published_at_desc": "Newest first",
                 "published_at_asc": "Oldest first",
-                "title_asc": "Title A–Z",
-                "title_desc": "Title Z–A"
+                "title_asc": "Title A\u2013Z",
+                "title_desc": "Title Z\u2013A"
             }
         },
         {

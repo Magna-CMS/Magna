@@ -1,7 +1,7 @@
 {
     "handle": "spacer",
     "label": "Spacer",
-    "icon": "heroicon-o-arrows-up-down",
+    "icon": "blocks:spacer",
     "category": "layout",
     "fields": [
         {
@@ -16,7 +16,7 @@
                 "md": "Medium",
                 "lg": "Large",
                 "xl": "Extra large",
-                "2xl": "2× extra large"
+                "2xl": "2\u00d7 extra large"
             }
         }
     ]

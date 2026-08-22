@@ -1,7 +1,7 @@
 {
     "handle": "divider",
     "label": "Divider",
-    "icon": "heroicon-o-minus",
+    "icon": "blocks:divider",
     "category": "layout",
     "fields": [
         {

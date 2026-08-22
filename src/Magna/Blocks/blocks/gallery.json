@@ -1,7 +1,7 @@
 {
     "handle": "gallery",
     "label": "Gallery",
-    "icon": "heroicon-o-squares-2x2",
+    "icon": "blocks:grid",
     "category": "media",
     "fields": [
         {
