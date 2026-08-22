@@ -132,3 +132,24 @@ it('fails when composer is unavailable on the host', function (): void {
     expect($state)->toBe(InstallState::Failed)
         ->and($runner->commands)->toBe([]);
 });
+
+// magna-cms/docs was approved at v1.1.0, the tag was later replaced by v1.1.1,
+// and the panel then showed nothing but Composer's resolver output — accurate,
+// but unreadable as "the listing is stale, not the installer".
+it('names a stale listing when the approved version is no longer published', function (): void {
+    fakeMarket([['package' => 'acme/forum', 'name' => 'Acme Forum', 'version' => 'v1.1.0', 'compat' => '^1.0']]);
+
+    $runner = fakeRunner();
+    $runner->exitCode = 1;
+    $runner->output = 'Problem 1'."\n"
+        .'  - Root composer.json requires acme/forum v1.1.0 (exact version match), found acme/forum[dev-main, v1.1.1, 1.x-dev (alias of dev-main)] but it does not match the constraint.';
+
+    expect(app(PluginInstaller::class)->install('acme/forum'))->toBe(InstallState::Failed);
+
+    $message = (string) (Cache::get('magna.marketplace.install.acme/forum')['message'] ?? '');
+
+    expect($message)->toContain('The marketplace lists v1.1.0, which acme/forum no longer publishes.')
+        ->and($message)->toContain('dev-main, v1.1.1')
+        // Composer's own output still follows, for whoever needs the detail.
+        ->and($message)->toContain('exact version match');
+});

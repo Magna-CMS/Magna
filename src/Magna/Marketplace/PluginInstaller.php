@@ -71,7 +71,12 @@ class PluginInstaller
             $this->setProgress($package, InstallState::Running, 'Downloading…');
             $required = $this->composer->run(['require', $package.':'.$listing->version], 600);
             if (! $required->successful()) {
-                return $this->fail($package, "Composer could not install the plugin.\n".$required->output);
+                return $this->fail(
+                    $package,
+                    "Composer could not install the plugin.\n"
+                    .$this->explainStaleListing($package, $listing->version, $required->output)
+                    .$required->output,
+                );
             }
 
             $manifestMismatch = $this->verifyInstalledManifest($package, $listing->version);
@@ -166,6 +171,32 @@ class PluginInstaller
         }
 
         return null;
+    }
+
+    /**
+     * A plain sentence in front of Composer's resolver output when the failure
+     * is that the marketplace pinned a version the package no longer publishes.
+     *
+     * magna-cms/docs was approved at v1.1.0, the tag was later replaced by
+     * v1.1.1, and from then on every install of it failed here. Composer says
+     * so accurately — "requires magna-cms/docs v1.1.0 (exact version match),
+     * found magna-cms/docs[dev-main, v1.1.1, …]" — but only to somebody who
+     * already knows the catalog pins the approved version, so the panel read as
+     * a broken installer rather than a stale listing. Read out of Composer's own
+     * output: no extra network call in a path that has already failed.
+     */
+    private function explainStaleListing(string $package, string $version, string $output): string
+    {
+        if (! str_contains($output, 'exact version match') || ! str_contains($output, 'does not match the constraint')) {
+            return '';
+        }
+
+        $found = preg_match('/found\s+'.preg_quote($package, '/').'\[([^\]]+)\]/', $output, $m) === 1
+            ? ' It currently publishes: '.$m[1].'.'
+            : '';
+
+        return "The marketplace lists {$version}, which {$package} no longer publishes.{$found}"
+            ." Ask the developer to submit the current release — the listing cannot install until it names a published version.\n\n";
     }
 
     private function fail(string $package, string $message): InstallState
