@@ -19,14 +19,10 @@
             --_radius: var(--radius, 0.5rem);
             --_max: var(--max-width, 1152px);
         }
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --_text: #e2e8f0;
-                --_muted: #94a3b8;
-                --_surface: #0b1220;
-                --_surface-alt: #131c2e;
-            }
-        }
+        /* No dark block of its own: every --_ variable above already reads
+           from a design token, and a token carries both readings. A second
+           copy here would be a palette to keep in step, and one this theme
+           could not pin to a scheme the site had chosen. */
         html { font-size: var(--base-size, 16px); }
         body {
             margin: 0;
