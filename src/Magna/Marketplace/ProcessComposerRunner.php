@@ -25,6 +25,7 @@ final class ProcessComposerRunner implements ComposerRunner
     public function __construct(
         private readonly string $basePath,
         private readonly string $fallbackHome,
+        private readonly ComposerManifestRepair $repair,
     ) {}
 
     public function isAvailable(): bool
@@ -47,6 +48,11 @@ final class ProcessComposerRunner implements ComposerRunner
             return new ComposerResult(1, $homeProblem);
         }
 
+        // Before the command, not after a failure: Composer refuses to load a
+        // manifest naming a path repository that is not there, so every command
+        // — including the ones that would fix it — fails until this runs.
+        $repairs = $this->repair->repair();
+
         $process = new Process(
             [...$binary, ...$args, '--no-interaction'],
             $this->basePath,
@@ -58,13 +64,28 @@ final class ProcessComposerRunner implements ComposerRunner
         try {
             $process->run();
         } catch (\Throwable $e) {
-            return new ComposerResult(1, $e->getMessage());
+            return new ComposerResult(1, $this->annotate($repairs, $e->getMessage()));
         }
 
         return new ComposerResult(
             $process->getExitCode() ?? 1,
-            trim($process->getOutput()."\n".$process->getErrorOutput()),
+            $this->annotate($repairs, trim($process->getOutput()."\n".$process->getErrorOutput())),
         );
+    }
+
+    /**
+     * Repairs go in front of the Composer output so the install log says why a
+     * site's manifest changed, rather than changing it silently.
+     *
+     * @param  list<string>  $repairs
+     */
+    private function annotate(array $repairs, string $output): string
+    {
+        if ($repairs === []) {
+            return $output;
+        }
+
+        return trim(implode("\n", $repairs)."\n\n".$output);
     }
 
     /**

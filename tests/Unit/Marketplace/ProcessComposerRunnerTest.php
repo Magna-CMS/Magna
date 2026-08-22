@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Magna\Marketplace\ComposerManifestRepair;
 use Magna\Marketplace\ProcessComposerRunner;
 
 /**
@@ -21,7 +22,7 @@ function composerEnvironmentFor(ProcessComposerRunner $runner): array
 
 beforeEach(function (): void {
     $this->home = sys_get_temp_dir().'/magna-composer-home-'.bin2hex(random_bytes(6));
-    $this->runner = new ProcessComposerRunner(sys_get_temp_dir(), $this->home);
+    $this->runner = new ProcessComposerRunner(sys_get_temp_dir(), $this->home, new ComposerManifestRepair(sys_get_temp_dir().'/magna-absent-root'));
 
     $this->originalHome = getenv('HOME');
     $this->originalComposerHome = getenv('COMPOSER_HOME');
@@ -88,7 +89,7 @@ it('refuses to run rather than let Composer fail obscurely on an unwritable home
     // does nothing for an administrator on Windows.
     file_put_contents($this->home, '');
 
-    $result = (new ProcessComposerRunner(sys_get_temp_dir(), $this->home))->run(['--version']);
+    $result = (new ProcessComposerRunner(sys_get_temp_dir(), $this->home, new ComposerManifestRepair(sys_get_temp_dir().'/magna-absent-root')))->run(['--version']);
 
     expect($result->successful())->toBeFalse()
         ->and($result->output)->toContain('Composer needs a writable home directory');
@@ -97,6 +98,6 @@ it('refuses to run rather than let Composer fail obscurely on an unwritable home
 })->skip(
     // run() resolves the binary before it checks the home, so with no Composer
     // on the machine this would assert against "Composer was not found".
-    fn (): bool => ! (new ProcessComposerRunner(sys_get_temp_dir(), sys_get_temp_dir()))->isAvailable(),
+    fn (): bool => ! (new ProcessComposerRunner(sys_get_temp_dir(), sys_get_temp_dir(), new ComposerManifestRepair(sys_get_temp_dir().'/magna-absent-root')))->isAvailable(),
     'Composer is not installed on this machine.',
 );

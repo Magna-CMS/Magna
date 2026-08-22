@@ -8,6 +8,7 @@ use Illuminate\Support\ServiceProvider;
 use Magna\Contracts\RegistersCommands;
 use Magna\Frontend\FrontendPageRegistry;
 use Magna\Install\Installer;
+use Magna\Marketplace\ComposerManifestRepair;
 use Magna\Marketplace\ComposerRunner;
 use Magna\Marketplace\ProcessComposerRunner;
 use Magna\Plugins\Commands\PluginDisableCommand;
@@ -60,6 +61,7 @@ class PluginsServiceProvider extends ServiceProvider
             return new ProcessComposerRunner(
                 $this->app->basePath(),
                 $this->app->storagePath('app/composer-home'),
+                new ComposerManifestRepair($this->app->basePath()),
             );
         });
     }
