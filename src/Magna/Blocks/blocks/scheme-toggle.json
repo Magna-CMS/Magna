@@ -1,0 +1,27 @@
+{
+    "handle": "scheme-toggle",
+    "label": "Light / dark switch",
+    "icon": "core:eye",
+    "category": "layout",
+    "fields": [
+        {
+            "handle": "size",
+            "type": "select",
+            "label": "Size",
+            "required": false,
+            "default": "md",
+            "options": {
+                "sm": "Small",
+                "md": "Medium",
+                "lg": "Large"
+            }
+        },
+        {
+            "handle": "label",
+            "type": "text",
+            "label": "Accessible label",
+            "required": false,
+            "default": "Switch between light and dark"
+        }
+    ]
+}
