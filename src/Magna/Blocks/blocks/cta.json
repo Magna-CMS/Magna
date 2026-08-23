@@ -8,37 +8,43 @@
             "handle": "headline",
             "type": "text",
             "label": "Headline",
-            "required": true
+            "required": true,
+            "group": "content"
         },
         {
             "handle": "body",
             "type": "textarea",
             "label": "Body text",
-            "required": false
+            "required": false,
+            "group": "content"
         },
         {
             "handle": "button_primary_label",
             "type": "text",
             "label": "Primary button label",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "button_primary_url",
             "type": "url",
             "label": "Primary button URL",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "button_secondary_label",
             "type": "text",
             "label": "Secondary button label",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "button_secondary_url",
             "type": "url",
             "label": "Secondary button URL",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "layout",
@@ -49,7 +55,8 @@
             "options": {
                 "centered": "Centered",
                 "left-right": "Left text, right buttons"
-            }
+            },
+            "group": "appearance"
         }
     ]
 }

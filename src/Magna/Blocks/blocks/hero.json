@@ -8,43 +8,50 @@
             "handle": "headline",
             "type": "text",
             "label": "Headline",
-            "required": true
+            "required": true,
+            "group": "content"
         },
         {
             "handle": "subheadline",
             "type": "textarea",
             "label": "Subheadline",
-            "required": false
+            "required": false,
+            "group": "content"
         },
         {
             "handle": "background_id",
             "type": "media",
             "label": "Background image/video",
-            "required": false
+            "required": false,
+            "group": "appearance"
         },
         {
             "handle": "cta_primary_label",
             "type": "text",
             "label": "Primary CTA label",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "cta_primary_url",
             "type": "url",
             "label": "Primary CTA URL",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "cta_secondary_label",
             "type": "text",
             "label": "Secondary CTA label",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "cta_secondary_url",
             "type": "url",
             "label": "Secondary CTA URL",
-            "required": false
+            "required": false,
+            "group": "buttons"
         },
         {
             "handle": "layout",
@@ -56,7 +63,8 @@
                 "centered": "Centered",
                 "left-text-right-image": "Left text, right image",
                 "full-bleed": "Full bleed"
-            }
+            },
+            "group": "appearance"
         }
     ]
 }

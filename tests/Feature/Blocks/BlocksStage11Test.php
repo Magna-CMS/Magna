@@ -637,3 +637,47 @@ it('EntryManager round-trips a blocks_data column through create → read', func
         ->and($readTree[0]['settings']['tokenOverrides']['color-brand'])->toBe('#6366f1')
         ->and($readTree[0]['columns'][0]['blocks'][0]['data']['body'])->toBe('Hello world');
 });
+
+it('groups all of a block’s settings, or none of them', function (): void {
+    /*
+     * A field with no group lands on Content. That is the right default,
+     * and it is exactly wrong when the block HAS declared tabs: the
+     * ungrouped fields would appear on a Content tab the block never asked
+     * for, next to nothing that explains why they are there.
+     *
+     * So grouping is all-or-nothing per block, and this is the guard —
+     * the failure mode is a quiet one an editor would meet before anyone
+     * else did.
+     */
+    $directory = dirname(__DIR__, 3).'/src/Magna/Blocks/blocks';
+
+    foreach (glob($directory.'/*.json') ?: [] as $file) {
+        $definition = json_decode((string) file_get_contents($file), true);
+        $fields = $definition['fields'] ?? [];
+
+        if ($fields === []) {
+            continue;
+        }
+
+        $grouped = array_filter($fields, fn (array $field): bool => ($field['group'] ?? null) !== null);
+
+        expect(count($grouped))->toBeIn([0, count($fields)],
+            basename($file).' groups some settings but not all of them');
+
+        foreach ($grouped as $field) {
+            // A group name reaches the DOM as a tab id, so it may only
+            // look like one.
+            expect($field['group'])->toMatch('/^[a-z][a-z0-9-]*$/',
+                basename($file).': "'.$field['group'].'" is not a usable tab name');
+
+            /*
+             * `style` and `advanced` are the BUILDER's tabs — the style
+             * descriptor table and the visibility controls draw those
+             * panels. A block claiming one would put its fields behind a
+             * tab that renders something else entirely, and lose them.
+             */
+            expect($field['group'])->not->toBeIn(['style', 'advanced'],
+                basename($file).' claims a tab the builder owns');
+        }
+    }
+});

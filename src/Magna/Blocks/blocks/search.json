@@ -16,7 +16,7 @@
             "type": "text",
             "label": "Placeholder",
             "required": false,
-            "default": "Search…",
+            "default": "Search\u2026",
             "group": "content"
         },
         {
@@ -25,7 +25,7 @@
             "label": "Query parameter",
             "required": false,
             "default": "q",
-            "group": "advanced"
+            "group": "options"
         },
         {
             "handle": "label",
@@ -33,7 +33,7 @@
             "label": "Accessible label",
             "required": false,
             "default": "Search this site",
-            "group": "advanced"
+            "group": "options"
         }
     ]
 }
