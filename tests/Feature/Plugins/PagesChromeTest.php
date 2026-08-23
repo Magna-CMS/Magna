@@ -220,3 +220,24 @@ it('offers only parts meant for the role', function (): void {
     expect(array_column($resolver->chromeChoices('header'), 'slug'))->toBe(['brand-header'])
         ->and(array_column($resolver->chromeChoices('footer'), 'slug'))->toBe(['brand-footer']);
 });
+
+it('reports a published part as published, and a draft as a draft', function (): void {
+    $author = chromeAuthor();
+
+    // `status` is cast to an enum. Comparing the raw attribute to a string
+    // is always false, which reported every published part as a draft and
+    // left it unselectable in both pickers — the feature looked broken
+    // while the resolver underneath was working perfectly.
+    $published = chromePart($author, 'live-header', 'Live', ['role' => 'header']);
+    $draft = app(EntryManager::class)->create('pages_template', [
+        'title' => 'Draft', 'slug' => 'draft-header', 'kind' => 'part',
+        'role' => 'header', 'blocks_data' => [],
+    ], $author->id);
+
+    $choices = collect(app(TemplatePartResolver::class)->chromeChoices('header'))
+        ->keyBy('slug');
+
+    expect($choices['live-header']['published'])->toBeTrue()
+        ->and($choices['draft-header']['published'])->toBeFalse()
+        ->and($published->getKey())->not->toBe($draft->getKey());
+});
