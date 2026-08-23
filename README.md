@@ -640,16 +640,7 @@ Statamic is a great Laravel CMS — but it's flat-file by default, paid for comm
 - Registration disabled by default (admin creates users)
 - `composer audit` + PHPStan level 9 + taint analysis in CI
 
-**Committed before 1.0:**
 
-- Third-party penetration test + OWASP ASVS Level 2 assessment (results published)
-- Field-level encryption as a content schema attribute
-- Upload re-encoding pipeline (content-sniff + strip embedded payloads)
-- Signed releases with per-release SBOMs
-
-Found a vulnerability? **Do not open a public issue.** See [SECURITY.md](SECURITY.md) for coordinated disclosure.
-
----
 
 ## ❓ FAQ
 
