@@ -1,0 +1,39 @@
+{
+    "handle": "search",
+    "label": "Search",
+    "icon": "core:search",
+    "category": "site",
+    "fields": [
+        {
+            "handle": "action",
+            "type": "url",
+            "label": "Results page",
+            "required": true,
+            "group": "content"
+        },
+        {
+            "handle": "placeholder",
+            "type": "text",
+            "label": "Placeholder",
+            "required": false,
+            "default": "Search…",
+            "group": "content"
+        },
+        {
+            "handle": "param",
+            "type": "text",
+            "label": "Query parameter",
+            "required": false,
+            "default": "q",
+            "group": "advanced"
+        },
+        {
+            "handle": "label",
+            "type": "text",
+            "label": "Accessible label",
+            "required": false,
+            "default": "Search this site",
+            "group": "advanced"
+        }
+    ]
+}

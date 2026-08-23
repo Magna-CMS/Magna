@@ -241,3 +241,71 @@ it('reports a published part as published, and a draft as a draft', function ():
         ->and($choices['draft-header']['published'])->toBeFalse()
         ->and($published->getKey())->not->toBe($draft->getKey());
 });
+
+it('gives a page no chrome at all when it asks for none', function (): void {
+    $author = chromeAuthor();
+    chromePart($author, 'header', 'Legacy header');
+    $default = chromePart($author, 'brand-header', 'Site default header', ['role' => 'header']);
+    setChromeDefault('header', (string) $default->getKey());
+
+    // A landing page that wants no header is SAYING something. Falling
+    // through to the site default would make "none" mean "the usual one",
+    // which is the opposite of the request.
+    chromePage($author, 'bare-landing', ['header' => TemplatePartResolver::NONE]);
+
+    $html = (string) $this->get('/bare-landing')->assertOk()->getContent();
+
+    expect(str_contains($html, 'Site default header'))->toBeFalse()
+        ->and(str_contains($html, 'Legacy header'))->toBeFalse();
+});
+
+it('keeps “never decided” meaning the site default', function (): void {
+    $author = chromeAuthor();
+    $default = chromePart($author, 'brand-header', 'Site default header', ['role' => 'header']);
+    setChromeDefault('header', (string) $default->getKey());
+
+    // Empty is not "none": a page that has never been asked still inherits,
+    // which is what every page did before this choice existed.
+    chromePage($author, 'undecided-page', ['header' => '']);
+
+    expect($this->get('/undecided-page')->assertOk()->getContent())
+        ->toContain('Site default header');
+});
+
+it('asks about sticky twice, because it is two decisions', function (): void {
+    $author = chromeAuthor();
+
+    // Sticky on wide screens, NOT on phones — where a header that follows
+    // you can eat a third of the screen.
+    $part = chromePart($author, 'desk-sticky', 'Desk sticky', [
+        'role' => 'header',
+        'behaviour' => ['sticky' => true, 'stickyMobile' => false],
+    ]);
+    setChromeDefault('header', (string) $part->getKey());
+    chromePage($author, 'sticky-split');
+
+    $html = (string) $this->get('/sticky-split')->assertOk()->getContent();
+
+    expect($html)->toContain('@media (min-width: 768px)')
+        // Said explicitly rather than left to inherit: a header sticky on
+        // desktop must let go on a phone.
+        ->and($html)->toContain('@media (max-width: 767.98px)')
+        ->and($html)->toContain('position:static');
+});
+
+it('lets mobile follow desktop when nobody said otherwise', function (): void {
+    $author = chromeAuthor();
+
+    // Every site that set sticky before mobile was a separate answer.
+    $part = chromePart($author, 'legacy-sticky', 'Legacy sticky', [
+        'role' => 'header',
+        'behaviour' => ['sticky' => true],
+    ]);
+    setChromeDefault('header', (string) $part->getKey());
+    chromePage($author, 'sticky-legacy');
+
+    $html = (string) $this->get('/sticky-legacy')->assertOk()->getContent();
+
+    expect($html)->toContain('magna-chrome--sticky-mobile')
+        ->and(str_contains($html, 'position:static'))->toBeFalse();
+});
