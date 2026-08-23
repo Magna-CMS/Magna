@@ -38,6 +38,15 @@ final class BlockField
         public readonly bool $multiple,
         /** @var list<BlockField> Item fields when type === 'repeater' */
         public readonly array $fields = [],
+        /**
+         * Which tab of the inspector this field belongs on.
+         *
+         * A block decides how its own settings are grouped, the way it
+         * already decides what they are. Absent means "Content", which is
+         * where every field lived before this existed — so no block.json
+         * needs changing and nothing moves for a block that says nothing.
+         */
+        public readonly ?string $group = null,
     ) {}
 
     /**
@@ -91,6 +100,9 @@ final class BlockField
             optionsFrom: $optionsFrom,
             multiple: isset($data['multiple']) && (bool) $data['multiple'],
             fields: $itemFields,
+            group: isset($data['group']) && is_string($data['group']) && $data['group'] !== ''
+                ? $data['group']
+                : null,
         );
     }
 
