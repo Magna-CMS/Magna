@@ -1,0 +1,26 @@
+{
+    "handle": "quote",
+    "label": "Quote",
+    "icon": "core:chat",
+    "category": "content",
+    "fields": [
+        {
+            "handle": "quote",
+            "type": "textarea",
+            "label": "Quote",
+            "required": true
+        },
+        {
+            "handle": "attribution",
+            "type": "text",
+            "label": "Attribution",
+            "required": false
+        },
+        {
+            "handle": "source",
+            "type": "text",
+            "label": "Source",
+            "required": false
+        }
+    ]
+}

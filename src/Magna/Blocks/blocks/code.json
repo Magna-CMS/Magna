@@ -1,0 +1,40 @@
+{
+    "handle": "code",
+    "label": "Code",
+    "icon": "blocks:code",
+    "category": "content",
+    "fields": [
+        {
+            "handle": "code",
+            "type": "textarea",
+            "label": "Code",
+            "required": true
+        },
+        {
+            "handle": "language",
+            "type": "select",
+            "label": "Language",
+            "required": false,
+            "default": "plain",
+            "options": {
+                "plain": "Plain text",
+                "bash": "Shell",
+                "css": "CSS",
+                "html": "HTML",
+                "javascript": "JavaScript",
+                "json": "JSON",
+                "php": "PHP",
+                "python": "Python",
+                "sql": "SQL",
+                "typescript": "TypeScript",
+                "yaml": "YAML"
+            }
+        },
+        {
+            "handle": "filename",
+            "type": "text",
+            "label": "Filename",
+            "required": false
+        }
+    ]
+}

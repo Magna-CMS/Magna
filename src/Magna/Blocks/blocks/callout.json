@@ -1,0 +1,33 @@
+{
+    "handle": "callout",
+    "label": "Callout",
+    "icon": "core:bolt",
+    "category": "content",
+    "fields": [
+        {
+            "handle": "body",
+            "type": "textarea",
+            "label": "Body",
+            "required": true
+        },
+        {
+            "handle": "heading",
+            "type": "text",
+            "label": "Heading",
+            "required": false
+        },
+        {
+            "handle": "tone",
+            "type": "select",
+            "label": "Tone",
+            "required": false,
+            "default": "info",
+            "options": {
+                "info": "Information",
+                "success": "Success",
+                "warning": "Warning",
+                "danger": "Danger"
+            }
+        }
+    ]
+}
