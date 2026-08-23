@@ -1,0 +1,54 @@
+{
+    "handle": "logo",
+    "label": "Logo",
+    "icon": "core:sparkles",
+    "category": "site",
+    "inlineFields": [
+        "text"
+    ],
+    "fields": [
+        {
+            "handle": "media_id",
+            "type": "media",
+            "label": "Logo image",
+            "required": false
+        },
+        {
+            "handle": "text",
+            "type": "text",
+            "label": "Text, when there is no image",
+            "required": false
+        },
+        {
+            "handle": "height",
+            "type": "text",
+            "label": "Height",
+            "required": false,
+            "default": "40px"
+        },
+        {
+            "handle": "alt",
+            "type": "text",
+            "label": "Alt text",
+            "required": false
+        },
+        {
+            "handle": "url",
+            "type": "url",
+            "label": "Links to",
+            "required": false,
+            "default": "/"
+        },
+        {
+            "handle": "heading",
+            "type": "select",
+            "label": "Is this the page's main heading?",
+            "required": false,
+            "default": "no",
+            "options": {
+                "no": "No \u2014 a link",
+                "yes": "Yes \u2014 an h1"
+            }
+        }
+    ]
+}
