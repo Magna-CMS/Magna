@@ -78,8 +78,28 @@ it('wraps only when a block renders no element at all', function (): void {
     $markup = new BuilderMarkup;
 
     expect($markup->mark('bare text', 'blk-3', 'block'))
-        ->toBe('<span data-magna-node="blk-3" data-magna-kind="block" style="display:contents">bare text</span>')
-        ->and($markup->mark('', 'blk-4', 'block'))->toBe('');
+        ->toBe('<span data-magna-node="blk-3" data-magna-kind="block" style="display:contents">bare text</span>');
+});
+
+it('leaves a marker for a block that rendered nothing', function (): void {
+    $markup = new BuilderMarkup;
+
+    /*
+     * This returned the empty string until it was found to be the reason a
+     * freshly inserted image or download block could be neither seen nor
+     * clicked: several blocks correctly render nothing until they are
+     * given something, and with no node in the canvas the only way to
+     * select one was the navigator.
+     *
+     * Builder-only. mark() is called from the sections partial exclusively
+     * when $inBuilder, and the drift guarantee below covers the public
+     * page.
+     */
+    expect($markup->mark('', 'blk-4', 'block'))
+        ->toContain('data-magna-node="blk-4"')
+        ->and($markup->mark('', 'blk-4', 'block'))->toContain('data-magna-empty="true"')
+        // Scaffolding for a pointer, not content.
+        ->and($markup->mark('', 'blk-4', 'block'))->toContain('aria-hidden="true"');
 });
 
 // ── The drift guarantee ────────────────────────────────────────────────────

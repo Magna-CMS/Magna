@@ -106,3 +106,43 @@ it('needs the media permissions, not merely the builder', function (): void {
     // Viewing is a separate grant, and this actor has it.
     $this->actingAs($user)->getJson(url('/pages-builder/media'))->assertOk();
 });
+
+it('lists only pictures unless the field asked for more', function (): void {
+    $user = builderMediaUser();
+
+    Media::create([
+        'disk' => 'public', 'path' => 'media/report.pdf', 'filename' => 'report.pdf',
+        'original_filename' => 'report.pdf', 'mime_type' => 'application/pdf', 'size' => 2048,
+    ]);
+    Media::create([
+        'disk' => 'public', 'path' => 'media/photo.png', 'filename' => 'photo.png',
+        'original_filename' => 'photo.png', 'mime_type' => 'image/png', 'size' => 1024,
+    ]);
+
+    // The default is pictures, so the logo and image fields cannot start
+    // offering an editor a PDF because a download block wanted one.
+    $images = $this->actingAs($user)->getJson(url('/pages-builder/media'));
+    $images->assertOk();
+    expect(collect($images->json('media'))->pluck('name')->all())->toBe(['photo.png']);
+
+    $all = $this->actingAs($user)->getJson(url('/pages-builder/media?accept=any'));
+    $all->assertOk();
+    expect(collect($all->json('media'))->pluck('name')->sort()->values()->all())
+        ->toBe(['photo.png', 'report.pdf']);
+});
+
+it('narrows rather than widens when the accept value is not one it knows', function (): void {
+    $user = builderMediaUser();
+
+    Media::create([
+        'disk' => 'public', 'path' => 'media/report.pdf', 'filename' => 'report.pdf',
+        'original_filename' => 'report.pdf', 'mime_type' => 'application/pdf', 'size' => 2048,
+    ]);
+
+    // A malformed query string must not be a way to widen what an editor
+    // is shown.
+    $response = $this->actingAs($user)->getJson(url('/pages-builder/media?accept=everything'));
+
+    $response->assertOk();
+    expect($response->json('media'))->toBe([]);
+});

@@ -255,17 +255,18 @@ it('SectionNode::tokenOverrides() returns empty array when not set', function ()
 
 // ── BlockRegistry ────────────────────────────────────────────────────────────
 
-it('loads all 27 core blocks at boot', function (): void {
+it('loads all 29 core blocks at boot', function (): void {
     /** @var BlockRegistry $registry */
     $registry = app(BlockRegistry::class);
 
     // 19 until `container` joined the standard library, then 21 with
     // `icon`, then 22 with `scheme-toggle`, then 23 with `logo`, then 24
     // with `search`, then 27 with the prose blocks `quote`, `code` and
-    // `callout`. The number is asserted so a block.json that fails to parse
-    // cannot disappear silently — update it deliberately when the library
-    // grows, never to make a red test green.
-    expect($registry->count())->toBe(27)
+    // `callout`, then 29 with `table` and `file`. The number is asserted so
+    // a block.json that fails to parse cannot disappear silently — update
+    // it deliberately when the library grows, never to make a red test
+    // green.
+    expect($registry->count())->toBe(29)
         ->and($registry->has('container'))->toBeTrue()
         ->and($registry->has('icon'))->toBeTrue()
         ->and($registry->has('scheme-toggle'))->toBeTrue()
@@ -273,7 +274,9 @@ it('loads all 27 core blocks at boot', function (): void {
         ->and($registry->has('search'))->toBeTrue()
         ->and($registry->has('quote'))->toBeTrue()
         ->and($registry->has('code'))->toBeTrue()
-        ->and($registry->has('callout'))->toBeTrue();
+        ->and($registry->has('callout'))->toBeTrue()
+        ->and($registry->has('table'))->toBeTrue()
+        ->and($registry->has('file'))->toBeTrue();
 });
 
 it('has() returns true for registered core blocks and false for unknown', function (): void {

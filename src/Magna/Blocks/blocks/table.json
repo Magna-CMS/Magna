@@ -1,0 +1,44 @@
+{
+    "handle": "table",
+    "label": "Table",
+    "icon": "blocks:grid",
+    "category": "content",
+    "fields": [
+        {
+            "handle": "rows",
+            "type": "textarea",
+            "label": "Rows",
+            "required": true
+        },
+        {
+            "handle": "separator",
+            "type": "select",
+            "label": "Columns separated by",
+            "required": false,
+            "default": "tab",
+            "options": {
+                "tab": "Tab (paste from a spreadsheet)",
+                "pipe": "Pipe |",
+                "comma": "Comma ,",
+                "semicolon": "Semicolon ;"
+            }
+        },
+        {
+            "handle": "header",
+            "type": "select",
+            "label": "First row is",
+            "required": false,
+            "default": "header",
+            "options": {
+                "header": "A header row",
+                "data": "Ordinary data"
+            }
+        },
+        {
+            "handle": "caption",
+            "type": "text",
+            "label": "Caption",
+            "required": false
+        }
+    ]
+}

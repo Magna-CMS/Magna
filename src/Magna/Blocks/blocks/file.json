@@ -1,0 +1,27 @@
+{
+    "handle": "file",
+    "label": "File download",
+    "icon": "core:download",
+    "category": "media",
+    "fields": [
+        {
+            "handle": "media_id",
+            "type": "media",
+            "label": "File",
+            "required": false,
+            "accept": "any"
+        },
+        {
+            "handle": "label",
+            "type": "text",
+            "label": "Link text",
+            "required": false
+        },
+        {
+            "handle": "description",
+            "type": "text",
+            "label": "Description",
+            "required": false
+        }
+    ]
+}

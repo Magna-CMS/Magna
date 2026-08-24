@@ -19,12 +19,19 @@ use Magna\Blocks\Contracts\ProvidesOptions;
  *   optionsFrom?: string,
  *   multiple?: bool,
  *   fields?: list<mixed>,
+ *   accept?: string,
  * }
  */
 final class BlockField
 {
     /** Repeater safety cap — a document field is not a data import. */
     public const MAX_REPEATER_ITEMS = 100;
+
+    /** Pictures only — what every media field meant before `accept` existed. */
+    public const ACCEPT_IMAGE = 'image';
+
+    /** Any file the install's ingest allowlist accepts. */
+    public const ACCEPT_ANY = 'any';
 
     public function __construct(
         public readonly string $handle,
@@ -47,6 +54,19 @@ final class BlockField
          * needs changing and nothing moves for a block that says nothing.
          */
         public readonly ?string $group = null,
+        /**
+         * What a `media` field will let an editor choose.
+         *
+         * `image` is the default because every media field that existed
+         * before this one was a picture, and a picker that started
+         * offering PDFs to the logo field would be a regression. `any`
+         * exists for the blocks that want a file rather than an image —
+         * a download link, an attachment.
+         *
+         * Bounded by the ingest allowlist either way: this decides what
+         * the picker OFFERS, not what the install accepts.
+         */
+        public readonly string $accept = self::ACCEPT_IMAGE,
     ) {}
 
     /**
@@ -103,6 +123,12 @@ final class BlockField
             group: isset($data['group']) && is_string($data['group']) && $data['group'] !== ''
                 ? $data['group']
                 : null,
+            // An unrecognised value falls back to pictures rather than
+            // widening the picker: a typo in a block.json must not be the
+            // thing that starts offering an editor every file on the site.
+            accept: ($data['accept'] ?? null) === self::ACCEPT_ANY
+                ? self::ACCEPT_ANY
+                : self::ACCEPT_IMAGE,
         );
     }
 
