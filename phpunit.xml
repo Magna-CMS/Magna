@@ -29,13 +29,21 @@
     <php>
         <!--
             The whole suite runs in one process, so peak memory is the sum of
-            ~1500 tests' worth of retained state, not any single test's. PHP's
+            ~4000 tests' worth of retained state, not any single test's. PHP's
             own 512M default started killing the run mid-suite — always in
             whichever test happened to make the next large allocation, which
             reads as a random unrelated failure. Set here rather than in a
             developer's php.ini so CI and every machine agree.
+
+            Raised 1G -> 2G when the suite passed 4000 tests: it began dying
+            the same way again, and the same way it misreads — the last fatal
+            pointed at PHPUnit's value exporter, which suggests a failing
+            assertion with a huge diff and is nothing of the sort. Each
+            testsuite passed cleanly on its own (Unit 92, Feature 1486,
+            Plugins 2503, no failures); only the combined single-process run
+            ran out of room. Grow this with the suite.
         -->
-        <ini name="memory_limit" value="1G"/>
+        <ini name="memory_limit" value="2G"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

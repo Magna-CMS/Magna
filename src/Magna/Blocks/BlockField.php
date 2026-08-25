@@ -227,12 +227,30 @@ final class BlockField
                     continue;
                 }
 
-                if ($itemField->required && ($itemValue === null || $itemValue === '' || $itemValue === [])) {
-                    $errors[] = "The {$this->label} field's item #{$index} is missing {$itemField->label}.";
-
-                    continue;
-                }
-
+                /*
+                 * A required sub-field is NOT enforced here.
+                 *
+                 * PageTreeValidator runs this on every save, and the builder
+                 * saves on every keystroke — so an incomplete row is the
+                 * normal state of a row being written, not a mistake. A
+                 * top-level required field only survives that because
+                 * inserting a block seeds it with something valid; a list
+                 * row has no seed, and seeding one would not help anyway,
+                 * because clearing a placeholder to type your own answer
+                 * puts the row right back into the half-filled state.
+                 *
+                 * Enforcing it here made the FAQ unusable in both
+                 * directions: "item #0 is missing Question" the instant you
+                 * pressed Add, then "missing Answer" the instant you typed
+                 * the question. There is no keystroke order that reaches a
+                 * complete row through a validator that refuses every
+                 * intermediate one.
+                 *
+                 * Nothing downstream trusts requiredness either: the FAQ
+                 * sanitiser drops items with neither question nor answer,
+                 * and the views skip what they cannot draw. Completeness is
+                 * a publishing question, not a per-keystroke one.
+                 */
                 if ($itemValue !== null) {
                     foreach ($itemField->validateValue($itemValue) as $message) {
                         $errors[] = "The {$this->label} field's item #{$index}: {$message}";
