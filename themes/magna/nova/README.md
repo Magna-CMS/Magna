@@ -1,17 +1,26 @@
 # Nova — the Magna product-site theme
 
-Nova is the Magna CMS marketing site turned into a real Magna theme: dark
-editorial bands, gradient accents, a card-driven marketing vocabulary, and a
-starter site kit that ships all ten pages of the site as **block documents**.
+Nova is the hand-written Magna CMS marketing site, turned into a Magna theme
+without turning into a different design. The stylesheet **is** that site's
+stylesheet: the declarations are the original's, unchanged, with their
+selectors pointed at the markup the block renderer emits. Where the original
+wrote `.why-card`, Nova writes `.why .magna-features__item` and keeps every
+value.
 
-The design rule the whole theme is built around:
+The rule the whole theme is built around:
 
 > Nothing on this site may be a hand-written template. Every page, every
 > section and every block is something an editor can select, edit, reorder
-> and delete in the page builder.
+> and delete in the page builder — and it still looks exactly like the
+> original.
 
-That is why there is exactly one theme block view in here. Everything else is
-CSS written against the classes the block renderer already emits.
+That is why there is exactly one theme block view in here. Everything else
+is CSS against classes the renderer already produces.
+
+**Verified against the original**, band by band, at 1440×900: on the home
+page every section is within 7px of the hand-written page and the whole
+document is within 9px of 10,173px. On Why Magna every section is within
+13px.
 
 ---
 
@@ -37,100 +46,94 @@ from the kit are left alone. It creates:
 | Menus | `primary`, `footer_product`, `footer_developers`, `footer_company` |
 | Settings | `home_page_slug` → `home` |
 
-Re-run the sync any time; node ids in the kit are stable, so a re-sync
-updates the same nodes instead of replacing the document wholesale.
+Node ids in the kit are deterministic, so re-running the sync updates the
+same nodes instead of rewriting the document.
 
 ---
 
-## Section vocabulary
+## The section vocabulary
 
-Nova's design lives in a set of **section CSS classes**. Type them into the
-section's *CSS class* field in the builder's inspector; combine one band
-class with one pattern class.
+The design lives in **section CSS classes**, and they are the original's own
+class names. Type them into the section's *CSS class* field in the builder's
+inspector; combine one band with any patterns it needs.
 
-### Bands — what the strip looks like
+### Bands
 
-| Class | Ground |
+| Class | What it is |
 |---|---|
-| `nova-hero` | Dark, grid overlay and a gradient bloom. Adds `nova-hero--short` for a sub-page hero. |
-| `nova-problem` | White, hairline rule beneath |
-| `nova-why` | Off-white |
-| `nova-arch` | White, hairline rules above and below |
-| `nova-headless` | White |
-| `nova-plugins` | Soft grey |
-| `nova-builder` | White, hairline rule above |
-| `nova-audiences` | Off-white |
-| `nova-faq` | Soft grey |
-| `nova-cases` | Dark |
-| `nova-cta` | Deepest dark, centred, radial glow |
-| `nova-trust` | Dark ribbon, no top padding |
+| `hero` | The dark hero: grid overlay, gradient mesh, two-up with a card. Add `short` for a sub-page hero (single column, 820px measure). |
+| `problem` | White, hairline rule beneath |
+| `why` | Off-white; a features block becomes the card grid |
+| `arch` | White, rules above and below; the second column becomes the dark architecture panel |
+| `headless` | Off-white; pairs a terminal with two path cards |
+| `plugins` | Soft grey; a features block becomes the numbered steps with the connecting line |
+| `builder` | White, rule above; a features list becomes tick points |
+| `audiences` | Off-white |
+| `faq` | Soft grey |
+| `cases` | Dark; a features block becomes the use-case chips |
+| `cta` | Deepest dark, centred, radial glow |
+| `trust` | The dark scrolling ribbon under the hero |
 
-### Patterns — how the blocks inside are drawn
+### Patterns
 
 | Class | Effect |
 |---|---|
-| `nova-cards` | A **features** block becomes elevated cards (the "why Magna" grid) |
-| `nova-chips` | A **features** block becomes compact chips |
-| `nova-rows` | A **features** block becomes full-width rows with a status pill |
-| `nova-steps` | A **features** block becomes numbered steps |
-| `nova-layers` | A **features** block becomes stacked layer bars with a tag |
-| `nova-marquee` | A **features** block becomes a wrapping ribbon of large labels |
-| `nova-cardgrid` | Nested **container** blocks lay out two-up as cards |
-| `nova-compare` | Table styling for a wide comparison grid |
-| `nova-terminal` | The column holding a **code** block reads as a terminal |
-| `nova-grid-2` | Forces a two-column features grid instead of auto-fit |
-| `nova-center` | Centres the section's headings, prose and buttons |
-| `nova-split` | Two-column row, vertically centred (desktop only) |
-| `nova-foot` | A closing line + button under the pattern above it |
-| `nova-light` | Marks a band as light so ghost buttons and chips invert |
-| `nova-footer-main` | Footer link columns (used by the `footer` template part) |
-| `nova-footer-bottom` | Footer baseline row, with a rule above it |
+| `split` | Two columns, vertically centred (the band decides the ratio) |
+| `center` | Centres the section's headings, prose and buttons |
+| `grid-2` | Two-up instead of the band's default column count |
+| `feat-rows` | A features block becomes full-width rows with a status pill |
+| `aud-grid` | Nested container blocks become the two-up card grid |
+| `cmp-wrap` | The comparison table's frame |
+| `terminal-split` | Marks the column pairing that holds a code block |
+| `cases-foot` | The closing line and button beneath a pattern |
+| `prose` | A long-form column: 780px measure, 16.5px paragraphs, 20px apart |
+| `marquee` | The ribbon's scrolling track |
+| `head-continue` / `tail-continue` | See below |
 
 ### Continuations
 
 A section's column spans must sum to 12, so a full-width head **above** a
 two-column grid cannot be a third column. Nova splits that composition into
-two sections and joins them visually:
-
-- `nova-continue--head` — the head; drops its bottom padding
-- `nova-continue--tail` — the grid; takes a small top padding
+two sections and joins them seamlessly: `head-continue` drops its bottom
+padding, `tail-continue` takes the head's 64px as its top padding.
 
 ---
 
 ## Conventions inside blocks
 
-**Heading level H6 is the eyebrow pill.** Set a heading block to H6 and it
-renders as the small uppercase capsule above a headline. No extra class, no
-extra block.
+**Heading level H6 is the badge.** Set a heading block to H6 and it renders
+as the original's pill — accent tint, uppercase, pulsing dot. On a dark band
+it switches to the light treatment automatically, the way `.badge.light`
+did.
 
-> The trade-off, stated plainly: an eyebrow is a label for the headline
-> beneath it, not a heading in its own right, so a screen reader announces
+> The trade-off, stated plainly: a badge labels the headline beneath it
+> rather than being a heading in its own right, so a screen reader announces
 > one extra heading per section. It is the convention because no core block
 > produces styleable non-heading text — a richtext paragraph is
-> indistinguishable from body copy in CSS — and because the alternative,
-> folding the eyebrow into the headline's richtext, would make two things an
-> editor thinks of separately share one field. The document accessibility
-> checker does not flag it (it only reports *descending-to-ascending* level
-> jumps), so this note is the record.
+> indistinguishable from body copy in CSS — and because folding the badge
+> into the headline's richtext would make two things an editor thinks of
+> separately share one field.
 
 **Two-tone headlines are a text block.** A heading block's text field is a
-plain, escaped string, so it cannot carry the accent colour on half the
-line. Nova's accented headlines are richtext blocks containing
-`<h2>Websites changed. <em>Most platforms didn't.</em></h2>` — the `<em>`
-takes the accent. It stays fully editable in the builder's richtext editor,
-and it degrades to an ordinary italic headline under any other theme.
+plain, escaped string, so it cannot carry the accent on half the line.
+Nova's accented headlines are richtext blocks holding
+`<h2>Websites changed. <em>Most platforms didn't.</em></h2>`. In a hero the
+`<em>` is the original's gradient text; elsewhere it is the accent colour.
+It stays editable in the builder's richtext editor and degrades to an
+ordinary italic headline under any other theme.
 
-**Container blocks are cards.** Set the container's *Style* settings
-(background `var(--nova-card)`, 1px border `var(--nova-border)`, radius
-`var(--nova-radius-lg)`, padding) and you have the site's card. Nest
-containers inside a row container for a card grid.
+**Container blocks are cards.** The hero card and the audience cards are
+container blocks whose *Style* settings carry the original's values.
+Translucent surfaces ride two variables — `var(--card-invert)` and
+`var(--border-invert)` — because a style setting may hold `var(--token)` and
+nothing else; `rgba()` is refused by the renderer's CSS sanitizer.
 
 ---
 
 ## The features block, extended
 
 `views/blocks/features.blade.php` is the only Blade view Nova overrides. It
-reads the core item keys and three more, all optional and all ignored by any
+reads the core item keys and three more, all optional and ignored by any
 other theme:
 
 ```jsonc
@@ -138,51 +141,65 @@ other theme:
   "icon": "shield",          // sprite name (below), or any short string / emoji
   "title": "Content type builder",
   "description": "Define custom content types with typed fields.",
-  "status": "Available",     // pill on the right of a nova-rows item
+  "status": "Available",     // pill on the right of a feat-rows item
   "tone": "avail",           // avail | dev | plan — what colours that pill
-  "tag": "Opt-in",           // small label on a nova-layers row
+  "tag": "Opt-in",           // small label beside the title
   "url": "/features"         // makes the title a link
 }
 ```
 
 ### Icon names
 
-The theme layout defines an SVG sprite; a document stores a **name**, never
-markup. A name the sprite does not know is printed as text, which is what
-keeps an emoji working.
+The layout defines an SVG sprite; a document stores a **name**, never
+markup. A name the sprite does not know prints as text, which is what keeps
+an emoji working.
 
 ```
 check  check-circle  code  shield  bolt  modules  pencil  screen  terminal
 type   layout  layers  target  clock  building  list  devices  chart  users
-cog    sparkle  arrow-right  arrow-up
+cog    sparkle  arrow-right  arrow-up  close
 ```
 
 ---
 
 ## Chrome
 
-- **Header** is the theme's own, built from the `primary` menu. Publish a
-  template part with slug `header` and it replaces the theme's chrome; the
-  mobile drawer copies whatever navigation the header actually has, so it
-  keeps working either way.
+- **Header** is the theme's own, built from the `primary` menu: the
+  wordmark with its animated mark, the underline-on-hover navigation, the
+  translucent scrolled state and the hamburger that folds into a cross.
+  Publish a template part with slug `header` and it replaces all of that;
+  the mobile drawer copies whatever navigation the header actually has, so
+  it keeps working either way.
+- **Wordmark**: the site name is drawn the way the original drew it — the
+  last word set apart as the small accent suffix ("Magna **CMS**") when
+  there is one, the whole name otherwise, so another site still gets a
+  wordmark rather than a hardcoded one.
 - **Footer** ships as a template part (slug `footer`) so its link columns
-  are editable in the builder like any other page. The theme's built-in
-  footer is only the fallback for a site that has not designed one.
+  are editable like any other page. The theme's built-in footer is the
+  fallback for a site that has not designed one.
+- **Visitor chrome only.** The preloader, scroll progress, cursor glow,
+  back-to-top and the behaviour script are all suppressed in builder mode:
+  the canvas renders through this same layout, and a splash screen over the
+  page would be a splash screen over the thing being edited.
 
 ---
 
-## Tokens
+## Tokens and colour
 
-`tokens.json` carries the palette, the layout metrics and the two
-typefaces. Every colour has a dark reading, so the site follows the
-visitor's colour scheme (or whatever *Pages → Appearance* pins it to). The
-theme's own `--nova-*` variables read from those tokens; they are also what
-a block's style settings in the builder should reference —
-`background: var(--nova-card)` rather than a literal hex.
+`tokens.json` carries the original's palette, metrics and the two
+typefaces, under the original's own names — `accent`, `accent_2`,
+`bg_dark`, `text_muted` and so on — so the ported rules did not have to be
+touched. Change a token in Appearance and the site repaints.
 
-Fonts are Figtree (display) and Inter (body), loaded from Google Fonts.
-Change `typography.displayFamily` / `typography.bodyFamily` to use others;
-the `<link>` in the layout is the only place the Google Fonts request lives.
+**There is no dark reading.** The original site has one palette, and a
+theme that repainted it under `prefers-color-scheme: dark` would not be the
+same site. Values a token cannot hold (anything with a bracket — every
+`rgba()` and every shadow) live in the stylesheet, which is where the
+original kept them too.
+
+Fonts are Figtree (display) and Inter (body) from Google Fonts. Change
+`typography.display_family` / `body_family` to use others; the `<link>` in
+the layout is the only place the request lives.
 
 ---
 
@@ -192,12 +209,12 @@ the `<link>` in the layout is the only place the Google Fonts request lives.
   stores them, and the site-kit format has no field for them. The copy for
   all ten pages is in `website-content/13-seo-metadata.md`; enter it once
   `magna/seo` is installed.
-- **Decorative mock panels** from the source HTML (the page-builder
-  wireframe, the floating "Open Source" badge). They carry no content and
-  could only exist as raw markup, which is exactly what this theme refuses.
-  The bands they sat in keep their copy.
-- **The `developers` path.** It is claimed at the site root by the
-  Marketplace plugin's admin resource, so the marketing page ships as
+- **Two decorative mock panels** from the original: the page-builder
+  wireframe and the floating "Open Source" badge. They carry no content and
+  could only exist as raw markup, which is what this theme refuses. The
+  bands they sat in keep all of their copy.
+- **The `developers` path**, which is claimed at the site root by the
+  Marketplace plugin's admin resource. The marketing page ships as
   `for-developers`.
 
 ---
@@ -209,9 +226,6 @@ The kit is generated from the source HTML in `website-content/`:
 ```bash
 python website-content/build/convert.py themes/magna/nova/starter/magna-website.json
 ```
-
-Node ids are deterministic, so regenerating and re-syncing updates the
-existing documents rather than replacing them.
 
 ---
 

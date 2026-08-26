@@ -12,795 +12,925 @@
     @endif
     <style>
         /*
-            Nova — the Magna product-site design system.
+            Nova — the Magna product site.
 
-            Everything below is written against the classes the block
-            renderer emits (.magna-section, .magna-block--*, .magna-prose)
-            and against a small vocabulary of section CSS classes an editor
-            types into the builder's "CSS class" field (nova-why, nova-cards,
-            nova-rows, …). There is no markup here that only a hand-written
-            template could produce, which is what keeps every page on this
-            site editable in the page builder.
+            This stylesheet IS the site's stylesheet: the declarations are
+            the original's, unchanged, with their selectors pointed at the
+            markup the block renderer emits. Where the original wrote
+            `.why-card`, this writes `.why .magna-features__item` and keeps
+            every value. That is the whole design of the theme — the site
+            keeps its exact appearance, and every part of it is a node the
+            page builder can edit.
 
-            Colour comes from design tokens, so a token change in Appearance
-            restyles the site; the --nova-* layer below is the theme's own
-            naming on top of them, and it is what block-level style settings
-            in the builder reference (background: var(--nova-card)).
+            The variable names below are the original's too, so the rules
+            that use them did not have to be touched. They read from design
+            tokens, so Appearance can still repaint the site.
         */
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
         :root {
-            --nova-primary: var(--color-primary, #6366f1);
-            --nova-primary-deep: var(--color-primary-deep, #4f52e0);
-            --nova-primary-alt: var(--color-primary-alt, #8b5cf6);
-            --nova-accent: var(--color-accent, #4facfe);
-            --nova-text: var(--color-text, #12142b);
-            --nova-muted: var(--color-muted, #5c6078);
-            --nova-faint: var(--color-faint, #9aa0b8);
-            --nova-surface: var(--color-surface, #ffffff);
-            --nova-surface-alt: var(--color-surface-alt, #f7f7fb);
-            --nova-surface-soft: var(--color-surface-soft, #f1f1f8);
-            --nova-ink: var(--color-ink, #0c1022);
-            --nova-ink-deep: var(--color-ink-deep, #070a18);
-            --nova-border: var(--color-border, #e4e4f0);
-            --nova-border-dark: var(--color-border-dark, #1d2142);
-            --nova-success: var(--color-success, #0d9668);
-            --nova-warning: var(--color-warning, #c07817);
+            --bg-main: var(--color-bg-main, #f7f7fb);
+            --bg-white: var(--color-bg-white, #ffffff);
+            --bg-soft: var(--color-bg-soft, #f1f1f8);
+            --bg-dark: var(--color-bg-dark, #0c1022);
+            --bg-darker: var(--color-bg-darker, #070a18);
+            --text-main: var(--color-text-main, #12142b);
+            --text-muted: var(--color-text-muted, #5c6078);
+            --text-light: var(--color-text-light, #9aa0b8);
+            --accent: var(--color-accent, #6366f1);
+            --accent-2: var(--color-accent-2, #8b5cf6);
+            --accent-3: var(--color-accent-3, #4facfe);
+            --accent-hover: var(--color-accent-hover, #4f52e0);
+            --accent-light: var(--color-accent-light, #eef0fe);
+            --border: var(--color-border, #e4e4f0);
+            --border-dark: var(--color-border-dark, #1d2142);
+            --status-avail: var(--color-status-avail, #0d9668);
+            --status-dev: var(--color-status-dev, #c07817);
 
-            /* Surfaces a builder style setting can name. Two readings, so a
-               card set on a light band and the same card set on a dark one
-               are one setting rather than two documents. */
-            --nova-card: var(--color-surface, #ffffff);
-            --nova-card-invert: #131735;
-            --nova-border-invert: #262b52;
+            --maxw: var(--max-width, 1240px);
+            --radius: var(--radius-base, 14px);
+            --radius-lg: var(--radius-large, 24px);
 
-            --nova-max: var(--max-width, 1240px);
-            --nova-gutter: var(--gutter, 32px);
-            --nova-radius: var(--radius, 14px);
-            --nova-radius-lg: var(--radius-large, 24px);
-            --nova-band: var(--band-padding, 110px);
+            /*
+                Values a design token cannot hold: the token filter drops
+                anything containing "(" , which is every rgba() and every
+                shadow. They live here, which is also where the original
+                kept them.
+            */
+            --accent-glow: rgba(99,102,241,0.35);
+            --shadow-sm: 0 2px 8px rgba(18,20,43,0.05);
+            --shadow-md: 0 12px 40px rgba(18,20,43,0.08);
+            --shadow-lg: 0 30px 80px rgba(18,20,43,0.14);
+            --ease: cubic-bezier(0.16,1,0.3,1);
 
-            --nova-display: var(--display-family, Figtree, ui-sans-serif, system-ui, sans-serif);
-            --nova-body: var(--body-family, Inter, ui-sans-serif, system-ui, sans-serif);
-            --nova-display-weight: var(--display-weight, 700);
+            /* The two translucent card surfaces, as variables so a block's
+               style setting in the builder can name them — a style value
+               may hold var(--token) and nothing else. */
+            --card-invert: rgba(255,255,255,0.05);
+            --border-invert: rgba(255,255,255,0.12);
 
-            --nova-shadow-sm: 0 2px 8px rgba(18, 20, 43, 0.05);
-            --nova-shadow-md: 0 12px 40px rgba(18, 20, 43, 0.08);
-            --nova-shadow-lg: 0 30px 80px rgba(18, 20, 43, 0.14);
-            --nova-ease: cubic-bezier(0.16, 1, 0.3, 1);
+            /* The mark, for the two places it is drawn as decoration
+               rather than as content (the hero card, the architecture
+               panel). A <use> reference cannot live in a pseudo-element. */
+            --mark-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3ClinearGradient id='g' x1='0' y1='0' x2='34' y2='34' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3Cpath d='M17 1 31 9v16l-14 8L3 25V9l14-8Z' stroke='url(%23g)' stroke-width='2.4' fill='rgba(99,102,241,.06)'/%3E%3Cpath d='M10 23V11.5l7 6 7-6V23' stroke='url(%23g)' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+            --serif: var(--display-family, 'Figtree', system-ui, -apple-system, sans-serif);
+            --sans: var(--body-family, 'Inter', system-ui, -apple-system, sans-serif);
         }
 
-        /* The dark reading of the two surfaces that are not tokens: they
-           describe a card ON a band, and a band already carries a scheme. */
-        @media (prefers-color-scheme: dark) {
-            :root:not([data-theme="light"]) {
-                --nova-card: #131735;
-                --nova-border: #262b52;
-            }
-        }
-        :root[data-theme="dark"] {
-            --nova-card: #131735;
-            --nova-border: #262b52;
-        }
-
-        html { font-size: var(--base-size, 16px); scroll-behavior: smooth; }
-
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; font-size: var(--base-size, 16px); }
         body {
-            font-family: var(--nova-body);
-            color: var(--nova-text);
-            background: var(--nova-surface-alt);
+            font-family: var(--sans);
+            color: var(--text-main);
+            background: var(--bg-main);
             line-height: 1.65;
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
         }
+        h1, h2, h3, h4 { letter-spacing: -0.03em; font-weight: 700; color: var(--text-main); }
+        h5, h6 { letter-spacing: -0.03em; font-weight: 700; }
+        a { text-decoration: none; color: inherit; }
+        img, svg.logo-mark { display: block; max-width: 100%; }
+        ::selection { background: var(--accent); color: #fff; }
 
-        img, svg { display: block; max-width: 100%; }
-        a { color: inherit; text-decoration: none; }
-        ::selection { background: var(--nova-primary); color: #fff; }
+        .container, .magna-section__inner { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 32px; }
+        .serif { font-family: var(--serif); font-weight: 600; }
 
-        h1, h2, h3, h4, h5 {
-            font-family: var(--nova-display);
-            font-weight: var(--nova-display-weight);
-            letter-spacing: -0.03em;
-            line-height: 1.12;
-            color: inherit;
-        }
-        h1 { font-size: clamp(38px, 5.4vw, 64px); }
-        h2 { font-size: clamp(30px, 4vw, 46px); }
-        h3 { font-size: clamp(19px, 2vw, 22px); letter-spacing: -0.02em; }
-        h4 { font-size: 16px; letter-spacing: -0.01em; }
-
-        a:focus-visible, button:focus-visible, summary:focus-visible {
-            outline: 3px solid var(--nova-accent);
-            outline-offset: 3px;
-            border-radius: 6px;
+        /* ===== LOGO ===== */
+        .logo { display: inline-flex; align-items: center; gap: 11px; font-family: var(--serif); font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.04em; transition: color 0.4s var(--ease); }
+        .logo .logo-mark { width: 34px; height: 34px; flex-shrink: 0; }
+        .logo .cms { font-weight: 500; color: var(--accent-3); font-size: 15px; margin-left: 2px; letter-spacing: 0.08em; text-transform: uppercase; align-self: center; margin-top: 4px; }
+        .running-line { stroke-dasharray: 28 56; stroke-dashoffset: 84; animation: pulse-chase 2s cubic-bezier(0.25,1,0.5,1) infinite; }
+        @keyframes pulse-chase {
+            0%   { stroke-dasharray: 15 69; stroke-dashoffset: 84; }
+            40%  { stroke-dasharray: 38 46; }
+            100% { stroke-dasharray: 15 69; stroke-dashoffset: 0; }
         }
 
-        .nova-skip {
-            position: absolute; left: -9999px; top: 0; z-index: 6000;
-            background: var(--nova-primary); color: #fff; padding: 12px 20px; border-radius: 0 0 10px 0;
-        }
-        .nova-skip:focus { left: 0; }
-
-        .nova-wrap {
-            width: 100%; max-width: var(--nova-max); margin: 0 auto;
-            padding-left: var(--nova-gutter); padding-right: var(--nova-gutter);
+        /* ===== SCROLL PROGRESS ===== */
+        .scroll-progress {
+            position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+            background: linear-gradient(90deg, var(--accent-3), var(--accent), var(--accent-2));
+            z-index: 2000; transition: width 0.1s linear;
         }
 
-        /* ================= icons ================= */
-        .nova-i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        /* ===== CUSTOM CURSOR ===== */
+        .cursor-glow {
+            position: fixed; top: 0; left: 0; width: 380px; height: 380px;
+            border-radius: 50%; pointer-events: none; z-index: 1;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 60%);
+            transform: translate(-50%,-50%); opacity: 0; transition: opacity 0.4s ease;
+            mix-blend-mode: multiply;
+        }
 
-        /* ================= buttons ================= */
-        .magna-btn, .nova-btn {
-            position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-            padding: 15px 30px; border-radius: 100px; font-weight: 600; font-size: 14px; line-height: 1;
-            font-family: var(--nova-body); border: 1px solid transparent; cursor: pointer; white-space: nowrap;
-            transition: transform 0.35s var(--nova-ease), box-shadow 0.35s var(--nova-ease),
-                        background-color 0.35s var(--nova-ease), color 0.35s var(--nova-ease),
-                        border-color 0.35s var(--nova-ease), filter 0.35s var(--nova-ease);
-        }
-        .magna-btn--sm, .nova-btn--sm { padding: 11px 22px; font-size: 13px; }
-        .magna-btn--lg { padding: 18px 36px; font-size: 15px; }
-
-        .magna-btn--primary, .nova-btn--primary {
-            background: linear-gradient(120deg, var(--nova-primary), var(--nova-primary-alt));
-            color: #fff;
-            box-shadow: 0 10px 30px -8px rgba(99, 102, 241, 0.35);
-        }
-        .magna-btn--primary:hover, .nova-btn--primary:hover {
-            filter: brightness(1.08); transform: translateY(-3px);
-            box-shadow: 0 18px 40px -10px rgba(99, 102, 241, 0.45);
-        }
-        .magna-btn--secondary {
-            background: var(--nova-text); color: var(--nova-surface);
-        }
-        .magna-btn--secondary:hover { transform: translateY(-3px); box-shadow: var(--nova-shadow-md); }
-        .magna-btn--outline {
-            background: var(--nova-surface); color: var(--nova-text); border-color: var(--nova-border);
-        }
-        .magna-btn--outline:hover { border-color: var(--nova-primary); color: var(--nova-primary); transform: translateY(-3px); box-shadow: var(--nova-shadow-md); }
-        .magna-btn--ghost {
-            background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.22);
-            backdrop-filter: blur(6px);
-        }
-        .magna-btn--ghost:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.42); }
-        /* A ghost button on a light band would be white-on-white. */
-        .nova-light .magna-btn--ghost { background: var(--nova-surface); color: var(--nova-text); border-color: var(--nova-border); }
-        .nova-light .magna-btn--ghost:hover { border-color: var(--nova-primary); color: var(--nova-primary); }
-
-        .magna-block--button { display: inline-block; }
-        .magna-block--button + .magna-block--button { margin-left: 12px; }
-
-        /* ================= header ================= */
-        .nova-header {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-            padding: 20px 0; transition: background 0.4s var(--nova-ease), box-shadow 0.4s var(--nova-ease), padding 0.4s var(--nova-ease);
-        }
-        .nova-header.is-stuck {
-            padding: 12px 0; background: rgba(255, 255, 255, 0.86);
-            backdrop-filter: blur(18px); box-shadow: var(--nova-shadow-sm);
-        }
-        .nova-header__inner { display: flex; align-items: center; justify-content: space-between; gap: 28px; }
-
-        .nova-logo { display: inline-flex; align-items: center; gap: 11px; font-family: var(--nova-display); font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.04em; }
-        .nova-logo svg { width: 34px; height: 34px; flex-shrink: 0; }
-        .nova-logo__suffix { font-weight: 500; color: var(--nova-accent); font-size: 15px; margin-left: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
-        .nova-header.is-stuck .nova-logo { color: var(--nova-text); }
-
-        .nova-nav ul { display: flex; align-items: center; gap: 30px; list-style: none; }
-        .nova-nav a { font-size: 14.5px; font-weight: 500; color: rgba(255, 255, 255, 0.78); transition: color 0.25s; }
-        .nova-nav a:hover { color: #fff; }
-        .nova-header.is-stuck .nova-nav a { color: var(--nova-muted); }
-        .nova-header.is-stuck .nova-nav a:hover { color: var(--nova-text); }
-
-        .nova-burger { display: none; flex-direction: column; gap: 5px; background: none; border: 0; padding: 8px; }
-        .nova-burger span { display: block; width: 24px; height: 2px; border-radius: 2px; background: #fff; transition: background 0.3s; }
-        .nova-header.is-stuck .nova-burger span { background: var(--nova-text); }
-
-        .nova-drawer {
-            position: fixed; inset: 0; z-index: 1500; background: var(--nova-ink);
-            display: flex; flex-direction: column; padding: 26px var(--nova-gutter) 40px;
-            transform: translateX(100%); transition: transform 0.45s var(--nova-ease); visibility: hidden;
-        }
-        .nova-drawer.is-open { transform: translateX(0); visibility: visible; }
-        .nova-drawer__top { display: flex; align-items: center; justify-content: space-between; }
-        .nova-drawer__close { background: none; border: 0; color: #fff; font-size: 30px; line-height: 1; padding: 4px 10px; }
-        .nova-drawer__links { display: grid; gap: 4px; margin-top: 48px; }
-        .nova-drawer__links a {
-            display: flex; align-items: center; gap: 16px; padding: 16px 0; color: #fff;
-            font-family: var(--nova-display); font-size: 26px; font-weight: 600; letter-spacing: -0.03em;
-            border-bottom: 1px solid var(--nova-border-dark);
-        }
-        .nova-drawer__index { font-family: var(--nova-body); font-size: 12px; font-weight: 600; color: var(--nova-accent); letter-spacing: 0.1em; }
-
-        /* ================= progress + preloader ================= */
-        .nova-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; z-index: 2000;
-            background: linear-gradient(90deg, var(--nova-accent), var(--nova-primary), var(--nova-primary-alt)); transition: width 0.1s linear; }
-        .nova-splash {
-            position: fixed; inset: 0; z-index: 5000; background: var(--nova-ink);
+        /* ===== PRELOADER ===== */
+        .preloader {
+            position: fixed; inset: 0; z-index: 5000; background: var(--bg-dark);
             display: flex; align-items: center; justify-content: center; flex-direction: column;
             transition: opacity 0.6s ease, visibility 0.6s ease;
         }
-        .nova-splash.is-done { opacity: 0; visibility: hidden; }
-        html.nova-seen .nova-splash { display: none; }
-        .nova-splash__bar { width: 180px; height: 2px; background: var(--nova-border-dark); margin-top: 24px; overflow: hidden; border-radius: 2px; }
-        .nova-splash__bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--nova-accent), var(--nova-primary), var(--nova-primary-alt)); animation: nova-load 1.3s ease forwards; }
-        @keyframes nova-load { to { width: 100%; } }
+        .preloader.done { opacity: 0; visibility: hidden; }
+        html.no-splash .preloader { display: none; }
+        .pre-logo { display: flex; align-items: center; gap: 14px; opacity: 0; animation: preIn 0.8s var(--ease) forwards; }
+        .pre-logo .logo-mark { width: 52px; height: 52px; }
+        .pre-logo span { font-family: var(--serif); font-size: 42px; font-weight: 700; color: #fff; letter-spacing: -0.04em; }
+        .pre-bar { width: 180px; height: 2px; background: var(--border-dark); margin-top: 24px; overflow: hidden; border-radius: 2px; }
+        .pre-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg,var(--accent-3),var(--accent),var(--accent-2)); animation: preLoad 1.3s ease forwards; }
+        @keyframes preIn { to { opacity: 1; transform: translateY(0); } from { opacity: 0; transform: translateY(14px); } }
+        @keyframes preLoad { to { width: 100%; } }
 
-        .nova-top {
-            position: fixed; bottom: 30px; right: 30px; z-index: 900; width: 52px; height: 52px; border-radius: 50%;
-            background: linear-gradient(135deg, var(--nova-primary), var(--nova-primary-alt)); color: #fff;
-            display: flex; align-items: center; justify-content: center; cursor: pointer; border: 0;
-            box-shadow: 0 12px 30px -6px rgba(99, 102, 241, 0.4);
-            opacity: 0; visibility: hidden; transform: translateY(20px) scale(0.8);
-            transition: all 0.4s var(--nova-ease);
+        /* ===== BUTTONS ===== */
+        .btn, .magna-btn {
+            position: relative; display: inline-flex; align-items: center; justify-content: center;
+            gap: 10px; padding: 15px 30px; border-radius: 100px; font-weight: 600; font-size: 14px;
+            font-family: var(--sans);
+            transition: all 0.35s var(--ease); cursor: pointer; border: 1px solid transparent;
+            overflow: hidden; white-space: nowrap;
         }
-        .nova-top.is-on { opacity: 1; visibility: visible; transform: none; }
-        .nova-top svg { width: 20px; height: 20px; }
+        .btn svg, .magna-btn svg { width: 17px; height: 17px; transition: transform 0.35s var(--ease); }
+        .btn:hover svg, .magna-btn:hover svg { transform: translateX(4px); }
+        .btn-primary, .magna-btn--primary { background: linear-gradient(120deg, var(--accent), var(--accent-2)); color: #fff; box-shadow: 0 10px 30px -8px var(--accent-glow); }
+        .btn-primary:hover, .magna-btn--primary:hover { filter: brightness(1.08); transform: translateY(-3px); box-shadow: 0 18px 40px -10px var(--accent-glow); }
+        .btn-secondary, .magna-btn--outline { background: var(--bg-white); color: var(--text-main); border-color: var(--border); }
+        .btn-secondary:hover, .magna-btn--outline:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-3px); box-shadow: var(--shadow-md); }
+        .btn-dark, .magna-btn--secondary { background: var(--text-main); color: #fff; }
+        .btn-dark:hover, .magna-btn--secondary:hover { background: #232649; transform: translateY(-3px); box-shadow: var(--shadow-md); }
+        .btn-ghost, .magna-btn--ghost { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.2); backdrop-filter: blur(6px); }
+        .btn-ghost:hover, .magna-btn--ghost:hover { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.4); }
+        .magna-btn--sm { padding: 11px 22px; font-size: 13px; }
+        .magna-btn--lg { padding: 18px 36px; font-size: 15px; }
 
-        /* ================= bands ================= */
-        .magna-section { position: relative; padding: var(--nova-band) 0; }
-        .magna-section__inner { width: 100%; max-width: var(--nova-max); margin: 0 auto; padding: 0 var(--nova-gutter); position: relative; z-index: 1; }
-        .magna-columns { display: flex; flex-wrap: wrap; gap: clamp(28px, 4vw, 56px); }
-        .magna-column { min-width: 0; max-width: 100%; }
-
-        .nova-problem, .nova-arch, .nova-builder, .nova-headless { background: var(--nova-surface); }
-        .nova-why, .nova-audiences { background: var(--nova-surface-alt); }
-        .nova-plugins, .nova-faq { background: var(--nova-surface-soft); }
-        .nova-problem { border-bottom: 1px solid var(--nova-border); }
-        .nova-arch, .nova-builder { border-top: 1px solid var(--nova-border); }
-
-        .nova-cases, .nova-hero, .nova-trust, .nova-cta { background: var(--nova-ink); color: #fff; overflow: hidden; }
-        .nova-cta { background: var(--nova-ink-deep); text-align: center; }
-        .nova-cases h1, .nova-cases h2, .nova-cases h3, .nova-cases h4,
-        .nova-hero h1, .nova-hero h2, .nova-hero h3, .nova-hero h4,
-        .nova-cta h1, .nova-cta h2, .nova-cta h3, .nova-cta h4 { color: #fff; }
-        .nova-cases .magna-prose p, .nova-hero .magna-prose p, .nova-cta .magna-prose p { color: #c3c8de; }
-
-        /* A head band and the grid beneath it are one composition split
-           across two sections, because a section's column spans must sum to
-           12 and a full-width head plus two halves cannot. */
-        .nova-continue--head { padding-bottom: 0; }
-        .nova-continue--tail { padding-top: 44px; }
-
-        .nova-center, .nova-center .magna-heading, .nova-center .magna-prose { text-align: center; }
-        .nova-center .magna-prose { margin-left: auto; margin-right: auto; }
-        .nova-center .magna-block--button { display: inline-block; }
-
-        .nova-split > .magna-section__inner > .magna-columns { align-items: center; }
-
-        /* ================= block rhythm ================= */
-        .magna-block { margin-bottom: 22px; max-width: 100%; }
-        .magna-block:last-child { margin-bottom: 0; }
-        .magna-block--heading { margin-bottom: 14px; }
-        .magna-block--spacer + .magna-block { margin-top: 0; }
-
-        /* The eyebrow pill. A heading block set to H6 — a documented Nova
-           convention, so an editor makes one without leaving the builder. */
+        /* ===== BADGE (a heading block set to H6) ===== */
         .magna-heading h6 {
             display: inline-flex; align-items: center; gap: 8px; padding: 7px 16px;
-            background: rgba(99, 102, 241, 0.09); color: var(--nova-primary); border-radius: 100px;
-            font-family: var(--nova-body); font-size: 12px; font-weight: 700; line-height: 1.4;
-            letter-spacing: 0.08em; text-transform: uppercase;
-            border: 1px solid rgba(99, 102, 241, 0.16);
+            background: var(--accent-light); color: var(--accent); border-radius: 100px;
+            font-family: var(--sans); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            border: 1px solid rgba(99,102,241,0.15);
         }
-        .nova-hero .magna-heading h6, .nova-cases .magna-heading h6, .nova-cta .magna-heading h6 {
-            background: rgba(255, 255, 255, 0.08); color: var(--nova-accent); border-color: rgba(255, 255, 255, 0.16);
+        .magna-heading h6::before { content:""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+        .hero .magna-heading h6, .cases .magna-heading h6, .cta .magna-heading h6, .trust .magna-heading h6 {
+            background: rgba(255,255,255,0.08); color: var(--accent-3); border-color: rgba(255,255,255,0.14);
         }
-        .magna-heading--center { text-align: center; }
-        .magna-heading--right { text-align: right; }
+        .hero .magna-heading h6::before, .cases .magna-heading h6::before, .cta .magna-heading h6::before { background: var(--accent-3); }
+        @keyframes pulse { 0%,100%{ box-shadow: 0 0 0 0 var(--accent-glow);} 50%{ box-shadow: 0 0 0 6px transparent;} }
 
-        /* ================= prose ================= */
-        .magna-prose { max-width: 780px; }
-        .magna-prose > * + * { margin-top: 18px; }
-        .magna-prose p { color: var(--nova-muted); font-size: 16.5px; }
-        .magna-prose h1, .magna-prose h2, .magna-prose h3 { color: var(--nova-text); max-width: 18ch; }
-        .magna-prose h2 { max-width: 22ch; }
-        .magna-prose h1 + p, .magna-prose h2 + p, .magna-prose h3 + p { margin-top: 18px; }
-        .magna-prose h3 { margin-top: 40px; }
-        .magna-prose em { font-style: normal; font-weight: 800; color: var(--nova-primary); }
-        .nova-hero .magna-prose em, .nova-cases .magna-prose em, .nova-cta .magna-prose em { color: var(--nova-accent); }
-        .nova-hero .magna-prose h1, .nova-cases .magna-prose h2, .nova-cta .magna-prose h2 { color: #fff; }
-        .magna-prose a { color: var(--nova-primary); font-weight: 500; }
-        .magna-prose a:hover { text-decoration: underline; }
-        .magna-prose ul, .magna-prose ol { padding-left: 22px; color: var(--nova-muted); }
+        /* Every band's default, ahead of the bands themselves so a band
+           that names its own padding (the hero, the ribbon, the closing
+           call to action) keeps it. */
+        .magna-section { padding: 110px 0; position: relative; }
+
+        /* ===== HEADER ===== */
+        header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+            padding: 20px 0; transition: all 0.4s var(--ease);
+            background: transparent;
+        }
+        header.scrolled {
+            padding: 12px 0; background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(18px) saturate(180%); border-bottom: 1px solid var(--border);
+            box-shadow: 0 4px 30px rgba(18,20,43,0.04);
+        }
+        .nav-wrap { display: flex; align-items: center; justify-content: space-between; }
+        header.scrolled .logo { color: var(--text-main); }
+        header nav ul { display: flex; gap: 34px; list-style: none; }
+        header nav a { position: relative; color: rgba(255,255,255,0.75); font-size: 14px; font-weight: 500; transition: color 0.25s; padding: 4px 0; }
+        header nav a::after { content:""; position: absolute; left: 0; bottom: -2px; width: 0; height: 2px; background: var(--accent); transition: width 0.3s var(--ease); }
+        header nav a:hover { color: #fff; }
+        header nav a:hover::after { width: 100%; }
+        header.scrolled nav a { color: var(--text-muted); }
+        header.scrolled nav a:hover { color: var(--text-main); }
+        header.scrolled .hamburger span { background: var(--text-main); }
+        .nav-right { display: flex; align-items: center; gap: 16px; }
+        .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 8px; }
+        .hamburger span { width: 24px; height: 2px; background: #fff; border-radius: 2px; transition: all 0.3s var(--ease); }
+        .hamburger.open span:nth-child(1){ transform: translateY(7px) rotate(45deg); }
+        .hamburger.open span:nth-child(2){ opacity: 0; }
+        .hamburger.open span:nth-child(3){ transform: translateY(-7px) rotate(-45deg); }
+
+        /* Mobile menu */
+        .mobile-menu {
+            position: fixed; inset: 0; z-index: 1100;
+            background: linear-gradient(160deg, #0f1330 0%, #070a18 100%);
+            display: flex; flex-direction: column; padding: 20px 26px 34px;
+            opacity: 0; visibility: hidden; transform: translateY(-10px);
+            transition: opacity 0.45s var(--ease), visibility 0.45s var(--ease), transform 0.45s var(--ease);
+        }
+        .mobile-menu::before { content:""; position: absolute; inset: 0; pointer-events: none;
+            background: radial-gradient(420px circle at 88% 10%, rgba(99,102,241,0.20), transparent 55%),
+                        radial-gradient(380px circle at 0% 100%, rgba(79,172,254,0.10), transparent 50%); }
+        .mobile-menu.open { opacity: 1; visibility: visible; transform: translateY(0); }
+
+        .mm-top { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; }
+        .mm-close {
+            width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.05); color: #fff; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.3s var(--ease);
+        }
+        .mm-close:hover { background: rgba(99,102,241,0.16); border-color: var(--accent); color: var(--accent-3); transform: rotate(90deg); }
+        .mm-close svg { width: 20px; height: 20px; }
+
+        .mm-links { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .mm-links a {
+            display: flex; align-items: center; gap: 18px; padding: 15px 2px; color: #f1f5f9;
+            font-family: var(--serif); font-size: clamp(26px, 8vw, 34px); font-weight: 700; letter-spacing: -0.03em;
+            border-bottom: 1px solid rgba(255,255,255,0.08); opacity: 0; transform: translateX(-26px); transition: color 0.25s;
+        }
+        .mm-links a .mm-idx { font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--accent-3); width: 24px; letter-spacing: 0.1em; }
+        .mm-links a .mm-arrow { margin-left: auto; width: 24px; height: 24px; color: var(--accent-3); opacity: 0; transform: translateX(-10px); transition: all 0.3s var(--ease); }
+        .mm-links a:active, .mm-links a:hover { color: var(--accent-3); }
+        .mm-links a:active .mm-arrow, .mm-links a:hover .mm-arrow { opacity: 1; transform: translateX(0); }
+        .mobile-menu.open .mm-links a { animation: mmIn 0.55s var(--ease) forwards; }
+        .mobile-menu.open .mm-links a:nth-child(1){ animation-delay: .10s; }
+        .mobile-menu.open .mm-links a:nth-child(2){ animation-delay: .16s; }
+        .mobile-menu.open .mm-links a:nth-child(3){ animation-delay: .22s; }
+        .mobile-menu.open .mm-links a:nth-child(4){ animation-delay: .28s; }
+        .mobile-menu.open .mm-links a:nth-child(5){ animation-delay: .34s; }
+        .mobile-menu.open .mm-links a:nth-child(6){ animation-delay: .40s; }
+        .mobile-menu.open .mm-links a:nth-child(7){ animation-delay: .46s; }
+        .mobile-menu.open .mm-links a:nth-child(8){ animation-delay: .52s; }
+        .mobile-menu.open .mm-links a:nth-child(9){ animation-delay: .58s; }
+        @keyframes mmIn { to { opacity: 1; transform: none; } }
+
+        .mm-foot { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 22px; opacity: 0; transform: translateY(18px); }
+        .mobile-menu.open .mm-foot { animation: mmIn 0.55s var(--ease) 0.62s forwards; }
+        .mm-foot .btn { width: 100%; }
+        .mm-note { font-size: 13px; color: #9aa0b8; text-align: center; }
+
+        /* ===== HERO ===== */
+        .hero {
+            position: relative; min-height: 100vh; display: flex; align-items: center;
+            padding: 150px 0 90px; overflow: hidden; background: var(--bg-dark); color: #fff;
+        }
+        .hero::before {
+            content:""; position: absolute; inset: 0; z-index: 0; opacity: 0.5;
+            background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+            background-size: 56px 56px;
+            -webkit-mask-image: radial-gradient(900px circle at 50% 40%, #000 20%, transparent 75%);
+            mask-image: radial-gradient(900px circle at 50% 40%, #000 20%, transparent 75%);
+        }
+        .hero::after {
+            content:""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+            background:
+              radial-gradient(620px circle at 12% 25%, rgba(99,102,241,0.22), transparent 48%),
+              radial-gradient(700px circle at 88% 72%, rgba(139,92,246,0.16), transparent 48%),
+              radial-gradient(460px circle at 70% 12%, rgba(79,172,254,0.10), transparent 50%);
+        }
+        .hero > .magna-section__inner { position: relative; z-index: 2; width: 100%; }
+        .hero > .magna-section__inner > .magna-columns { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 60px; align-items: center; }
+
+        .hero .magna-prose h1 { font-family: var(--serif); font-size: clamp(38px, 5.4vw, 64px); line-height: 1.06; letter-spacing: -0.04em; color: #fff; font-weight: 700; max-width: none; }
+        .hero .magna-prose h1 em { font-style: normal; font-weight: 800; background: linear-gradient(100deg, var(--accent-3), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .hero .magna-prose p { color: #c3c8de; font-size: 18px; max-width: 560px; }
+        .hero .magna-column > .magna-block--text + .magna-block--text { margin-top: 24px; }
+        .hero .magna-column > .magna-block--text + .magna-block--button { margin-top: 34px; }
+        .hero .magna-column > .magna-block--button + .magna-block--features { margin-top: 26px; }
+        /* The original's hero paragraph keeps its 34px even when it is the
+           last thing in the hero, which is what sets a sub-page hero's height. */
+        .hero .magna-column > .magna-block--text:last-child { margin-bottom: 34px; }
+        .hero.short { min-height: 56vh; padding: 175px 0 95px; }
+        .hero.short > .magna-section__inner > .magna-columns { grid-template-columns: 1fr; }
+        .hero.short .magna-prose { max-width: 820px; }
+        .hero.short .magna-prose h1 { max-width: none; }
+
+        /* The hero's checklist row (a features block, horizontal list). */
+        .hero .magna-column > .magna-block--features.magna-features--horizontal-list { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: #8b91ad; }
+        .hero .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__item { display: inline-flex; align-items: center; gap: 7px; }
+        .hero .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon { width: 14px; height: 14px; background: none; color: var(--accent-3); border-radius: 0; margin: 0; }
+        .hero .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon svg { width: 14px; height: 14px; }
+        .hero .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__title { font-family: var(--sans); font-size: 13px; font-weight: 400; color: #8b91ad; letter-spacing: 0; }
+
+        /* The hero card (a container block). */
+        .hero .magna-container {
+            backdrop-filter: blur(20px); box-shadow: 0 30px 70px rgba(0,0,0,0.35); text-align: center;
+        }
+        .hero .magna-container::before {
+            content:""; display: block; width: 116px; height: 116px; margin: 6px auto 22px;
+            background: center / contain no-repeat var(--mark-svg);
+            filter: drop-shadow(0 0 34px rgba(99,102,241,0.45));
+        }
+        .hero .magna-container .magna-heading h6 {
+            background: none; border: 0; padding: 0; font-size: 12px; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--accent-3); font-weight: 700; font-family: var(--sans);
+        }
+        .hero .magna-container .magna-heading h6::before { display: none; }
+        .hero .magna-container h3 { font-family: var(--serif); font-size: 23px; color: #fff; font-weight: 600; margin: 0; }
+        .hero .magna-container .magna-block--heading { margin-bottom: 6px; }
+        .hero .magna-container .magna-block--heading + .magna-block--heading { margin-bottom: 22px; }
+        .hero .magna-container .magna-features--horizontal-list {
+            display: grid; gap: 12px; text-align: left; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 24px; font-size: 14px;
+        }
+        .hero .magna-container .magna-features__item { display: flex; align-items: center; gap: 10px; }
+        .hero .magna-container .magna-features__icon { width: 16px; height: 16px; background: none; color: var(--accent-3); border-radius: 0; margin: 0; flex-shrink: 0; }
+        .hero .magna-container .magna-features__icon svg { width: 16px; height: 16px; }
+        .hero .magna-container .magna-features__title { font-size: 14px; color: #d6daec; font-weight: 500; font-family: var(--sans); letter-spacing: 0; }
+
+        .scroll-hint { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; color: #8b91ad; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; }
+        .scroll-hint .mouse { width: 24px; height: 38px; border: 2px solid rgba(255,255,255,0.3); border-radius: 14px; position: relative; }
+        .scroll-hint .mouse::before { content:""; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 4px; height: 8px; background: var(--accent-3); border-radius: 2px; animation: scrollWheel 1.6s infinite; }
+        @keyframes scrollWheel { 0%{ opacity:1; top: 7px;} 70%{ opacity:0; top: 18px;} 100%{opacity:0;} }
+
+        /* ===== MARQUEE ===== */
+        .trust { background: var(--bg-dark); padding: 0 0 60px; overflow: hidden; }
+        .trust > .magna-section__inner { max-width: none; padding: 0; }
+        .trust .magna-heading { max-width: var(--maxw); margin: 0 auto; padding: 0 32px; }
+        .trust .magna-block--heading { margin-bottom: 0; }
+        .trust .magna-column > .magna-block--heading + .magna-block--features { margin-top: 0; }
+        .trust .magna-heading h6 {
+            display: block; text-align: center; background: none; border: 0; padding: 0;
+            color: #676d8c; font-size: 12px; font-weight: 400; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 26px;
+        }
+        .trust .magna-heading h6::before { display: none; }
+        .trust .magna-column > .magna-block--features {
+            display: flex; gap: 64px; padding-right: 64px; white-space: nowrap;
+            animation: scrollX 30s linear infinite; width: max-content;
+            -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+        }
+        .trust:hover .magna-column > .magna-block--features { animation-play-state: paused; }
+        .trust .magna-column > .magna-block--features .magna-features__item { display: block; }
+        .trust .magna-column > .magna-block--features .magna-features__title { font-family: var(--serif); font-size: 26px; font-weight: 500; color: rgba(255,255,255,0.26); transition: color 0.3s; letter-spacing: normal; }
+        .trust .magna-column > .magna-block--features .magna-features__item:hover .magna-features__title { color: rgba(255,255,255,0.6); }
+        .trust .magna-column > .magna-block--features .magna-features__icon,
+        .trust .magna-column > .magna-block--features .magna-features__description { display: none; }
+        @keyframes scrollX { to { transform: translateX(-50%); } }
+
+        /* ===== SECTION SHARED ===== */
+        .magna-columns { display: flex; flex-wrap: wrap; gap: 0; }
+        .magna-column { min-width: 0; max-width: 100%; }
+        .magna-block { max-width: 100%; }
+
+        /*
+            The rhythm the original got from wrappers (.section-head, its
+            64px bottom margin, the 22px under a badge), rebuilt from the
+            sibling order the renderer produces. Same numbers.
+        */
+        .magna-block--heading { margin-bottom: 22px; }
+        .magna-block--text + .magna-block--text { margin-top: 16px; }
+        .magna-column > .magna-block--text + .magna-block--features,
+        .magna-column > .magna-block--text + .magna-block--faq,
+        .magna-column > .magna-block--text + .magna-block--table,
+        .magna-column > .magna-block--text + .magna-block--container,
+        .magna-column > .magna-block--heading + .magna-block--features,
+        .magna-column > .magna-block--heading + .magna-block--faq,
+        .magna-column > .magna-block--heading + .magna-block--table,
+        .magna-column > .magna-block--heading + .magna-block--container { margin-top: 64px; }
+        .magna-column > .magna-block--features + .magna-block--text, 
+        .magna-column > .magna-block--table + .magna-block--text,
+        .magna-column > .magna-block--container + .magna-block--text { margin-top: 44px; }
+        .magna-block--button { display: inline-flex; margin-top: 26px; }
+        .magna-block--button + .magna-block--button { margin-left: 16px; }
+        .magna-block--text + .magna-block--button { margin-top: 30px; }
+        .magna-block--quote { margin: 28px 0 0; }
+
+        .magna-prose { max-width: 680px; }
+        .magna-prose h2 { font-family: var(--serif); font-size: clamp(30px, 4vw, 46px); line-height: 1.1; letter-spacing: -0.035em; font-weight: 700; }
+        .magna-prose h2 em { font-style: normal; font-weight: 800; color: var(--accent); }
+        .magna-prose h3 { font-family: var(--serif); font-size: 24px; margin: 40px 0 12px; }
+        .magna-prose p { color: var(--text-muted); font-size: 16.5px; }
+
+        .magna-prose h2 + p, .magna-prose h1 + p { margin-top: 16px; font-size: 17px; }
+        .magna-prose ul, .magna-prose ol { padding-left: 22px; color: var(--text-muted); font-size: 16px; margin-top: 16px; }
         .magna-prose li + li { margin-top: 8px; }
-        .magna-prose strong { color: var(--nova-text); font-weight: 600; }
-        .magna-prose code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em;
-            background: var(--nova-surface-soft); padding: 0.15em 0.4em; border-radius: 5px;
-        }
-        .nova-center .magna-prose h1, .nova-center .magna-prose h2, .nova-center .magna-prose h3 { max-width: none; }
-        .nova-cta .magna-prose { max-width: 700px; margin: 0 auto; }
-        .nova-cta .magna-prose h2 { max-width: none; font-size: clamp(34px, 5vw, 54px); }
-        .nova-cta .magna-prose p { font-size: 18px; }
+        .magna-prose a { color: var(--accent); font-weight: 500; }
+        .magna-prose a:hover { text-decoration: underline; }
+        .magna-prose strong { color: var(--text-main); font-weight: 600; }
+        .magna-prose code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.92em; background: var(--bg-soft); padding: 0.15em 0.4em; border-radius: 5px; }
 
-        /* ================= quote ================= */
-        .magna-quote { margin: 34px 0; }
+        /* The original's .prose: a long-form column, wider than a section
+           head and with paragraph spacing of its own. It is the text block
+           AFTER the head — the head keeps its own 680px measure, and the
+           64px between them is the head's own bottom margin. */
+        .prose .magna-column > .magna-block--text + .magna-block--text { margin-top: 64px; max-width: 780px; }
+        .prose .magna-column > .magna-block--text + .magna-block--text > p,
+        .prose .magna-column > .magna-block--text:first-child > p { font-size: 16.5px; margin-bottom: 20px; }
+        .prose .magna-column > .magna-block--text:first-child { max-width: 780px; }
+        .prose .magna-column > .magna-block--quote { max-width: 780px; }
+
+        .center .magna-prose { margin-left: auto; margin-right: auto; text-align: center; }
+        .center .magna-heading { text-align: center; }
+        .center .magna-block--button { display: inline-flex; }
+
+        /* reveal */
+        .reveal { opacity: 0; transform: translateY(40px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+        .reveal.in { opacity: 1; transform: translateY(0); }
+
+        /* Two sections that read as one composition. */
+        .head-continue { padding-bottom: 0; }
+        .tail-continue { padding-top: 64px; }
+
+        /* ===== PROBLEM ===== */
+        .problem { background: var(--bg-white); border-bottom: 1px solid var(--border); }
+        .problem.split > .magna-section__inner > .magna-columns,
+        .arch.split > .magna-section__inner > .magna-columns,
+        .builder.split > .magna-section__inner > .magna-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 70px; align-items: start; }
+        .arch.split > .magna-section__inner > .magna-columns,
+        .builder.split > .magna-section__inner > .magna-columns { align-items: center; }
+        .problem.split .magna-prose p { font-size: 16px; }
+        .problem.split .magna-prose > p, .arch .magna-prose > p { margin-bottom: 18px; }
         .magna-quote__text {
-            font-family: var(--nova-display); font-size: clamp(19px, 2.2vw, 23px); font-weight: 600;
-            line-height: 1.45; letter-spacing: -0.02em; color: var(--nova-text);
-            border-left: 3px solid var(--nova-primary); padding-left: 22px;
+            border-left: 3px solid var(--accent); background: var(--accent-light);
+            border-radius: 0 var(--radius) var(--radius) 0; padding: 22px 26px;
+            font-family: var(--serif); font-size: 19px; font-weight: 600; color: var(--text-main);
         }
-        .nova-cases .magna-quote__text, .nova-hero .magna-quote__text { color: #fff; border-left-color: var(--nova-accent); }
-        .magna-quote__attribution { margin-top: 12px; padding-left: 25px; color: var(--nova-faint); font-size: 14px; }
-        .magna-quote__source { font-style: normal; }
+        .magna-quote__attribution { margin-top: 10px; color: var(--text-light); font-size: 13.5px; }
 
-        /* ================= features: the marketing workhorse ================= */
-        .magna-features { display: grid; gap: 22px; }
-        .magna-features--icon-grid { grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
-        .magna-features--horizontal-list { grid-template-columns: 1fr; gap: 14px; }
-        .nova-grid-2 .magna-features--icon-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); }
+        /* The "shift" list — a horizontal features list on a problem band. */
+        .problem .magna-column > .magna-block--features.magna-features--horizontal-list { display: grid; gap: 14px; }
+        .problem .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__item { display: flex; gap: 18px; padding: 20px; background: var(--bg-main); border: 1px solid var(--border); border-radius: var(--radius); transition: all 0.3s var(--ease); }
+        .problem .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__item:hover { border-color: var(--accent); transform: translateX(6px); box-shadow: var(--shadow-sm); }
+        .problem .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon { width: 44px; height: 44px; flex-shrink: 0; background: var(--accent-light); color: var(--accent); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0; }
+        .problem .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon svg { width: 22px; height: 22px; }
+        .problem .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__title { font-size: 16px; margin-bottom: 3px; font-family: var(--sans); }
+        .problem .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__description { font-size: 13.5px; color: var(--text-muted); margin: 0; }
 
-        .magna-features__item { min-width: 0; }
-        .magna-features__body { min-width: 0; flex: 1 1 auto; }
-        .magna-features__title { font-family: var(--nova-display); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
-        .magna-features__description { color: var(--nova-muted); font-size: 14.5px; margin-top: 6px; }
-        .nova-cases .magna-features__description, .nova-hero .magna-features__description { color: #a9b0cb; }
+        /* ===== WHY (cards) ===== */
+        .why { background: var(--bg-main); }
+        .why:not(.feat-rows) .magna-column > .magna-block--features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+        .why.grid-2:not(.feat-rows) .magna-column > .magna-block--features { grid-template-columns: repeat(2, 1fr); }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__item {
+            position: relative; background: var(--bg-white); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 36px 32px; transition: all 0.45s var(--ease); overflow: hidden;
+        }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__item::before {
+            content:""; position: absolute; inset: 0; z-index: 0; opacity: 0; transition: opacity 0.45s ease;
+            background: linear-gradient(160deg, #fff 0%, var(--accent-light) 100%);
+        }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__item > * { position: relative; z-index: 1; }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__item:hover { transform: translateY(-8px); border-color: rgba(99,102,241,0.4); box-shadow: var(--shadow-lg); }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__item:hover::before { opacity: 1; }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__icon {
+            width: 56px; height: 56px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center; margin-bottom: 24px;
+            box-shadow: 0 12px 26px -8px var(--accent-glow); transition: transform 0.4s var(--ease);
+        }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__item:hover .magna-features__icon { transform: rotate(-8deg) scale(1.05); }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__icon svg { width: 26px; height: 26px; }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__title { font-family: var(--serif); font-size: 21px; margin-bottom: 10px; font-weight: 600; }
+        .why:not(.feat-rows) .magna-column > .magna-block--features .magna-features__description { color: var(--text-muted); font-size: 14.5px; }
 
-        .magna-features__icon {
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 46px; height: 46px; border-radius: 12px; margin-bottom: 16px;
-            background: rgba(99, 102, 241, 0.1); color: var(--nova-primary);
+        /* ===== ARCHITECTURE ===== */
+        .arch { background: var(--bg-white); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .arch .magna-prose h2 { font-size: clamp(28px,3.6vw,42px); line-height: 1.65; }
+        .arch .magna-column > .magna-block--text + .magna-block--text { margin-top: 20px; }
+        .arch .magna-quote__text {
+            font-family: var(--serif); font-size: 18px; font-weight: 600; color: var(--text-main);
+            border-left: 3px solid var(--accent-2); padding: 0 0 0 20px; background: none;
+            border-radius: 0; line-height: 1.5;
         }
-        .magna-features__icon .nova-i { width: 22px; height: 22px; }
+        .arch .magna-block--quote { margin: 26px 0; }
+        .arch .magna-column > .magna-block--quote + .magna-block--button { margin-top: 0; }
+        .arch .magna-prose p { font-size: 15.5px; }
+        .arch .magna-column:last-child .magna-features {
+            background: var(--bg-dark); border-radius: var(--radius-lg); padding: 44px;
+            box-shadow: var(--shadow-lg); position: relative; overflow: hidden;
+            display: grid; gap: 10px;
+        }
+        .arch .magna-column:last-child .magna-features::before { content:""; position: absolute; inset: 0;
+            background: radial-gradient(420px circle at 30% 20%, rgba(99,102,241,0.22), transparent 55%),
+                        radial-gradient(380px circle at 80% 90%, rgba(79,172,254,0.14), transparent 55%); }
+        .arch .magna-column:last-child .magna-features::after {
+            content:""; order: -1; position: relative; z-index: 1; display: block;
+            width: 150px; height: 150px; margin: 0 auto 12px;
+            background: center / contain no-repeat var(--mark-svg);
+            filter: drop-shadow(0 0 40px rgba(99,102,241,0.5));
+        }
+        .arch .magna-column:last-child .magna-features__item {
+            position: relative; z-index: 1;
+            border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05); border-radius: 12px;
+            padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;
+            font-size: 13px; color: #d6daec; font-weight: 500;
+        }
+        .arch .magna-column:last-child .magna-features__item:nth-child(3) { border-color: rgba(99,102,241,0.55); background: rgba(99,102,241,0.14); }
+        .arch .magna-column:last-child .magna-features__body { flex: 1; }
+        .arch .magna-column:last-child .magna-features__title { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 13px; font-weight: 500; font-family: var(--sans); letter-spacing: 0; color: #d6daec; }
+        .arch .magna-column:last-child .magna-features__tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-3); flex-shrink: 0; }
 
-        /* Cards — the "why Magna" grid. */
-        .nova-cards .magna-features__item {
-            background: var(--nova-card); border: 1px solid var(--nova-border);
-            border-radius: var(--nova-radius-lg); padding: 34px 32px;
-            transition: transform 0.35s var(--nova-ease), box-shadow 0.35s var(--nova-ease), border-color 0.35s var(--nova-ease);
-        }
-        .nova-cards .magna-features__item:hover { transform: translateY(-6px); border-color: rgba(99, 102, 241, 0.4); box-shadow: var(--nova-shadow-md); }
-
-        /* Chips — the compact "what you can build" grid. */
-        .nova-chips .magna-features { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-        .nova-chips .magna-features__item {
-            background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: var(--nova-radius); padding: 24px 22px;
-            transition: transform 0.35s var(--nova-ease), background 0.35s var(--nova-ease), border-color 0.35s var(--nova-ease);
-        }
-        .nova-chips .magna-features__item:hover { transform: translateY(-5px); background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.24); }
-        .nova-chips .magna-features__title { font-size: 16px; }
-        .nova-chips .magna-features__description { font-size: 13.5px; }
-        .nova-light.nova-chips .magna-features__item { background: var(--nova-card); border-color: var(--nova-border); }
-
-        /* Rows — a feature list with a status pill on the right. */
-        .nova-rows .magna-features { grid-template-columns: 1fr; gap: 14px; }
-        .nova-rows .magna-features__item {
-            display: flex; gap: 18px; align-items: flex-start; justify-content: space-between;
-            padding: 22px 24px; background: var(--nova-card); border: 1px solid var(--nova-border);
-            border-radius: var(--nova-radius); transition: border-color 0.3s var(--nova-ease), box-shadow 0.3s var(--nova-ease);
-        }
-        .nova-rows .magna-features__item:hover { border-color: var(--nova-primary); box-shadow: var(--nova-shadow-sm); }
-        .nova-rows .magna-features__title { font-size: 16px; }
-        .nova-rows .magna-features__description { font-size: 14px; margin-top: 3px; }
-
-        .magna-features__status {
-            flex-shrink: 0; margin-top: 2px; display: inline-flex; align-items: center; gap: 6px;
-            font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-            border-radius: 100px; padding: 4px 12px; white-space: nowrap;
-            background: rgba(99, 102, 241, 0.1); color: var(--nova-primary); border: 1px solid rgba(99, 102, 241, 0.18);
-        }
-        .magna-features__status[data-tone="avail"] { background: rgba(13, 150, 104, 0.1); color: var(--nova-success); border-color: rgba(13, 150, 104, 0.24); }
-        .magna-features__status[data-tone="dev"] { background: rgba(192, 120, 23, 0.1); color: var(--nova-warning); border-color: rgba(192, 120, 23, 0.24); }
-
-        /* Steps — the numbered "install / build / trust" run. */
-        .nova-steps .magna-features { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 34px; text-align: center; }
-        .nova-steps .magna-features__icon {
-            width: 58px; height: 58px; border-radius: 50%; margin: 0 auto 18px;
-            font-family: var(--nova-display); font-size: 22px; font-weight: 800; color: #fff;
-            background: linear-gradient(135deg, var(--nova-primary), var(--nova-primary-alt));
-            box-shadow: 0 10px 26px -8px rgba(99, 102, 241, 0.5);
-        }
-
-        /* Layers — the architecture stack. */
-        .nova-layers .magna-features, .nova-arch .magna-column:last-child .magna-features { grid-template-columns: 1fr; gap: 10px; }
-        .nova-layers .magna-features__item, .nova-arch .magna-column:last-child .magna-features__item {
-            display: flex; align-items: center; justify-content: space-between; gap: 16px;
-            padding: 18px 20px; border-radius: var(--nova-radius);
-            background: var(--nova-surface-alt); border: 1px solid var(--nova-border);
-        }
-        .nova-layers .magna-features__item:nth-child(3),
-        .nova-arch .magna-column:last-child .magna-features__item:nth-child(3) {
-            background: linear-gradient(120deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.12));
-            border-color: rgba(99, 102, 241, 0.35);
-        }
-        .magna-features__tag {
-            flex-shrink: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-            color: var(--nova-primary); background: rgba(99, 102, 241, 0.1); border-radius: 100px; padding: 4px 11px;
-        }
-
-        /* Checklists and split-list rows — an icon beside a line of text. */
-        .magna-features--horizontal-list .magna-features__item { display: flex; gap: 14px; align-items: flex-start; }
-        .magna-features--horizontal-list .magna-features__icon { width: 34px; height: 34px; border-radius: 9px; margin: 0; flex-shrink: 0; }
-        .magna-features--horizontal-list .magna-features__icon .nova-i { width: 17px; height: 17px; }
-        .magna-features--horizontal-list .magna-features__body { min-width: 0; }
-        .magna-features--horizontal-list .magna-features__title { font-size: 15.5px; font-weight: 600; }
-        .nova-hero .magna-features--horizontal-list {
-            display: flex; flex-wrap: wrap; gap: 12px 26px; margin-top: 30px;
-        }
-        .nova-hero .magna-features--horizontal-list .magna-features__item { align-items: center; gap: 9px; }
-        .nova-hero .magna-features--horizontal-list .magna-features__icon {
-            width: 20px; height: 20px; border-radius: 50%; background: rgba(79, 172, 254, 0.16); color: var(--nova-accent);
-        }
-        .nova-hero .magna-features--horizontal-list .magna-features__icon .nova-i { width: 12px; height: 12px; }
-        .nova-hero .magna-features--horizontal-list .magna-features__title { font-family: var(--nova-body); font-size: 14px; font-weight: 500; color: #b9c0d8; letter-spacing: 0; }
-
-        /* Marquee — the use-case ribbon under the hero. */
-        .nova-marquee { padding: 0 0 60px; }
-        .nova-marquee .magna-heading h6 { margin-bottom: 22px; }
-        .nova-marquee .magna-features {
-            display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 34px;
-        }
-        .nova-marquee .magna-features__item { display: block; }
-        .nova-marquee .magna-features__title {
-            font-family: var(--nova-display); font-size: clamp(18px, 2.4vw, 26px); font-weight: 700;
-            color: rgba(255, 255, 255, 0.28); letter-spacing: -0.02em; white-space: nowrap;
-            transition: color 0.3s var(--nova-ease);
-        }
-        .nova-marquee .magna-features__item:hover .magna-features__title { color: rgba(255, 255, 255, 0.7); }
-        .nova-marquee .magna-features__icon { display: none; }
-
-        /* ================= hero ================= */
-        .nova-hero { padding: 170px 0 90px; }
-        .nova-hero::before {
-            content: ""; position: absolute; inset: 0;
-            background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-            background-size: 64px 64px;
-            mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 30%, transparent 75%);
-        }
-        .nova-hero::after {
-            content: ""; position: absolute; top: -220px; left: 50%; width: 900px; height: 620px;
-            transform: translateX(-50%);
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.35) 0%, transparent 62%);
-            filter: blur(30px); pointer-events: none;
-        }
-        .nova-hero--short { padding: 165px 0 90px; min-height: 0; }
-        .nova-hero .magna-prose { max-width: 44rem; }
-        .nova-hero .magna-prose p { font-size: 18px; color: #c3c8de; }
-        .nova-hero .magna-block--button { margin-top: 8px; }
-
-        /* ================= cta ================= */
-        .nova-cta { padding: 120px 0; }
-        .nova-cta::before {
-            content: ""; position: absolute; inset: 0;
-            background: radial-gradient(600px circle at 50% 0%, rgba(99, 102, 241, 0.26), transparent 55%);
-        }
-        .nova-cta .magna-block--button { margin-top: 10px; }
-
-        /* ================= containers as cards ================= */
-        .magna-container { min-width: 0; }
-        /* Containers nested in a container are a card grid: each one takes a
-           column and wraps. This is what makes a two-up or four-up card row
-           possible from the builder without a bespoke block. */
-        .magna-container > .magna-block--container { flex: 1 1 min(100%, 300px); }
-        /* nova-cardgrid pins that to two-up, which is the proportion the
-           long-form cards on this site were written for. The maths assumes
-           the wrapping container's gap is 22px — the value the starter
-           documents set, and the one an editor sees in the inspector. */
-        .nova-cardgrid .magna-container { text-align: left; }
-        .nova-cardgrid .magna-container > .magna-block--container { flex: 0 1 calc(50% - 11px); }
-        @media (max-width: 760px) {
-            .nova-cardgrid .magna-container > .magna-block--container { flex: 1 1 100%; }
-        }
-        .magna-container .magna-heading h6 {
-            background: none; border: 0; padding: 0; color: var(--nova-primary);
-            font-size: 12px; letter-spacing: 0.1em;
-        }
-        .nova-hero .magna-container .magna-heading h6, .nova-cases .magna-container .magna-heading h6 { color: var(--nova-accent); }
-        .nova-hero .magna-container, .nova-cases .magna-container { color: #d7dbec; }
-        .nova-hero .magna-container h3, .nova-cases .magna-container h3 { color: #fff; }
-        .nova-hero .magna-container .magna-features__title { color: #d7dbec; font-weight: 500; }
-
-        /* ================= code / terminal ================= */
-        .magna-code {
-            width: 100%;
-            background: var(--nova-ink); border: 1px solid var(--nova-border-dark);
-            border-radius: var(--nova-radius-lg); overflow: hidden; box-shadow: var(--nova-shadow-lg);
-        }
-        .magna-code__filename {
-            display: flex; align-items: center; gap: 8px; padding: 14px 18px;
-            background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--nova-border-dark);
-            color: #7d8399; font-size: 12.5px; letter-spacing: 0.02em;
-        }
+        /* ===== HEADLESS ===== */
+        .headless { background: var(--bg-main); }
+        .headless.split > .magna-section__inner > .magna-columns { display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 64px; align-items: center; }
+        .magna-code { border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-lg); border: 1px solid var(--border-dark); background: var(--bg-dark); width: 100%; }
+        .magna-code__filename { display: flex; align-items: center; gap: 7px; padding: 13px 18px; background: rgba(255,255,255,0.04); border-bottom: 1px solid var(--border-dark); font-size: 12px; color: #676d8c; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
         .magna-code__filename::before {
-            content: ""; width: 42px; height: 10px; flex-shrink: 0; border-radius: 20px;
-            background: radial-gradient(circle at 5px 5px, #ff5f57 4px, transparent 4px),
-                        radial-gradient(circle at 21px 5px, #febc2e 4px, transparent 4px),
-                        radial-gradient(circle at 37px 5px, #28c840 4px, transparent 4px);
+            content:""; width: 41px; height: 11px; flex-shrink: 0; margin-right: 3px;
+            background: radial-gradient(circle at 5.5px 5.5px, #f87171 5.5px, transparent 5.5px),
+                        radial-gradient(circle at 20.5px 5.5px, #fbbf24 5.5px, transparent 5.5px),
+                        radial-gradient(circle at 35.5px 5.5px, #34d399 5.5px, transparent 5.5px);
         }
-        .magna-code__pre { margin: 0; padding: 26px 24px; overflow-x: auto; }
-        .magna-code__pre code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: 13.5px; line-height: 1.85; color: #c9d1e4; white-space: pre;
-        }
+        .magna-code__pre { padding: 24px 26px; overflow-x: auto; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.75; color: #c3c8de; }
+        .magna-code__pre code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.75; color: #c3c8de; white-space: pre; }
 
-        /* ================= table / comparison ================= */
-        .magna-table {
-            overflow-x: auto; border: 1px solid var(--nova-border); border-radius: var(--nova-radius-lg);
-            background: var(--nova-card); box-shadow: var(--nova-shadow-sm);
+        /* The two "paths" cards beside the terminal. */
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list { display: grid; gap: 16px; }
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__item { display: flex; gap: 18px; padding: 24px; background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius); transition: all 0.3s var(--ease); }
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__item:hover { border-color: var(--accent); transform: translateX(6px); box-shadow: var(--shadow-md); }
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon { width: 48px; height: 48px; flex-shrink: 0; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-radius: 13px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 22px -8px var(--accent-glow); margin: 0; }
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon svg { width: 23px; height: 23px; }
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__title { font-size: 17px; margin-bottom: 4px; font-family: var(--sans); }
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__description { font-size: 14px; color: var(--text-muted); margin: 0; }
+        .headless .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__tag {
+            display: inline-block; margin-left: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em;
+            text-transform: uppercase; color: var(--accent); background: var(--accent-light); border-radius: 100px;
+            padding: 3px 10px; vertical-align: middle;
         }
-        .magna-table__table { width: 100%; border-collapse: collapse; min-width: 640px; font-size: 14.5px; }
-        .magna-table__table th, .magna-table__table td { padding: 18px 22px; text-align: left; border-bottom: 1px solid var(--nova-border); vertical-align: top; }
-        .magna-table__table thead th { background: var(--nova-surface-soft); font-size: 12.5px; letter-spacing: 0.05em; text-transform: uppercase; font-family: var(--nova-body); }
-        .magna-table__table tbody tr:last-child td { border-bottom: 0; }
-        .magna-table__table td:first-child { font-weight: 600; }
-        .magna-table__table td:last-child { color: var(--nova-text); font-weight: 600; }
-        .magna-table__table td:not(:first-child):not(:last-child) { color: var(--nova-muted); }
-        .magna-table__caption { padding: 16px 22px; text-align: left; color: var(--nova-faint); font-size: 13px; }
+        .headless .magna-block--text { margin-top: 28px; }
+        .headless .magna-prose p { color: var(--text-muted); font-size: 15px; }
 
-        /* ================= faq ================= */
-        .magna-faq { max-width: 860px; margin: 0 auto; display: grid; gap: 14px; text-align: left; }
-        .magna-faq__item {
-            background: var(--nova-card); border: 1px solid var(--nova-border);
-            border-radius: var(--nova-radius); overflow: hidden; transition: border-color 0.3s var(--nova-ease), box-shadow 0.3s var(--nova-ease);
+        /* ===== USE CASES ===== */
+        .cases { background: var(--bg-dark); color: #fff; position: relative; overflow: hidden; }
+        .cases::before { content:""; position: absolute; inset: 0; background: radial-gradient(700px circle at 80% 20%, rgba(139,92,246,0.14), transparent 50%), radial-gradient(600px circle at 10% 90%, rgba(99,102,241,0.12), transparent 50%); }
+        .cases > .magna-section__inner { position: relative; }
+        .cases .magna-prose h2, .cases .magna-prose h1 { color: #fff; }
+        .cases .magna-prose h2 em { color: var(--accent-3); }
+        .cases .magna-prose p { color: #c3c8de; }
+        .cases .magna-column > .magna-block--features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .cases.grid-2 .magna-column > .magna-block--features { grid-template-columns: repeat(2, 1fr); }
+        .cases .magna-column > .magna-block--features .magna-features__item {
+            border: 1px solid var(--border-dark); background: rgba(255,255,255,0.04); border-radius: var(--radius);
+            padding: 22px 20px; transition: all 0.35s var(--ease);
         }
-        .magna-faq__item[open] { border-color: rgba(99, 102, 241, 0.4); box-shadow: var(--nova-shadow-sm); }
-        .magna-faq__question {
-            display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer;
-            padding: 24px 28px; font-family: var(--nova-display); font-size: 17px; font-weight: 600;
-            letter-spacing: -0.02em; list-style: none;
+        .cases .magna-column > .magna-block--features .magna-features__item:hover { border-color: var(--accent); background: rgba(99,102,241,0.10); transform: translateY(-5px); }
+        .cases .magna-column > .magna-block--features .magna-features__title { color: #fff; font-size: 15.5px; margin-bottom: 4px; font-family: var(--sans); }
+        .cases .magna-column > .magna-block--features .magna-features__description { font-size: 12.5px; color: #9aa0b8; }
+        .cases .magna-column > .magna-block--features .magna-features__icon { display: none; }
+        .cases-foot .magna-column > .magna-block--container { margin-top: 44px; }
+        .cases-foot .magna-container .magna-prose { max-width: none; }
+        .cases-foot .magna-container .magna-prose p { font-family: var(--serif); font-size: 19px; font-weight: 600; color: #e8eaf6; }
+        .cases-foot .magna-container .magna-block--button { margin-top: 0; }
+
+        /* ===== PLUGINS ===== */
+        .plugins { background: var(--bg-soft); overflow: hidden; }
+        .plugins .magna-column > .magna-block--features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; position: relative; }
+        .plugins .magna-column > .magna-block--features::before {
+            content:""; position: absolute; top: 36px; left: 16%; right: 16%; height: 3px; border-radius: 3px;
+            background: linear-gradient(90deg, var(--accent-3), var(--accent), var(--accent-2)); opacity: 0.85;
         }
+        .plugins .magna-column > .magna-block--features .magna-features__item { text-align: center; padding: 0 26px; position: relative; }
+        .plugins .magna-column > .magna-block--features .magna-features__icon {
+            width: 72px; height: 72px; margin: 0 auto 24px; border-radius: 50%; background: var(--bg-white);
+            border: 2px solid var(--accent); color: var(--accent); display: flex; align-items: center; justify-content: center;
+            font-family: var(--serif); font-size: 25px; font-weight: 700; position: relative; z-index: 1;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.4s var(--ease), background 0.4s var(--ease), color 0.4s var(--ease), box-shadow 0.4s var(--ease);
+        }
+        .plugins .magna-column > .magna-block--features .magna-features__item:hover .magna-features__icon { background: var(--accent); color: #fff; transform: translateY(-6px) scale(1.08); box-shadow: 0 18px 36px -10px var(--accent-glow); }
+        .plugins .magna-column > .magna-block--features .magna-features__title { font-size: 19px; margin-bottom: 10px; font-family: var(--sans); }
+        .plugins .magna-column > .magna-block--features .magna-features__description { font-size: 14px; color: var(--text-muted); }
+        .plugins .magna-block--features + .magna-block--text { max-width: 720px; margin: 56px auto 0; text-align: center; }
+        .plugins .magna-block--features + .magna-block--text .magna-prose p { font-size: 15px; }
+
+        /* Plugin bands that hold rows rather than steps keep the row design. */
+        .plugins.feat-rows .magna-column > .magna-block--features,
+        .plugins.feat-rows .magna-column > .magna-block--features::before { all: revert; }
+
+        /* ===== BUILDER ===== */
+        .builder { background: var(--bg-white); border-top: 1px solid var(--border); }
+        .builder .magna-column > .magna-block--text + .magna-block--features,
+        .builder .magna-column > .magna-block--heading + .magna-block--features { margin-top: 26px; }
+        .builder .magna-column > .magna-block--features.magna-features--horizontal-list { display: grid; gap: 12px; margin-bottom: 32px; }
+        .builder .magna-column > .magna-block--features + .magna-block--button { margin-top: 0; }
+        .builder .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__item { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; color: var(--text-main); font-weight: 500; }
+        .builder .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon { width: 18px; height: 18px; background: none; color: var(--accent); border-radius: 0; margin: 3px 0 0; flex-shrink: 0; }
+        .builder .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__icon svg { width: 18px; height: 18px; }
+        .builder .magna-column > .magna-block--features.magna-features--horizontal-list .magna-features__title { font-size: 15px; font-weight: 500; font-family: var(--sans); letter-spacing: 0; }
+
+        /* ===== TWO AUDIENCES / CARD GRIDS ===== */
+        .audiences { background: var(--bg-main); }
+        .aud-grid .magna-column > .magna-block--container { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+        .aud-grid .magna-column > .magna-block--container > .magna-block--container { display: block; transition: all 0.45s var(--ease); }
+        .aud-grid .magna-column > .magna-block--container > .magna-block--container:hover { transform: translateY(-8px); border-color: rgba(99,102,241,0.4); box-shadow: var(--shadow-lg); }
+        .aud-grid .magna-block--container .magna-heading h6 { background: none; border: 0; padding: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); font-weight: 700; font-family: var(--sans); }
+        .aud-grid .magna-block--container .magna-heading h6::before { display: none; }
+        .aud-grid .magna-block--container .magna-block--heading { margin-bottom: 12px; }
+        .aud-grid .magna-block--container h3 { font-family: var(--serif); font-size: 24px; font-weight: 600; margin: 0; }
+        .aud-grid .magna-block--container .magna-block--heading + .magna-block--heading { margin-bottom: 14px; }
+        .aud-grid .magna-block--container .magna-prose { max-width: none; }
+        .aud-grid .magna-block--container .magna-prose p { color: var(--text-muted); font-size: 15px; }
+        .aud-grid .magna-block--container .magna-prose > p { margin-bottom: 22px; }
+        .aud-grid .magna-block--container .magna-block--text + .magna-block--features { margin-top: 22px; }
+        .aud-grid .magna-block--container .magna-features--horizontal-list { display: grid; gap: 12px; border-top: 1px solid var(--border); padding-top: 22px; }
+        .aud-grid .magna-block--container .magna-features--horizontal-list .magna-features__item { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-main); font-weight: 500; }
+        .aud-grid .magna-block--container .magna-features--horizontal-list .magna-features__icon { width: 15px; height: 15px; background: none; color: var(--accent); border-radius: 0; margin: 0; flex-shrink: 0; }
+        .aud-grid .magna-block--container .magna-features--horizontal-list .magna-features__icon svg { width: 15px; height: 15px; }
+        .aud-grid .magna-block--container .magna-features--horizontal-list .magna-features__title { font-size: 14px; font-weight: 500; font-family: var(--sans); letter-spacing: 0; }
+
+        /* ===== FAQ ===== */
+        .faq { background: var(--bg-soft); }
+        .magna-faq { max-width: 820px; margin: 0 auto; text-align: left; }
+        .magna-faq__item { background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; transition: box-shadow 0.3s, border-color 0.3s; }
+        .magna-faq__item[open] { border-color: var(--accent); box-shadow: var(--shadow-md); }
+        .magna-faq__question { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 28px; cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; }
         .magna-faq__question::-webkit-details-marker { display: none; }
         .magna-faq__question::after {
-            content: "+"; flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; font-family: var(--nova-body);
-            font-size: 19px; font-weight: 400; line-height: 1;
-            background: rgba(99, 102, 241, 0.1); color: var(--nova-primary); transition: transform 0.3s var(--nova-ease);
+            content: "+"; flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-light);
+            color: var(--accent); display: flex; align-items: center; justify-content: center;
+            font-size: 20px; font-weight: 400; line-height: 1; transition: all 0.3s var(--ease);
         }
-        .magna-faq__item[open] .magna-faq__question::after { content: "−"; transform: rotate(180deg); }
-        .magna-faq__answer { padding: 0 28px 26px; color: var(--nova-muted); font-size: 15px; }
+        .magna-faq__item[open] .magna-faq__question::after { background: var(--accent); color: #fff; transform: rotate(45deg); }
+        .magna-faq__answer { padding: 0 28px 26px; color: var(--text-muted); font-size: 15px; }
 
-        /* ================= remaining core blocks ================= */
-        .magna-callout {
-            border-radius: var(--nova-radius); padding: 20px 24px; border-left: 3px solid var(--nova-primary);
-            background: var(--nova-surface-soft); color: var(--nova-muted);
-        }
-        .magna-callout__heading { font-weight: 700; color: var(--nova-text); margin-bottom: 6px; }
-        .magna-callout--success { border-left-color: var(--nova-success); }
-        .magna-callout--warning { border-left-color: var(--nova-warning); }
+        /* ===== CTA ===== */
+        .cta { background: var(--bg-darker); color: #fff; text-align: center; padding: 120px 0; position: relative; overflow: hidden; }
+        .cta::before { content:""; position: absolute; inset: 0; background: radial-gradient(600px circle at 50% 0%, rgba(99,102,241,0.26), transparent 55%); }
+        .cta > .magna-section__inner { position: relative; z-index: 1; }
+        .cta .magna-column { max-width: 636px; margin: 0 auto; }
+        .cta .magna-prose { max-width: none; margin: 0 auto; text-align: center; }
+        .cta .magna-prose h2 { font-family: var(--serif); font-size: clamp(34px,5vw,54px); line-height: 1.65; letter-spacing: -0.04em; color: #fff; font-weight: 700; }
+        .cta .magna-prose h2 em { font-style: normal; font-weight: 800; color: var(--accent-3); }
+        .cta .magna-prose h2 + p, .cta .magna-prose p { color: #c3c8de; font-size: 18px; }
+        .cta .magna-block--heading { text-align: center; }
+        .cta .magna-column > .magna-block--text + .magna-block--text { margin-top: 18px; }
+        .cta .magna-block--text + .magna-block--button { margin-top: 38px; }
+        .cta .magna-block--button + .magna-block--button { margin-left: 16px; }
+        /* The quiet third link sits on its own line under the pair of
+           buttons, as the original's .cta-tertiary does. */
+        .cta .magna-block--button:has(.magna-btn--sm) { display: block; margin-left: 0; }
+        .cta .magna-btn--sm { background: none; border: 0; backdrop-filter: none; padding: 0; font-size: 14px; color: #9aa0b8; transition: color 0.25s; }
+        .cta .magna-btn--sm:hover { color: var(--accent-3); transform: none; box-shadow: none; }
+
+        /* ===== SUBPAGE PATTERNS ===== */
+        .feat-rows .magna-column > .magna-block--features { display: grid; gap: 14px; grid-template-columns: 1fr; }
+        .feat-rows .magna-column > .magna-block--features .magna-features__item { display: flex; gap: 18px; align-items: flex-start; justify-content: space-between; padding: 22px 24px; background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius); transition: all .3s var(--ease); }
+        .feat-rows .magna-column > .magna-block--features .magna-features__item:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+        .feat-rows .magna-column > .magna-block--features .magna-features__title { font-size: 16px; margin-bottom: 3px; font-family: var(--sans); }
+        .feat-rows .magna-column > .magna-block--features .magna-features__description { font-size: 14px; color: var(--text-muted); margin: 0; }
+        .feat-rows .magna-column > .magna-block--features .magna-features__icon { display: none; }
+        .magna-column > .magna-block--features .magna-features__status { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; border-radius:100px; padding:4px 12px; white-space:nowrap; flex-shrink:0; margin-top:2px;
+            background: var(--accent-light); color: var(--accent); border: 1px solid rgba(99,102,241,.18); }
+        .magna-column > .magna-block--features .magna-features__status[data-tone="avail"] { background:#e7f8f1; color: var(--status-avail); border:1px solid rgba(13,150,104,.2); }
+        .magna-column > .magna-block--features .magna-features__status[data-tone="dev"] { background:#fdf3e7; color: var(--status-dev); border:1px solid rgba(192,120,23,.2); }
+
+        .cmp-wrap .magna-table { overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--bg-white); box-shadow:var(--shadow-sm); }
+        .cmp-wrap .magna-table__table { width:100%; border-collapse:collapse; min-width:640px; font-size:14.5px; }
+        .cmp-wrap .magna-table__table th, .cmp-wrap .magna-table__table td { padding:18px 22px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top; }
+        .cmp-wrap .magna-table__table thead th { background:var(--bg-soft); font-size:12.5px; letter-spacing:.05em; text-transform:uppercase; }
+        .cmp-wrap .magna-table__table tbody tr:last-child td { border-bottom:none; }
+        .cmp-wrap .magna-table__table td:first-child { font-weight:600; white-space:nowrap; }
+        .cmp-wrap .magna-table__table td:last-child { font-weight:600; color:var(--text-main); }
+        .cmp-wrap .magna-table__table td:not(:first-child):not(:last-child) { color: var(--text-muted); }
+
+        /* Everything else a page builder can drop on a page. */
+        .magna-callout { border-radius: var(--radius); padding: 20px 24px; border-left: 3px solid var(--accent); background: var(--accent-light); color: var(--text-muted); }
+        .magna-callout__heading { font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
+        .magna-callout--success { border-left-color: var(--status-avail); }
+        .magna-callout--warning { border-left-color: var(--status-dev); }
         .magna-callout--danger { border-left-color: #dc2626; }
-
-        .magna-divider { border: 0; border-top: 1px solid var(--nova-border); }
+        .magna-divider { border: 0; border-top: 1px solid var(--border); }
         .magna-divider--icon-center { display: flex; align-items: center; gap: 14px; }
         .magna-divider--icon-center .magna-divider__line { flex: 1; }
-
-        .magna-image figure, .magna-image { margin: 0; }
-        .magna-image img { border-radius: var(--nova-radius-lg); }
-        .magna-image figcaption { margin-top: 10px; color: var(--nova-faint); font-size: 13.5px; text-align: center; }
-
-        .magna-gallery { display: grid; gap: 14px; }
-        .magna-gallery img { border-radius: var(--nova-radius); }
-
-        .magna-spacer--xs { height: 8px; }
-        .magna-spacer--sm { height: 18px; }
-        .magna-spacer--md { height: 34px; }
-        .magna-spacer--lg { height: 60px; }
-        .magna-spacer--xl { height: 90px; }
-        .magna-spacer--2xl { height: 130px; }
-
-        .magna-stats { display: grid; gap: 26px; text-align: center; }
-        .magna-stats--cols-2 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-        .magna-stats--cols-3 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-        .magna-stats--cols-4 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-        .magna-stats__value { display: block; font-family: var(--nova-display); font-size: clamp(34px, 4vw, 48px); font-weight: 800; letter-spacing: -0.04em;
-            background: linear-gradient(120deg, var(--nova-primary), var(--nova-primary-alt)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .magna-stats__label { display: block; color: var(--nova-muted); font-size: 14px; margin-top: 6px; }
-
-        .magna-pricing { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
-        .magna-pricing__tier { background: var(--nova-card); border: 1px solid var(--nova-border); border-radius: var(--nova-radius-lg); padding: 34px 30px; display: flex; flex-direction: column; gap: 14px; }
-        .magna-pricing__tier--highlighted { border-color: var(--nova-primary); box-shadow: var(--nova-shadow-md); }
-        .magna-pricing__amount { font-family: var(--nova-display); font-size: 42px; font-weight: 800; letter-spacing: -0.04em; }
-        .magna-pricing__period { color: var(--nova-faint); font-size: 14px; }
-        .magna-pricing__features { list-style: none; display: grid; gap: 10px; color: var(--nova-muted); font-size: 14.5px; }
-        .magna-pricing__features li::before { content: "✓"; color: var(--nova-success); font-weight: 700; margin-right: 8px; }
-        .magna-pricing .magna-btn { margin-top: auto; }
-
-        .magna-testimonials { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-        .magna-testimonials__item { background: var(--nova-card); border: 1px solid var(--nova-border); border-radius: var(--nova-radius-lg); padding: 30px 28px; }
-        .magna-testimonials__quote { font-family: var(--nova-display); font-size: 17px; font-weight: 500; line-height: 1.55; }
-        .magna-testimonials__author { margin-top: 16px; color: var(--nova-faint); font-size: 14px; }
-
-        .magna-team { display: grid; gap: 26px; }
-        .magna-team--cols-2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-        .magna-team--cols-3 { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-        .magna-team--cols-4 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-        .magna-team__photo { border-radius: var(--nova-radius-lg); margin-bottom: 14px; }
-        .magna-team__role { color: var(--nova-primary); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-        .magna-team__bio { color: var(--nova-muted); font-size: 14px; margin-top: 8px; }
-
+        .magna-image, .magna-image figure { margin: 0; }
+        .magna-image img { border-radius: var(--radius-lg); }
+        .magna-image figcaption { margin-top: 10px; color: var(--text-light); font-size: 13.5px; text-align: center; }
+        .magna-gallery { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+        .magna-gallery img { border-radius: var(--radius); }
+        .magna-spacer--xs { height: 8px; } .magna-spacer--sm { height: 18px; } .magna-spacer--md { height: 34px; }
+        .magna-spacer--lg { height: 60px; } .magna-spacer--xl { height: 90px; } .magna-spacer--2xl { height: 130px; }
+        .magna-stats { display: grid; gap: 26px; text-align: center; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+        .magna-stats__value { display: block; font-family: var(--serif); font-size: clamp(34px,4vw,48px); font-weight: 800; letter-spacing: -0.04em;
+            background: linear-gradient(120deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .magna-stats__label { display: block; color: var(--text-muted); font-size: 14px; margin-top: 6px; }
+        .magna-pricing { display: grid; gap: 26px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+        .magna-pricing__tier { background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px 32px; display: flex; flex-direction: column; gap: 14px; }
+        .magna-pricing__tier--highlighted { border-color: var(--accent); box-shadow: var(--shadow-md); }
+        .magna-pricing__amount { font-family: var(--serif); font-size: 42px; font-weight: 800; letter-spacing: -0.04em; }
+        .magna-pricing__period { color: var(--text-light); font-size: 14px; }
+        .magna-pricing__features { list-style: none; display: grid; gap: 10px; color: var(--text-muted); font-size: 14.5px; }
+        .magna-testimonials { display: grid; gap: 26px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+        .magna-testimonials__item { background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px 30px; }
+        .magna-testimonials__quote { font-family: var(--serif); font-size: 17px; font-weight: 500; line-height: 1.55; }
+        .magna-testimonials__author { margin-top: 16px; color: var(--text-light); font-size: 14px; }
+        .magna-team { display: grid; gap: 26px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+        .magna-team__photo { border-radius: var(--radius-lg); margin-bottom: 14px; }
+        .magna-team__role { color: var(--accent); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+        .magna-team__bio { color: var(--text-muted); font-size: 14px; margin-top: 8px; }
         .magna-logos { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 34px; }
         .magna-logos--grayscale img { filter: grayscale(1); opacity: 0.6; transition: filter 0.3s, opacity 0.3s; }
-        .magna-logos--grayscale a:hover img, .magna-logos--grayscale .magna-logos__item:hover img { filter: none; opacity: 1; }
+        .magna-logos--grayscale .magna-logos__item:hover img { filter: none; opacity: 1; }
         .magna-logos img { max-height: 34px; width: auto; }
-
-        .magna-icon { color: var(--nova-primary); }
+        .magna-icon { color: var(--accent); }
         .magna-icon__glyph { fill: none; stroke: currentColor; stroke-width: 1.6; }
-
-        .magna-nav__list { list-style: none; display: flex; flex-wrap: wrap; gap: 12px 24px; }
-        .magna-nav__list--depth-0 { flex-direction: column; gap: 13px; }
-        .magna-nav a { color: var(--nova-faint); font-size: 14px; transition: color 0.2s, padding-left 0.2s; }
-        .magna-nav a:hover { color: var(--nova-accent); padding-left: 5px; }
-        .magna-nav__description { display: block; color: var(--nova-faint); font-size: 12.5px; }
-
         .magna-search { display: flex; gap: 10px; }
-        .magna-search input {
-            flex: 1; padding: 14px 18px; border-radius: 100px; border: 1px solid var(--nova-border);
-            background: var(--nova-card); color: inherit; font: inherit; font-size: 14px;
-        }
-
-        .magna-block--video iframe, .magna-block--video video, .magna-embed iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: var(--nova-radius-lg); }
-
-        .magna-file { display: inline-flex; align-items: center; gap: 12px; padding: 14px 20px; border: 1px solid var(--nova-border); border-radius: var(--nova-radius); background: var(--nova-card); }
-
-        .magna-entries, .magna-loop { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-
-        /* ================= footer ================= */
-        .nova-footer { background: var(--nova-ink-deep); color: var(--nova-faint); font-size: 14px; border-top: 1px solid var(--nova-border-dark); }
-        .nova-footer .magna-section { padding: 84px 0 40px; background: none; border: 0; }
-        .nova-footer h1, .nova-footer h2, .nova-footer h3, .nova-footer h4 { color: #fff; font-size: 14px; letter-spacing: 0.02em; }
-        .nova-footer .magna-heading h6 { background: none; border: 0; padding: 0; color: #fff; font-size: 14px; letter-spacing: 0.02em; text-transform: none; font-family: var(--nova-display); font-weight: 700; }
-        .nova-footer .magna-prose p { color: var(--nova-faint); font-size: 14px; }
-        .nova-footer .magna-columns { gap: 48px; }
-        .nova-footer .magna-logo__text { font-family: var(--nova-display); font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.04em; }
-        .nova-footer .nova-footer-bottom { padding: 0 0 34px; }
-        .nova-footer .nova-footer-bottom .magna-section__inner { border-top: 1px solid var(--nova-border-dark); padding-top: 30px; }
-        .nova-footer .nova-footer-bottom .magna-prose { max-width: none; }
-        .nova-footer .nova-footer-bottom .magna-prose p { font-size: 13px; }
-        .nova-footer .nova-footer-main { padding-bottom: 46px; }
-        .nova-footer__fallback { padding: 60px 0 40px; }
-        .nova-footer__bottom { display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; align-items: center;
-            padding: 30px 0; margin-top: 20px; border-top: 1px solid var(--nova-border-dark); font-size: 13px; }
-        .nova-footer a:hover { color: #fff; }
-
-        /* ================= frontend pages from plugins ================= */
+        .magna-search input { flex: 1; padding: 14px 18px; border-radius: 100px; border: 1px solid var(--border); background: var(--bg-white); color: inherit; font: inherit; font-size: 14px; }
+        .magna-block--video iframe, .magna-block--video video, .magna-embed iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: var(--radius-lg); }
+        .magna-file { display: inline-flex; align-items: center; gap: 12px; padding: 14px 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-white); }
+        .magna-entries, .magna-loop { display: grid; gap: 26px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
         .magna-frontend-page { padding: 150px 0 90px; }
-        .magna-frontend-page > * { max-width: var(--nova-max); margin-inline: auto; padding-inline: var(--nova-gutter); }
+        .magna-frontend-page > * { max-width: var(--maxw); margin-inline: auto; padding-inline: 32px; }
 
-        /* ================= reveal-on-scroll ================= */
-        .nova-reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s var(--nova-ease), transform 0.7s var(--nova-ease); }
-        .nova-reveal.is-in { opacity: 1; transform: none; }
+        /* ===== FOOTER ===== */
+        footer { background: var(--bg-darker); color: var(--text-light); padding: 90px 0 40px; font-size: 14px; border-top: 1px solid var(--border-dark); }
+        footer .magna-section { padding: 0; background: none; border: 0; }
+        footer .footer-main > .magna-section__inner > .magna-columns { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 48px; padding-bottom: 56px; border-bottom: 1px solid var(--border-dark); }
+        footer .magna-logo__link { display: inline-flex; align-items: center; gap: 11px; }
+        footer .magna-logo__text { font-family: var(--serif); font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.04em; }
+        footer .magna-block--logo { margin-bottom: 18px; }
+        footer .magna-prose { max-width: 300px; }
+        footer .magna-prose p { color: var(--text-light); font-size: 14px; margin-bottom: 22px; }
+        footer .magna-heading h6 { background: none; border: 0; padding: 0; color: #fff; font-size: 14px; letter-spacing: 0.02em; text-transform: none; font-family: var(--sans); font-weight: 700; }
+        footer .magna-heading h6::before { display: none; }
+        footer .magna-block--heading { margin-bottom: 22px; }
+        footer .magna-nav__list { list-style: none; display: grid; gap: 13px; }
+        footer .magna-nav a { transition: color 0.2s, padding-left 0.2s; font-size: 14px; }
+        footer .magna-nav a:hover { color: var(--accent-3); padding-left: 5px; }
+        footer .footer-bottom { padding-top: 34px; font-size: 13px; }
+        footer .footer-bottom .magna-prose { max-width: none; }
+        footer .footer-bottom .magna-prose p { margin: 0; font-size: 13px; }
+        footer a:hover { color: #fff; }
+        .footer-fallback { padding-bottom: 34px; }
 
-        /* ================= responsive ================= */
-        @media (max-width: 1024px) {
-            .magna-columns { flex-direction: column; }
-            .magna-column { flex: 1 1 100% !important; }
-            /* Stacked, the columns must STRETCH. Centring them makes each
-               one fit-content, and a fit-content column is as wide as its
-               widest unbreakable child — which is how a code block ends up
-               pushing a stacked column past the page gutter. */
-            .nova-split > .magna-section__inner > .magna-columns { align-items: stretch; }
-            .nova-hero { padding-bottom: 70px; }
+        /* ===== BACK TO TOP ===== */
+        .to-top {
+            position: fixed; bottom: 30px; right: 30px; z-index: 900; width: 52px; height: 52px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 12px 30px -6px var(--accent-glow); border: none;
+            opacity: 0; visibility: hidden; transform: translateY(20px) scale(0.8); transition: all 0.4s var(--ease);
         }
-        @media (max-width: 900px) {
-            .nova-nav, .nova-header__cta { display: none; }
-            .nova-burger { display: flex; }
+        .to-top.show { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+        .to-top:hover { transform: translateY(-4px) scale(1.05); }
+        .to-top svg { width: 20px; height: 20px; }
+
+        /* ===== ACCESSIBILITY ===== */
+        a:focus-visible, button:focus-visible, summary:focus-visible {
+            outline: 3px solid var(--accent-3); outline-offset: 3px; border-radius: 6px;
         }
-        @media (max-width: 680px) {
-            :root { --nova-gutter: 22px; --nova-band: 80px; }
-            .nova-rows .magna-features__item { flex-direction: column; align-items: flex-start; gap: 12px; }
-            .magna-block--button + .magna-block--button { margin-left: 0; margin-top: 10px; }
-            .nova-top { bottom: 18px; right: 18px; }
-        }
+        .skip-link { position: absolute; left: -9999px; top: 0; z-index: 6000; background: var(--accent); color: #fff; padding: 12px 20px; border-radius: 0 0 10px 0; }
+        .skip-link:focus { left: 0; }
+
+        /* ===== VIEW TRANSITIONS (MPA) ===== */
+        @view-transition { navigation: auto; }
+        ::view-transition-old(root) { animation-duration: 0.18s; }
+        ::view-transition-new(root) { animation-duration: 0.24s; }
 
         @media (prefers-reduced-motion: reduce) {
             html { scroll-behavior: auto; }
-            *, *::before, *::after { animation: none !important; transition: none !important; }
-            .nova-reveal { opacity: 1 !important; transform: none !important; }
+        .trust .magna-column > .magna-block--features, .cursor-glow, .running-line, .scroll-hint .mouse::before, 
+            .magna-heading h6::before { animation: none !important; }
+            .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+            .cursor-glow { display: none; }
+            ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media(max-width: 1024px) {
+            .hero > .magna-section__inner > .magna-columns,
+            .problem.split > .magna-section__inner > .magna-columns,
+            .arch.split > .magna-section__inner > .magna-columns,
+            .headless.split > .magna-section__inner > .magna-columns,
+            .builder.split > .magna-section__inner > .magna-columns { grid-template-columns: 1fr; gap: 40px; }
+        .why:not(.feat-rows) .magna-column > .magna-block--features { grid-template-columns: repeat(2, 1fr); }
+        .cases .magna-column > .magna-block--features { grid-template-columns: repeat(2, 1fr); }
+        .plugins:not(.feat-rows) .magna-column > .magna-block--features { grid-template-columns: 1fr; gap: 40px; }
+        .plugins:not(.feat-rows) .magna-column > .magna-block--features::before { display: none; }
+            footer .footer-main > .magna-section__inner > .magna-columns { grid-template-columns: 1fr 1fr; }
+            .scroll-hint { display: none; }
+            .hero { padding-bottom: 70px; }
+            .magna-columns { flex-direction: column; }
+            .magna-column { flex: 1 1 100% !important; }
+        }
+        @media(max-width: 680px) {
+            .container, .magna-section__inner { padding: 0 22px; }
+            .magna-section { padding: 80px 0; }
+            header nav, .nav-right { display: none; }
+            .hamburger { display: flex; }
+        .why:not(.feat-rows) .magna-column > .magna-block--features, 
+        .cases .magna-column > .magna-block--features, 
+        .cases.grid-2 .magna-column > .magna-block--features, 
+            .aud-grid .magna-container,
+            footer .footer-main > .magna-section__inner > .magna-columns { grid-template-columns: 1fr; }
+            .hero .magna-container { padding: 28px !important; }
+            .cursor-glow { display: none; }
+        .feat-rows .magna-column > .magna-block--features .magna-features__item { flex-direction: column; align-items: flex-start; gap: 12px; }
+            .magna-block--button + .magna-block--button { margin-left: 0; }
         }
     </style>
 </head>
 <body>
 
-<a class="nova-skip" href="#main">Skip to content</a>
+<a class="skip-link" href="#main">Skip to content</a>
 
-{{-- The icon sprite. Block views reference these by name through <use>, so
-     a document stores an icon NAME and never markup — the same rule the
-     core icon registry enforces, kept here because a theme cannot register
-     icons of its own. --}}
+{{-- The wordmark, and the icons every block view draws by name. A document
+     stores a NAME and never markup — the same rule the core icon registry
+     enforces, kept here because a theme cannot register icons of its own. --}}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
     <defs>
-        <linearGradient id="nova-mark-gradient" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+        <linearGradient id="mg" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
             <stop stop-color="#6366f1"/>
             <stop offset="1" stop-color="#8b5cf6"/>
         </linearGradient>
-        <symbol id="nova-mark" viewBox="0 0 34 34">
-            <path d="M17 1 31 9v16l-14 8L3 25V9l14-8Z" stroke="url(#nova-mark-gradient)" stroke-width="2.4" fill="rgba(99,102,241,.06)"/>
-            <path d="M10 23V11.5l7 6 7-6V23" stroke="url(#nova-mark-gradient)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <linearGradient id="neon-glow" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#00f2fe"/>
+            <stop offset="50%" stop-color="#4facfe"/>
+            <stop offset="100%" stop-color="#f355da"/>
+        </linearGradient>
+        <symbol id="magna-mark" viewBox="0 0 34 34">
+            <path d="M17 1 31 9v16l-14 8L3 25V9l14-8Z" stroke="url(#mg)" stroke-width="2.4" fill="rgba(99,102,241,.06)"/>
+            <path class="running-line" d="M17 1 31 9v16l-14 8L3 25V9l14-8Z" stroke="url(#neon-glow)" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+            <path d="M10 23V11.5l7 6 7-6V23" stroke="url(#mg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         </symbol>
-        <symbol id="nova-i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
-        <symbol id="nova-i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></symbol>
-        <symbol id="nova-i-code" viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></symbol>
-        <symbol id="nova-i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
-        <symbol id="nova-i-bolt" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
-        <symbol id="nova-i-modules" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
-        <symbol id="nova-i-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></symbol>
-        <symbol id="nova-i-screen" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
-        <symbol id="nova-i-terminal" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></symbol>
-        <symbol id="nova-i-type" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></symbol>
-        <symbol id="nova-i-layout" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="8" height="7" rx="1"/><rect x="15" y="14" width="6" height="7" rx="1"/></symbol>
-        <symbol id="nova-i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
-        <symbol id="nova-i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></symbol>
-        <symbol id="nova-i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
-        <symbol id="nova-i-building" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></symbol>
-        <symbol id="nova-i-list" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
-        <symbol id="nova-i-devices" viewBox="0 0 24 24"><rect x="2" y="4" width="13" height="16" rx="2"/><rect x="17" y="8" width="5" height="12" rx="1.5"/></symbol>
-        <symbol id="nova-i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M18 17l-3-3-4 4-5-5"/></symbol>
-        <symbol id="nova-i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
-        <symbol id="nova-i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 5 15.4a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9.4a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.6 5H9a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V12a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
-        <symbol id="nova-i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4L12 3z"/></symbol>
-        <symbol id="nova-i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
-        <symbol id="nova-i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+        <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></symbol>
+        <symbol id="i-code" viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+        <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+        <symbol id="i-modules" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+        <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></symbol>
+        <symbol id="i-screen" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></symbol>
+        <symbol id="i-type" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></symbol>
+        <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="8" height="7" rx="1"/><rect x="15" y="14" width="6" height="7" rx="1"/></symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
+        <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+        <symbol id="i-building" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+        <symbol id="i-devices" viewBox="0 0 24 24"><rect x="2" y="4" width="13" height="16" rx="2"/><rect x="17" y="8" width="5" height="12" rx="1.5"/></symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M18 17l-3-3-4 4-5-5"/></symbol>
+        <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+        <symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 5 15.4a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9.4a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.6 5H9a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V12a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+        <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4L12 3z"/></symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+        <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
     </defs>
 </svg>
 
-{{--
-    Visitor chrome, and only for a visitor.
+@php
+    /*
+        The wordmark. The site's name is drawn the way the original drew it:
+        the last word set apart as a small accent suffix when there is one
+        ("Magna CMS"), the whole name otherwise — so a site called something
+        else still gets a wordmark rather than a hardcoded one.
+    */
+    $brandParts = preg_split('/\s+/', trim($siteName)) ?: [$siteName];
+    $brandSuffix = count($brandParts) > 1 ? array_pop($brandParts) : '';
+    $brandName = implode(' ', $brandParts);
+@endphp
 
-    The builder canvas renders through this same layout — that is what keeps
-    the canvas honest — so anything that covers the page on load would cover
-    the canvas too. A splash screen over the thing you are editing is not a
-    faithful preview, it is a blindfold.
+{{--
+    Visitor chrome, and only for a visitor. The builder canvas renders
+    through this same layout — that is what keeps the canvas honest — so a
+    splash screen over the page would be a splash screen over the thing
+    being edited.
 --}}
 @unless($builderMode ?? false)
-    <div class="nova-splash" data-nova-splash>
-        <div style="display:flex;align-items:center;gap:14px">
-            <svg style="width:52px;height:52px"><use href="#nova-mark"/></svg>
-            <span style="font-family:var(--nova-display);font-size:42px;font-weight:700;color:#fff;letter-spacing:-0.04em">{{ $siteName }}</span>
+    <div class="preloader" data-preloader>
+        <div class="pre-logo">
+            <svg class="logo-mark"><use href="#magna-mark"/></svg>
+            <span>{{ $brandName }}</span>
         </div>
-        <div class="nova-splash__bar"><i></i></div>
+        <div class="pre-bar"><i></i></div>
     </div>
-
-    <div class="nova-progress" data-nova-progress></div>
+    <div class="scroll-progress" data-progress></div>
+    <div class="cursor-glow" data-cursor></div>
 @endunless
 
 @if(!empty($headerPartHtml))
     {{-- A site-designed header part replaces the theme's own chrome. --}}
-    <header class="nova-header nova-header--custom" data-nova-header>{!! $headerPartHtml !!}</header>
+    <header data-header>{!! $headerPartHtml !!}</header>
 @else
-    <header class="nova-header" data-nova-header>
-        <div class="nova-wrap nova-header__inner">
-            <a href="/" class="nova-logo">
-                <svg><use href="#nova-mark"/></svg>
-                {{ $siteName }}
+    <header data-header>
+        <div class="container nav-wrap">
+            <a href="/" class="logo">
+                <svg class="logo-mark"><use href="#magna-mark"/></svg>
+                {{ $brandName }}@if($brandSuffix !== '')<span class="cms">{{ $brandSuffix }}</span>@endif
             </a>
             @if(!empty($headerMenu))
-                <nav class="nova-nav" aria-label="Primary">
+                <nav>
                     <ul>
                         @foreach($headerMenu as $item)
-                            <li>
-                                <a href="{{ \Magna\Blocks\Support\SafeUrl::sanitize($item['url'] ?? null) }}"
-                                   @if(!empty($item['target'])) target="{{ $item['target'] }}" rel="noopener noreferrer" @endif>{{ $item['label'] }}</a>
-                            </li>
+                            <li><a href="{{ \Magna\Blocks\Support\SafeUrl::sanitize($item['url'] ?? null) }}"
+                                   @if(!empty($item['target'])) target="{{ $item['target'] }}" rel="noopener noreferrer" @endif>{{ $item['label'] }}</a></li>
                         @endforeach
                     </ul>
                 </nav>
             @endif
-            <div class="nova-header__cta">
-                <a href="#get-started" class="nova-btn nova-btn--primary nova-btn--sm">
-                    Get Started
-                    <svg class="nova-i" style="width:16px;height:16px"><use href="#nova-i-arrow-right"/></svg>
+            <div class="nav-right">
+                <a href="#get-started" class="btn btn-primary">Get Started
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                 </a>
             </div>
-            <button class="nova-burger" type="button" aria-label="Open menu" aria-expanded="false" data-nova-burger>
-                <span></span><span></span><span></span>
-            </button>
+            <button class="hamburger" type="button" aria-label="Menu" aria-expanded="false" data-burger><span></span><span></span><span></span></button>
         </div>
     </header>
 @endif
 
-<div class="nova-drawer" id="nova-drawer" data-nova-drawer aria-hidden="true">
-    <div class="nova-drawer__top">
-        <a href="/" class="nova-logo">
-            <svg><use href="#nova-mark"/></svg>
-            {{ $siteName }}
-        </a>
-        <button class="nova-drawer__close" type="button" aria-label="Close menu" data-nova-drawer-close>&times;</button>
+@unless($builderMode ?? false)
+    <div class="mobile-menu" data-menu aria-hidden="true">
+        <div class="mm-top">
+            <a href="/" class="logo">
+                <svg class="logo-mark"><use href="#magna-mark"/></svg>
+                {{ $brandName }}@if($brandSuffix !== '')<span class="cms">{{ $brandSuffix }}</span>@endif
+            </a>
+            <button class="mm-close" type="button" aria-label="Close menu" data-menu-close>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-close"/></svg>
+            </button>
+        </div>
+        <nav class="mm-links" aria-label="Mobile" data-menu-links></nav>
+        <div class="mm-foot">
+            <a href="#get-started" class="btn btn-primary">Get Started
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            <div class="mm-note">Open source · Built to be built on</div>
+        </div>
     </div>
-    <nav class="nova-drawer__links" aria-label="Mobile" data-nova-drawer-links></nav>
-</div>
+@endunless
 
 <main id="main">
     @if(!empty($mainHtml))
@@ -815,144 +945,162 @@
 @endif
 
 @if(!empty($footerPartHtml))
-    <footer class="nova-footer nova-footer--custom">{!! $footerPartHtml !!}</footer>
+    <footer class="footer--custom">{!! $footerPartHtml !!}</footer>
 @else
-    <footer class="nova-footer">
-        <div class="nova-wrap nova-footer__fallback">
-            <a href="/" class="nova-logo"><svg><use href="#nova-mark"/></svg>{{ $siteName }}</a>
+    <footer>
+        <div class="container footer-fallback">
+            <a href="/" class="logo">
+                <svg class="logo-mark"><use href="#magna-mark"/></svg>
+                {{ $brandName }}@if($brandSuffix !== '')<span class="cms">{{ $brandSuffix }}</span>@endif
+            </a>
         </div>
-        <div class="nova-wrap">
-            <div class="nova-footer__bottom">
-                <span>&copy; {{ now()->year }} {{ $siteName }}</span>
-                <span>Built with Magna</span>
-            </div>
-        </div>
+        <div class="container"><span>&copy; {{ now()->year }} {{ $siteName }}</span></div>
     </footer>
 @endif
 
 @unless($builderMode ?? false)
-    <button class="nova-top" type="button" aria-label="Back to top" data-nova-top>
-        <svg class="nova-i"><use href="#nova-i-arrow-up"/></svg>
+    <button class="to-top" type="button" aria-label="Back to top" data-to-top>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-arrow-up"/></svg>
     </button>
-@endunless
 
-@unless($builderMode ?? false)
-<script>
-    /*
-        Nova's behaviour, and all of it: sticky header, scroll progress,
-        the mobile drawer, reveal-on-scroll and back-to-top. No dependency,
-        no build step, and nothing a block view needs to know about — the
-        theme audit forbids script inside block views precisely so that
-        interactivity lives in one reviewable place.
-    */
-    (function () {
-        var root = document.documentElement;
-        var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    <script>
+        (function () {
+            var root = document.documentElement;
+            try { if (window.sessionStorage.getItem('magnaSplash') === '1') { root.classList.add('no-splash'); } } catch (e) {}
 
-        try {
-            if (window.sessionStorage.getItem('nova-splash') === '1') {
-                root.classList.add('nova-seen');
-            }
-        } catch (e) {}
+            var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        function ready(fn) {
-            if (document.readyState !== 'loading') { fn(); } else { document.addEventListener('DOMContentLoaded', fn); }
-        }
-
-        ready(function () {
-            var splash = document.querySelector('[data-nova-splash]');
-            if (splash) {
-                window.setTimeout(function () {
-                    splash.classList.add('is-done');
-                    try { window.sessionStorage.setItem('nova-splash', '1'); } catch (e) {}
-                }, root.classList.contains('nova-seen') ? 0 : 1300);
+            function ready(fn) {
+                if (document.readyState !== 'loading') { fn(); } else { document.addEventListener('DOMContentLoaded', fn); }
             }
 
-            var header = document.querySelector('[data-nova-header]');
-            var progress = document.querySelector('[data-nova-progress]');
-            var toTop = document.querySelector('[data-nova-top]');
-
-            function onScroll() {
-                var y = window.scrollY || window.pageYOffset;
-                if (header) { header.classList.toggle('is-stuck', y > 40); }
-                if (toTop) { toTop.classList.toggle('is-on', y > 600); }
-                if (progress) {
-                    var max = document.body.scrollHeight - window.innerHeight;
-                    progress.style.width = (max > 0 ? (y / max) * 100 : 0) + '%';
+            ready(function () {
+                var preloader = document.querySelector('[data-preloader]');
+                if (preloader) {
+                    window.setTimeout(function () {
+                        preloader.classList.add('done');
+                        try { window.sessionStorage.setItem('magnaSplash', '1'); } catch (e) {}
+                    }, root.classList.contains('no-splash') ? 0 : 1300);
                 }
-            }
-            window.addEventListener('scroll', onScroll, { passive: true });
-            onScroll();
 
-            if (toTop) {
-                toTop.addEventListener('click', function () {
-                    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
-                });
-            }
+                var header = document.querySelector('[data-header]');
+                var progress = document.querySelector('[data-progress]');
+                var toTop = document.querySelector('[data-to-top]');
 
-            /*
-                The drawer copies whatever navigation the header actually
-                has, so it keeps working when a site replaces the theme's
-                chrome with a header part of its own design.
-            */
-            var drawer = document.querySelector('[data-nova-drawer]');
-            var burger = document.querySelector('[data-nova-burger]');
-            var links = document.querySelector('[data-nova-drawer-links]');
-            if (drawer && links && header) {
-                var sourceLinks = header.querySelectorAll('nav a');
-                Array.prototype.forEach.call(sourceLinks, function (source, index) {
-                    var a = document.createElement('a');
-                    a.href = source.getAttribute('href') || '#';
-                    if (source.getAttribute('target')) {
-                        a.target = source.getAttribute('target');
-                        a.rel = 'noopener noreferrer';
+                function onScroll() {
+                    var y = window.scrollY || window.pageYOffset;
+                    if (header) { header.classList.toggle('scrolled', y > 40); }
+                    if (toTop) { toTop.classList.toggle('show', y > 600); }
+                    if (progress) {
+                        var max = document.body.scrollHeight - window.innerHeight;
+                        progress.style.width = (max > 0 ? (y / max) * 100 : 0) + '%';
                     }
-                    var number = document.createElement('span');
-                    number.className = 'nova-drawer__index';
-                    number.textContent = ('0' + (index + 1)).slice(-2);
-                    a.appendChild(number);
-                    a.appendChild(document.createTextNode(source.textContent.trim()));
-                    links.appendChild(a);
-                });
+                }
+                window.addEventListener('scroll', onScroll, { passive: true });
+                onScroll();
 
-                var setOpen = function (open) {
-                    drawer.classList.toggle('is-open', open);
-                    drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
-                    document.body.style.overflow = open ? 'hidden' : '';
-                    if (burger) { burger.setAttribute('aria-expanded', open ? 'true' : 'false'); }
-                };
-                if (burger) { burger.addEventListener('click', function () { setOpen(true); }); }
-                var close = document.querySelector('[data-nova-drawer-close]');
-                if (close) { close.addEventListener('click', function () { setOpen(false); }); }
-                links.addEventListener('click', function (event) {
-                    if (event.target.closest('a')) { setOpen(false); }
-                });
-                document.addEventListener('keydown', function (event) {
-                    if (event.key === 'Escape') { setOpen(false); }
-                });
-            }
-
-            /* Reveal-on-scroll, applied to the blocks the renderer emitted
-               rather than to markup written for it. */
-            if (!reduced && 'IntersectionObserver' in window) {
-                var targets = document.querySelectorAll('main .magna-section > .magna-section__inner');
-                var observer = new IntersectionObserver(function (entries) {
-                    entries.forEach(function (entry) {
-                        if (entry.isIntersecting) {
-                            entry.target.classList.add('is-in');
-                            observer.unobserve(entry.target);
-                        }
+                if (toTop) {
+                    toTop.addEventListener('click', function () {
+                        window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
                     });
-                }, { rootMargin: '0px 0px -60px 0px', threshold: 0.04 });
+                }
 
-                Array.prototype.forEach.call(targets, function (target) {
-                    target.classList.add('nova-reveal');
-                    observer.observe(target);
-                });
-            }
-        });
-    })();
-</script>
+                var cursor = document.querySelector('[data-cursor]');
+                if (cursor && !reduced && window.matchMedia('(pointer: fine)').matches) {
+                    window.addEventListener('mousemove', function (event) {
+                        cursor.style.opacity = '1';
+                        cursor.style.transform = 'translate(' + event.clientX + 'px,' + event.clientY + 'px) translate(-50%,-50%)';
+                    }, { passive: true });
+                }
+
+                /*
+                    The drawer copies whatever navigation the header actually
+                    has, so it keeps working when a site replaces the theme's
+                    chrome with a header part of its own design.
+                */
+                var menu = document.querySelector('[data-menu]');
+                var burger = document.querySelector('[data-burger]');
+                var links = document.querySelector('[data-menu-links]');
+                if (menu && links && header) {
+                    Array.prototype.forEach.call(header.querySelectorAll('nav a'), function (source, index) {
+                        var a = document.createElement('a');
+                        a.href = source.getAttribute('href') || '#';
+                        if (source.getAttribute('target')) { a.target = source.getAttribute('target'); a.rel = 'noopener noreferrer'; }
+                        var idx = document.createElement('span');
+                        idx.className = 'mm-idx';
+                        idx.textContent = ('0' + (index + 1)).slice(-2);
+                        a.appendChild(idx);
+                        a.appendChild(document.createTextNode(source.textContent.trim()));
+                        var arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                        arrow.setAttribute('class', 'mm-arrow');
+                        arrow.setAttribute('viewBox', '0 0 24 24');
+                        arrow.setAttribute('fill', 'none');
+                        arrow.setAttribute('stroke', 'currentColor');
+                        arrow.setAttribute('stroke-width', '2');
+                        var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+                        use.setAttribute('href', '#i-arrow-right');
+                        arrow.appendChild(use);
+                        a.appendChild(arrow);
+                        links.appendChild(a);
+                    });
+
+                    var setOpen = function (open) {
+                        menu.classList.toggle('open', open);
+                        menu.setAttribute('aria-hidden', open ? 'false' : 'true');
+                        document.body.style.overflow = open ? 'hidden' : '';
+                        if (burger) {
+                            burger.classList.toggle('open', open);
+                            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+                        }
+                    };
+                    if (burger) { burger.addEventListener('click', function () { setOpen(!menu.classList.contains('open')); }); }
+                    var close = document.querySelector('[data-menu-close]');
+                    if (close) { close.addEventListener('click', function () { setOpen(false); }); }
+                    links.addEventListener('click', function (event) { if (event.target.closest('a')) { setOpen(false); } });
+                    document.addEventListener('keydown', function (event) { if (event.key === 'Escape') { setOpen(false); } });
+                }
+
+                /*
+                    The scroll hint belongs to a FULL-HEIGHT hero and to
+                    nothing else, and the layout cannot know whether the
+                    page has one — the document decides that. So it is
+                    added here, beside the rest of the visitor chrome,
+                    rather than smuggled into the page's content.
+                */
+                var fullHero = document.querySelector('main .magna-section.hero:not(.short)');
+                if (fullHero) {
+                    var hint = document.createElement('div');
+                    hint.className = 'scroll-hint';
+                    hint.setAttribute('aria-hidden', 'true');
+                    var mouse = document.createElement('div');
+                    mouse.className = 'mouse';
+                    var word = document.createElement('span');
+                    word.textContent = 'Scroll';
+                    hint.appendChild(mouse);
+                    hint.appendChild(word);
+                    fullHero.appendChild(hint);
+                }
+
+                /* Reveal-on-scroll, applied to the blocks the renderer
+                   emitted rather than to markup written for it. */
+                if (!reduced && 'IntersectionObserver' in window) {
+                    var observer = new IntersectionObserver(function (entries) {
+                        entries.forEach(function (entry) {
+                            if (entry.isIntersecting) {
+                                entry.target.classList.add('in');
+                                observer.unobserve(entry.target);
+                            }
+                        });
+                    }, { rootMargin: '0px 0px -60px 0px', threshold: 0.04 });
+
+                    Array.prototype.forEach.call(
+                        document.querySelectorAll('main .magna-section:not(.hero) > .magna-section__inner'),
+                        function (target) { target.classList.add('reveal'); observer.observe(target); }
+                    );
+                }
+            });
+        })();
+    </script>
 @endunless
 
 </body>

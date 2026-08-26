@@ -58,19 +58,22 @@ LINKS = {
 
 DOC_URL = "https://github.com/Magna-CMS/Magna/"
 
-# Source section class -> the Nova band class that reproduces it.
+# The band classes are the SOURCE's own section classes, kept verbatim.
+# The theme's stylesheet is the source stylesheet with its selectors pointed
+# at the renderer's markup, so a document that names the same bands gets the
+# same design rather than an interpretation of it.
 BANDS = {
-    "hero": "nova-hero",
-    "problem": "nova-problem",
-    "why": "nova-why",
-    "arch": "nova-arch",
-    "headless": "nova-headless",
-    "cases": "nova-cases",
-    "plugins": "nova-plugins",
-    "builder": "nova-builder",
-    "audiences": "nova-audiences",
-    "faq": "nova-faq",
-    "cta": "nova-cta",
+    "hero": "hero",
+    "problem": "problem",
+    "why": "why",
+    "arch": "arch",
+    "headless": "headless",
+    "cases": "cases",
+    "plugins": "plugins",
+    "builder": "builder",
+    "audiences": "audiences",
+    "faq": "faq",
+    "cta": "cta",
 }
 
 _ids = {"n": 0}
@@ -250,18 +253,22 @@ def container(children: list[dict], style: dict | None = None, tag: str = "div")
     return node
 
 
+# The source's .aud-card, as builder style settings so an editor can change
+# it. Values that carry a function (rgba) cannot ride a style setting — the
+# renderer's CSS sanitizer allows var(--token) and nothing else — so the two
+# translucent surfaces are tokens the theme defines.
 CARD_STYLE = {
-    "background": "var(--nova-card)",
+    "background": "var(--bg-white)",
     "borderWidth": "1px",
     "borderStyle": "solid",
-    "borderColor": "var(--nova-border)",
-    "borderRadius": "var(--nova-radius-lg)",
-    "paddingTop": "34px",
-    "paddingRight": "32px",
-    "paddingBottom": "34px",
-    "paddingLeft": "32px",
+    "borderColor": "var(--border)",
+    "borderRadius": "var(--radius-lg)",
+    "paddingTop": "42px",
+    "paddingRight": "38px",
+    "paddingBottom": "42px",
+    "paddingLeft": "38px",
     "direction": "column",
-    "childGap": "10px",
+    "childGap": "0px",
 }
 
 
@@ -432,7 +439,7 @@ def faq_block(wrap: Tag) -> dict:
 
 def convert_hero(sec: Tag) -> dict:
     short = "short" in (sec.get("class") or [])
-    css = "nova-hero nova-hero--short" if short else "nova-hero"
+    css = "hero short" if short else "hero"
 
     content = sec.find(class_="hero-content")
     blocks: list[dict] = []
@@ -479,8 +486,12 @@ def convert_hero(sec: Tag) -> dict:
     if ul:
         card_children.append(features(check_items(ul), "horizontal-list"))
     style = dict(CARD_STYLE)
-    style["background"] = "var(--nova-card-invert)"
-    style["borderColor"] = "var(--nova-border-invert)"
+    style["background"] = "var(--card-invert)"
+    style["borderColor"] = "var(--border-invert)"
+    style["paddingTop"] = "38px"
+    style["paddingRight"] = "38px"
+    style["paddingBottom"] = "38px"
+    style["paddingLeft"] = "38px"
     return section(css, [blocks, [container(card_children, style)]], spans=[7, 5])
 
 
@@ -495,8 +506,11 @@ def convert_trust(div: Tag) -> dict:
     blocks: list[dict] = []
     if label:
         blocks.append(heading(txt(label), "h6", "center"))
-    blocks.append(features([{"icon": "", "title": t, "description": ""} for t in seen], "horizontal-list"))
-    return section("nova-trust nova-marquee", [blocks])
+    # The ribbon scrolls by translating itself half a width, so the list is
+    # written out twice — exactly as the original marked it up.
+    terms = seen + seen
+    blocks.append(features([{"icon": "", "title": t, "description": ""} for t in terms], "horizontal-list"))
+    return section("trust marquee", [blocks])
 
 
 def convert_cta(sec: Tag) -> dict:
@@ -528,7 +542,7 @@ def convert_cta(sec: Tag) -> dict:
             node["data"]["url"] = "/compare"
         blocks.append(node)
 
-    return section("nova-cta", [blocks], anchor=sec.get("id") or "")
+    return section("cta", [blocks], anchor=sec.get("id") or "")
 
 
 def convert_children(nodes: list[Tag]) -> list[tuple[list[dict], str]]:
@@ -542,43 +556,56 @@ def convert_children(nodes: list[Tag]) -> list[tuple[list[dict], str]]:
         if "section-head" in classes:
             blocks = section_head(el)
             if "center" in classes:
-                extra = "nova-center"
+                extra = "center"
         elif "prose" in classes:
             blocks = convert_prose(el)
+            extra = "prose"  # the original's long-form column treatment
         elif "why-grid" in classes:
             blocks = [features(card_items(el, ".why-card"))]
-            extra = "nova-cards" + (" nova-grid-2" if "grid-2" in classes else "")
+            extra = "grid-2" if "grid-2" in classes else ""
         elif "case-grid" in classes:
             blocks = [features(chip_items(el))]
-            extra = "nova-chips" + (" nova-grid-2" if "grid-2" in classes else "")
+            extra = "grid-2" if "grid-2" in classes else ""
         elif "feat-rows" in classes:
             blocks = [features(row_items(el), "horizontal-list")]
-            extra = "nova-rows"
+            extra = "feat-rows"
         elif "plugin-grid" in classes:
             blocks = [features(step_items(el))]
-            extra = "nova-steps"
+            extra = ""
         elif "aud-grid" in classes:
             blocks = [card_grid(el.select(".aud-card"))]
-            extra = "nova-cardgrid"
+            extra = "aud-grid"
         elif "cmp-wrap" in classes:
             blocks = [table_block(el.find("table"))]
-            extra = "nova-compare"
+            extra = "cmp-wrap"
         elif "faq-wrap" in classes:
             blocks = [faq_block(el)]
         elif "cases-foot" in classes:
+            # A closing line and its button sit on ONE row in the original,
+            # so they go in a container laid out as a row — which is what a
+            # container block is for, and leaves both editable.
+            inner: list[dict] = []
             para = paragraphs(el.find_all("p", recursive=False))
             if para:
-                blocks.append(para)
+                inner.append(para)
             for a in el.find_all("a"):
-                blocks.append(button_from(a))
-            extra = "nova-foot"
+                inner.append(button_from(a))
+            if inner:
+                blocks.append(container(inner, {
+                    "direction": "row",
+                    "wrap": "wrap",
+                    "alignItems": "center",
+                    "justifyContent": "space-between",
+                    "childGap": "24px",
+                }))
+            extra = "cases-foot"
         elif "shift-list" in classes:
             blocks = [features(card_items(el, ".shift-item"), "horizontal-list")]
         elif "path-cards" in classes:
             blocks = [features(card_items(el, ".path-card"), "horizontal-list")]
         elif "terminal" in classes:
             blocks = [terminal_block(el)]
-            extra = "nova-terminal"
+            extra = "terminal-split"
         elif "builder-mock" in classes or "plugin-line" in classes:
             continue  # pure decoration; the theme draws its own
         elif el.name in ("h2", "h3", "p", "a", "ul"):
@@ -740,7 +767,7 @@ def convert_section(sec: Tag) -> list[dict]:
     if split:
         columns, extra = split_columns(container_el)
         if columns:
-            layout = "nova-split" if len(columns) > 1 else ""
+            layout = "split" if len(columns) > 1 else ""
             css = " ".join(dict.fromkeys(f"{band} {layout} {extra}".split()))
             sections.append(section(css, columns, anchor=anchor))
         return sections
@@ -766,11 +793,11 @@ def convert_section(sec: Tag) -> list[dict]:
             # grid cannot be a third column: the head keeps its own full-width
             # section and the grid follows in a continuation section that the
             # theme joins seamlessly to it.
-            flush_lead("nova-continue--head")
+            flush_lead("head-continue")
             columns, extra = split_columns(child)
             if columns:
-                layout = "nova-split" if len(columns) > 1 else ""
-                tail = "nova-continue--tail" if sections else ""
+                layout = "split" if len(columns) > 1 else ""
+                tail = "tail-continue" if sections else ""
                 css = " ".join(dict.fromkeys(f"{band} {layout} {extra} {tail}".split()))
                 sections.append(section(css, columns, anchor=anchor))
                 anchor = ""
@@ -880,13 +907,13 @@ def footer_part() -> dict:
         "blocks_data": {
             "schemaVersion": "1.0",
             "sections": [
-                section("nova-footer-main", [
+                section("footer-main", [
                     brand,
                     column("Product", "footer_product"),
                     column("Developers", "footer_developers"),
                     column("Company", "footer_company"),
                 ], spans=[6, 2, 2, 2]),
-                section("nova-footer-bottom", [[
+                section("footer-bottom", [[
                     prose('<p>&copy; 2026 Magna CMS. Open source, released under the MIT licence.</p>'),
                 ]]),
             ],

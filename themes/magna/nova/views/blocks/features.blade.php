@@ -1,24 +1,24 @@
 {{--
-    Block: features — Nova's marketing workhorse.
+    Block: features — the site's repeating marketing pattern.
 
-    One block covers every repeating pattern on the Magna site: the "why"
-    cards, the use-case chips, the feature rows with status pills, the
-    numbered steps, the architecture layers and every tick list. Which one
-    you get is decided by the section's CSS class (nova-cards, nova-chips,
-    nova-rows, nova-steps, nova-layers, nova-marquee) — a field an editor
-    fills in from the builder's own inspector.
+    One block covers every one of them: the "why" cards, the use-case
+    chips, the feature rows with status pills, the numbered steps, the
+    architecture layers and every tick list. Which one you get is decided
+    by the SECTION's CSS class (why, cases, plugins, feat-rows, …) and the
+    block's own layout field — both editable from the builder's inspector,
+    neither invented here.
 
     Over the core view this adds three optional item keys, all ignored by
-    every other theme:
+    any other theme:
 
-      status  a pill on the right of a row  ("Available", "Alpha 1.0.0")
-      tone    what colours that pill        (avail | dev | plan)
-      tag     a small label on a layer row  ("Yours", "Opt-in")
+      status  a pill on the right of a feature row ("Available")
+      tone    what colours that pill (avail | dev | plan)
+      tag     a small label beside the title ("Opt-in", "API-first")
 
     `icon` keeps its core meaning — a short string — and additionally
     resolves against the sprite the layout defines when it names one of
     the icons below. A name nobody knows prints as text, which is what
-    makes an emoji still work.
+    keeps an emoji working.
 --}}
 @php
     // Repeater-era data arrives as an array; the json field it is stored in
@@ -35,7 +35,7 @@
         'check', 'check-circle', 'code', 'shield', 'bolt', 'modules', 'pencil',
         'screen', 'terminal', 'type', 'layout', 'layers', 'target', 'clock',
         'building', 'list', 'devices', 'chart', 'users', 'cog', 'sparkle',
-        'arrow-right', 'arrow-up',
+        'arrow-right', 'arrow-up', 'close',
     ];
 
     $tones = ['avail', 'dev', 'plan'];
@@ -57,7 +57,7 @@
             @if($icon !== '')
                 <span class="magna-features__icon" aria-hidden="true">
                     @if($isSprite)
-                        <svg class="nova-i"><use href="#nova-i-{{ $icon }}"/></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-{{ $icon }}"/></svg>
                     @else
                         {{ $icon }}
                     @endif
@@ -72,6 +72,9 @@
                         @else
                             {{ $title }}
                         @endif
+                        @if($tag !== '')
+                            <span class="magna-features__tag">{{ $tag }}</span>
+                        @endif
                     </h3>
                 @endif
                 @if($description !== '')
@@ -81,9 +84,6 @@
 
             @if($status !== '')
                 <span class="magna-features__status" data-tone="{{ $tone }}">{{ $status }}</span>
-            @endif
-            @if($tag !== '')
-                <span class="magna-features__tag">{{ $tag }}</span>
             @endif
         </div>
     @endforeach

@@ -15,7 +15,7 @@
             "id": "nova-sec-0011",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero"
+              "cssClass": "hero"
             },
             "columns": [
               {
@@ -94,17 +94,17 @@
                     "block": "container",
                     "settings": {
                       "style": {
-                        "background": "var(--nova-card-invert)",
+                        "background": "var(--card-invert)",
                         "borderWidth": "1px",
                         "borderStyle": "solid",
-                        "borderColor": "var(--nova-border-invert)",
-                        "borderRadius": "var(--nova-radius-lg)",
-                        "paddingTop": "34px",
-                        "paddingRight": "32px",
-                        "paddingBottom": "34px",
-                        "paddingLeft": "32px",
+                        "borderColor": "var(--border-invert)",
+                        "borderRadius": "var(--radius-lg)",
+                        "paddingTop": "38px",
+                        "paddingRight": "38px",
+                        "paddingBottom": "38px",
+                        "paddingLeft": "38px",
                         "direction": "column",
-                        "childGap": "10px"
+                        "childGap": "0px"
                       }
                     },
                     "data": {
@@ -150,7 +150,7 @@
             "id": "nova-sec-0016",
             "type": "section",
             "settings": {
-              "cssClass": "nova-trust nova-marquee"
+              "cssClass": "trust marquee"
             },
             "columns": [
               {
@@ -173,7 +173,7 @@
                     "block": "features",
                     "settings": {},
                     "data": {
-                      "items": "[{\"icon\": \"\", \"title\": \"Company Websites\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Content Platforms\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Customer Portals\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Membership Platforms\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Directories\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Marketplaces\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Internal Systems\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Custom Applications\", \"description\": \"\"}]",
+                      "items": "[{\"icon\": \"\", \"title\": \"Company Websites\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Content Platforms\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Customer Portals\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Membership Platforms\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Directories\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Marketplaces\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Internal Systems\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Custom Applications\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Company Websites\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Content Platforms\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Customer Portals\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Membership Platforms\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Directories\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Marketplaces\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Internal Systems\", \"description\": \"\"}, {\"icon\": \"\", \"title\": \"Custom Applications\", \"description\": \"\"}]",
                       "layout": "horizontal-list"
                     }
                   }
@@ -185,7 +185,7 @@
             "id": "nova-sec-0020",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-continue--head",
+              "cssClass": "problem head-continue",
               "anchor": "problem"
             },
             "columns": [
@@ -220,7 +220,7 @@
             "id": "nova-sec-0025",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-split nova-continue--tail"
+              "cssClass": "problem split tail-continue"
             },
             "columns": [
               {
@@ -270,7 +270,7 @@
             "id": "nova-sec-0031",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cards",
+              "cssClass": "why",
               "anchor": "why"
             },
             "columns": [
@@ -314,7 +314,7 @@
             "id": "nova-sec-0039",
             "type": "section",
             "settings": {
-              "cssClass": "nova-arch nova-split",
+              "cssClass": "arch split",
               "anchor": "architecture"
             },
             "columns": [
@@ -395,7 +395,7 @@
             "id": "nova-sec-0045",
             "type": "section",
             "settings": {
-              "cssClass": "nova-headless nova-continue--head",
+              "cssClass": "headless head-continue",
               "anchor": "headless"
             },
             "columns": [
@@ -438,7 +438,7 @@
             "id": "nova-sec-0051",
             "type": "section",
             "settings": {
-              "cssClass": "nova-headless nova-split nova-terminal nova-continue--tail"
+              "cssClass": "headless split terminal-split tail-continue"
             },
             "columns": [
               {
@@ -497,15 +497,15 @@
             ]
           },
           {
-            "id": "nova-sec-0060",
+            "id": "nova-sec-0061",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cases nova-chips nova-foot",
+              "cssClass": "cases cases-foot",
               "anchor": "use-cases"
             },
             "columns": [
               {
-                "id": "nova-col-0061",
+                "id": "nova-col-0062",
                 "span": 12,
                 "settings": {},
                 "blocks": [
@@ -545,44 +545,62 @@
                     }
                   },
                   {
-                    "id": "nova-text-0058",
-                    "block": "text",
-                    "settings": {},
+                    "id": "nova-container-0060",
+                    "block": "container",
+                    "settings": {
+                      "style": {
+                        "direction": "row",
+                        "wrap": "wrap",
+                        "alignItems": "center",
+                        "justifyContent": "space-between",
+                        "childGap": "24px"
+                      }
+                    },
                     "data": {
-                      "body": "<p>One foundation. No forced ceiling.</p>"
-                    }
-                  },
-                  {
-                    "id": "nova-button-0059",
-                    "block": "button",
-                    "settings": {},
-                    "data": {
-                      "label": "Explore Use Cases",
-                      "url": "#get-started",
-                      "style": "ghost",
-                      "size": "md",
-                      "target": "_self"
-                    }
+                      "tag": "div"
+                    },
+                    "children": [
+                      {
+                        "id": "nova-text-0058",
+                        "block": "text",
+                        "settings": {},
+                        "data": {
+                          "body": "<p>One foundation. No forced ceiling.</p>"
+                        }
+                      },
+                      {
+                        "id": "nova-button-0059",
+                        "block": "button",
+                        "settings": {},
+                        "data": {
+                          "label": "Explore Use Cases",
+                          "url": "#get-started",
+                          "style": "ghost",
+                          "size": "md",
+                          "target": "_self"
+                        }
+                      }
+                    ]
                   }
                 ]
               }
             ]
           },
           {
-            "id": "nova-sec-0067",
+            "id": "nova-sec-0068",
             "type": "section",
             "settings": {
-              "cssClass": "nova-plugins nova-center nova-steps",
+              "cssClass": "plugins center",
               "anchor": "plugins"
             },
             "columns": [
               {
-                "id": "nova-col-0068",
+                "id": "nova-col-0069",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0062",
+                    "id": "nova-heading-0063",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -592,7 +610,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0063",
+                    "id": "nova-text-0064",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -600,7 +618,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0064",
+                    "id": "nova-text-0065",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -608,7 +626,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0065",
+                    "id": "nova-features-0066",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -617,7 +635,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0066",
+                    "id": "nova-text-0067",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -629,20 +647,20 @@
             ]
           },
           {
-            "id": "nova-sec-0073",
+            "id": "nova-sec-0074",
             "type": "section",
             "settings": {
-              "cssClass": "nova-builder",
+              "cssClass": "builder",
               "anchor": "builder"
             },
             "columns": [
               {
-                "id": "nova-col-0074",
+                "id": "nova-col-0075",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0069",
+                    "id": "nova-heading-0070",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -652,7 +670,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0070",
+                    "id": "nova-text-0071",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -660,7 +678,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0071",
+                    "id": "nova-features-0072",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -669,7 +687,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0072",
+                    "id": "nova-button-0073",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -685,20 +703,20 @@
             ]
           },
           {
-            "id": "nova-sec-0088",
+            "id": "nova-sec-0089",
             "type": "section",
             "settings": {
-              "cssClass": "nova-audiences nova-center nova-cardgrid",
+              "cssClass": "audiences center aud-grid",
               "anchor": "audiences"
             },
             "columns": [
               {
-                "id": "nova-col-0089",
+                "id": "nova-col-0090",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0075",
+                    "id": "nova-heading-0076",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -708,7 +726,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0076",
+                    "id": "nova-text-0077",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -716,7 +734,7 @@
                     }
                   },
                   {
-                    "id": "nova-container-0087",
+                    "id": "nova-container-0088",
                     "block": "container",
                     "settings": {
                       "style": {
@@ -730,21 +748,21 @@
                     },
                     "children": [
                       {
-                        "id": "nova-container-0081",
+                        "id": "nova-container-0082",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -752,7 +770,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0077",
+                            "id": "nova-heading-0078",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -762,7 +780,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0078",
+                            "id": "nova-heading-0079",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -772,7 +790,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0079",
+                            "id": "nova-text-0080",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -780,7 +798,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0080",
+                            "id": "nova-features-0081",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -791,21 +809,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0086",
+                        "id": "nova-container-0087",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -813,7 +831,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0082",
+                            "id": "nova-heading-0083",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -823,7 +841,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0083",
+                            "id": "nova-heading-0084",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -833,7 +851,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0084",
+                            "id": "nova-text-0085",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -841,7 +859,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0085",
+                            "id": "nova-features-0086",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -858,20 +876,20 @@
             ]
           },
           {
-            "id": "nova-sec-0093",
+            "id": "nova-sec-0094",
             "type": "section",
             "settings": {
-              "cssClass": "nova-faq nova-center",
+              "cssClass": "faq center",
               "anchor": "faq"
             },
             "columns": [
               {
-                "id": "nova-col-0094",
+                "id": "nova-col-0095",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0090",
+                    "id": "nova-heading-0091",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -881,7 +899,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0091",
+                    "id": "nova-text-0092",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -889,7 +907,7 @@
                     }
                   },
                   {
-                    "id": "nova-faq-0092",
+                    "id": "nova-faq-0093",
                     "block": "faq",
                     "settings": {},
                     "data": {
@@ -922,20 +940,20 @@
             ]
           },
           {
-            "id": "nova-sec-0101",
+            "id": "nova-sec-0102",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0102",
+                "id": "nova-col-0103",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0095",
+                    "id": "nova-heading-0096",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -945,7 +963,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0096",
+                    "id": "nova-text-0097",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -953,7 +971,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0097",
+                    "id": "nova-text-0098",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -961,7 +979,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0098",
+                    "id": "nova-button-0099",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -973,7 +991,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0099",
+                    "id": "nova-button-0100",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -985,7 +1003,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0100",
+                    "id": "nova-button-0101",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1013,19 +1031,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0106",
+            "id": "nova-sec-0107",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0107",
+                "id": "nova-col-0108",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0103",
+                    "id": "nova-heading-0104",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1035,7 +1053,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0104",
+                    "id": "nova-text-0105",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1043,7 +1061,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0105",
+                    "id": "nova-text-0106",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1055,19 +1073,19 @@
             ]
           },
           {
-            "id": "nova-sec-0112",
+            "id": "nova-sec-0113",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem"
+              "cssClass": "problem prose"
             },
             "columns": [
               {
-                "id": "nova-col-0113",
+                "id": "nova-col-0114",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0108",
+                    "id": "nova-heading-0109",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1077,7 +1095,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0109",
+                    "id": "nova-text-0110",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1085,7 +1103,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0110",
+                    "id": "nova-text-0111",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1093,7 +1111,7 @@
                     }
                   },
                   {
-                    "id": "nova-quote-0111",
+                    "id": "nova-quote-0112",
                     "block": "quote",
                     "settings": {},
                     "data": {
@@ -1107,19 +1125,19 @@
             ]
           },
           {
-            "id": "nova-sec-0118",
+            "id": "nova-sec-0119",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cards"
+              "cssClass": "why"
             },
             "columns": [
               {
-                "id": "nova-col-0119",
+                "id": "nova-col-0120",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0114",
+                    "id": "nova-heading-0115",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1129,7 +1147,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0115",
+                    "id": "nova-text-0116",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1137,7 +1155,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0116",
+                    "id": "nova-text-0117",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1145,7 +1163,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0117",
+                    "id": "nova-features-0118",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -1158,19 +1176,19 @@
             ]
           },
           {
-            "id": "nova-sec-0123",
+            "id": "nova-sec-0124",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cases nova-chips nova-grid-2"
+              "cssClass": "cases grid-2"
             },
             "columns": [
               {
-                "id": "nova-col-0124",
+                "id": "nova-col-0125",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0120",
+                    "id": "nova-heading-0121",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1180,7 +1198,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0121",
+                    "id": "nova-text-0122",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1188,7 +1206,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0122",
+                    "id": "nova-features-0123",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -1201,19 +1219,19 @@
             ]
           },
           {
-            "id": "nova-sec-0144",
+            "id": "nova-sec-0145",
             "type": "section",
             "settings": {
-              "cssClass": "nova-plugins nova-center nova-cardgrid"
+              "cssClass": "plugins center aud-grid"
             },
             "columns": [
               {
-                "id": "nova-col-0145",
+                "id": "nova-col-0146",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0125",
+                    "id": "nova-heading-0126",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1223,7 +1241,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0126",
+                    "id": "nova-text-0127",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1231,7 +1249,7 @@
                     }
                   },
                   {
-                    "id": "nova-container-0143",
+                    "id": "nova-container-0144",
                     "block": "container",
                     "settings": {
                       "style": {
@@ -1245,21 +1263,21 @@
                     },
                     "children": [
                       {
-                        "id": "nova-container-0130",
+                        "id": "nova-container-0131",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -1267,7 +1285,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0127",
+                            "id": "nova-heading-0128",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1277,7 +1295,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0128",
+                            "id": "nova-heading-0129",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1287,7 +1305,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0129",
+                            "id": "nova-text-0130",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -1297,21 +1315,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0134",
+                        "id": "nova-container-0135",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -1319,7 +1337,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0131",
+                            "id": "nova-heading-0132",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1329,7 +1347,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0132",
+                            "id": "nova-heading-0133",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1339,7 +1357,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0133",
+                            "id": "nova-text-0134",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -1349,21 +1367,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0138",
+                        "id": "nova-container-0139",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -1371,7 +1389,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0135",
+                            "id": "nova-heading-0136",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1381,7 +1399,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0136",
+                            "id": "nova-heading-0137",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1391,7 +1409,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0137",
+                            "id": "nova-text-0138",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -1401,21 +1419,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0142",
+                        "id": "nova-container-0143",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -1423,7 +1441,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0139",
+                            "id": "nova-heading-0140",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1433,7 +1451,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0140",
+                            "id": "nova-heading-0141",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -1443,7 +1461,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0141",
+                            "id": "nova-text-0142",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -1459,20 +1477,20 @@
             ]
           },
           {
-            "id": "nova-sec-0150",
+            "id": "nova-sec-0151",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0151",
+                "id": "nova-col-0152",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0146",
+                    "id": "nova-text-0147",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1480,7 +1498,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0147",
+                    "id": "nova-text-0148",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1488,7 +1506,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0148",
+                    "id": "nova-button-0149",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1500,7 +1518,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0149",
+                    "id": "nova-button-0150",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1528,19 +1546,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0157",
+            "id": "nova-sec-0158",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0158",
+                "id": "nova-col-0159",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0152",
+                    "id": "nova-heading-0153",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1550,7 +1568,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0153",
+                    "id": "nova-text-0154",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1558,7 +1576,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0154",
+                    "id": "nova-text-0155",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1566,7 +1584,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0155",
+                    "id": "nova-button-0156",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1578,7 +1596,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0156",
+                    "id": "nova-button-0157",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1594,19 +1612,19 @@
             ]
           },
           {
-            "id": "nova-sec-0163",
+            "id": "nova-sec-0164",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-rows"
+              "cssClass": "why feat-rows"
             },
             "columns": [
               {
-                "id": "nova-col-0164",
+                "id": "nova-col-0165",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0159",
+                    "id": "nova-heading-0160",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1616,7 +1634,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0160",
+                    "id": "nova-text-0161",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1624,7 +1642,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0161",
+                    "id": "nova-text-0162",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1632,7 +1650,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0162",
+                    "id": "nova-features-0163",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -1645,19 +1663,19 @@
             ]
           },
           {
-            "id": "nova-sec-0169",
+            "id": "nova-sec-0170",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-rows"
+              "cssClass": "problem feat-rows"
             },
             "columns": [
               {
-                "id": "nova-col-0170",
+                "id": "nova-col-0171",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0165",
+                    "id": "nova-heading-0166",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1667,7 +1685,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0166",
+                    "id": "nova-text-0167",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1675,7 +1693,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0167",
+                    "id": "nova-text-0168",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1683,7 +1701,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0168",
+                    "id": "nova-features-0169",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -1696,19 +1714,19 @@
             ]
           },
           {
-            "id": "nova-sec-0175",
+            "id": "nova-sec-0176",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-rows"
+              "cssClass": "why feat-rows"
             },
             "columns": [
               {
-                "id": "nova-col-0176",
+                "id": "nova-col-0177",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0171",
+                    "id": "nova-heading-0172",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1718,7 +1736,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0172",
+                    "id": "nova-text-0173",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1726,7 +1744,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0173",
+                    "id": "nova-text-0174",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1734,7 +1752,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0174",
+                    "id": "nova-features-0175",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -1747,19 +1765,19 @@
             ]
           },
           {
-            "id": "nova-sec-0181",
+            "id": "nova-sec-0182",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-rows"
+              "cssClass": "problem feat-rows"
             },
             "columns": [
               {
-                "id": "nova-col-0182",
+                "id": "nova-col-0183",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0177",
+                    "id": "nova-heading-0178",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1769,7 +1787,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0178",
+                    "id": "nova-text-0179",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1777,7 +1795,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0179",
+                    "id": "nova-text-0180",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1785,7 +1803,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0180",
+                    "id": "nova-features-0181",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -1798,19 +1816,19 @@
             ]
           },
           {
-            "id": "nova-sec-0186",
+            "id": "nova-sec-0187",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-rows"
+              "cssClass": "why feat-rows"
             },
             "columns": [
               {
-                "id": "nova-col-0187",
+                "id": "nova-col-0188",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0183",
+                    "id": "nova-heading-0184",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1820,7 +1838,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0184",
+                    "id": "nova-text-0185",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1828,7 +1846,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0185",
+                    "id": "nova-features-0186",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -1841,20 +1859,20 @@
             ]
           },
           {
-            "id": "nova-sec-0192",
+            "id": "nova-sec-0193",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0193",
+                "id": "nova-col-0194",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0188",
+                    "id": "nova-text-0189",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1862,7 +1880,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0189",
+                    "id": "nova-text-0190",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1870,7 +1888,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0190",
+                    "id": "nova-button-0191",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1882,7 +1900,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0191",
+                    "id": "nova-button-0192",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1910,19 +1928,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0199",
+            "id": "nova-sec-0200",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0200",
+                "id": "nova-col-0201",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0194",
+                    "id": "nova-heading-0195",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1932,7 +1950,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0195",
+                    "id": "nova-text-0196",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1940,7 +1958,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0196",
+                    "id": "nova-text-0197",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -1948,7 +1966,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0197",
+                    "id": "nova-button-0198",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1960,7 +1978,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0198",
+                    "id": "nova-button-0199",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -1976,19 +1994,19 @@
             ]
           },
           {
-            "id": "nova-sec-0204",
+            "id": "nova-sec-0205",
             "type": "section",
             "settings": {
-              "cssClass": "nova-builder"
+              "cssClass": "builder"
             },
             "columns": [
               {
-                "id": "nova-col-0205",
+                "id": "nova-col-0206",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0201",
+                    "id": "nova-heading-0202",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -1998,7 +2016,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0202",
+                    "id": "nova-text-0203",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2006,7 +2024,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0203",
+                    "id": "nova-text-0204",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2018,19 +2036,19 @@
             ]
           },
           {
-            "id": "nova-sec-0209",
+            "id": "nova-sec-0210",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cards"
+              "cssClass": "why"
             },
             "columns": [
               {
-                "id": "nova-col-0210",
+                "id": "nova-col-0211",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0206",
+                    "id": "nova-heading-0207",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2040,7 +2058,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0207",
+                    "id": "nova-text-0208",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2048,7 +2066,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0208",
+                    "id": "nova-features-0209",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -2061,19 +2079,19 @@
             ]
           },
           {
-            "id": "nova-sec-0222",
+            "id": "nova-sec-0223",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-cardgrid"
+              "cssClass": "problem aud-grid"
             },
             "columns": [
               {
-                "id": "nova-col-0223",
+                "id": "nova-col-0224",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0211",
+                    "id": "nova-heading-0212",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2083,7 +2101,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0212",
+                    "id": "nova-text-0213",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2091,7 +2109,7 @@
                     }
                   },
                   {
-                    "id": "nova-container-0221",
+                    "id": "nova-container-0222",
                     "block": "container",
                     "settings": {
                       "style": {
@@ -2105,21 +2123,21 @@
                     },
                     "children": [
                       {
-                        "id": "nova-container-0216",
+                        "id": "nova-container-0217",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -2127,7 +2145,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0213",
+                            "id": "nova-heading-0214",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -2137,7 +2155,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0214",
+                            "id": "nova-heading-0215",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -2147,7 +2165,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0215",
+                            "id": "nova-text-0216",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -2157,21 +2175,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0220",
+                        "id": "nova-container-0221",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -2179,7 +2197,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0217",
+                            "id": "nova-heading-0218",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -2189,7 +2207,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0218",
+                            "id": "nova-heading-0219",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -2199,7 +2217,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0219",
+                            "id": "nova-text-0220",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -2215,20 +2233,20 @@
             ]
           },
           {
-            "id": "nova-sec-0228",
+            "id": "nova-sec-0229",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0229",
+                "id": "nova-col-0230",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0224",
+                    "id": "nova-text-0225",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2236,7 +2254,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0225",
+                    "id": "nova-text-0226",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2244,7 +2262,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0226",
+                    "id": "nova-button-0227",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2256,7 +2274,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0227",
+                    "id": "nova-button-0228",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2284,19 +2302,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0235",
+            "id": "nova-sec-0236",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0236",
+                "id": "nova-col-0237",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0230",
+                    "id": "nova-heading-0231",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2306,7 +2324,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0231",
+                    "id": "nova-text-0232",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2314,7 +2332,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0232",
+                    "id": "nova-text-0233",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2322,7 +2340,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0233",
+                    "id": "nova-button-0234",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2334,7 +2352,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0234",
+                    "id": "nova-button-0235",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2350,19 +2368,19 @@
             ]
           },
           {
-            "id": "nova-sec-0241",
+            "id": "nova-sec-0242",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cards"
+              "cssClass": "why"
             },
             "columns": [
               {
-                "id": "nova-col-0242",
+                "id": "nova-col-0243",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0237",
+                    "id": "nova-heading-0238",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2372,7 +2390,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0238",
+                    "id": "nova-text-0239",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2380,7 +2398,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0239",
+                    "id": "nova-text-0240",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2388,7 +2406,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0240",
+                    "id": "nova-features-0241",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -2401,20 +2419,20 @@
             ]
           },
           {
-            "id": "nova-sec-0246",
+            "id": "nova-sec-0247",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-continue--head",
+              "cssClass": "problem head-continue",
               "anchor": "api"
             },
             "columns": [
               {
-                "id": "nova-col-0247",
+                "id": "nova-col-0248",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0243",
+                    "id": "nova-heading-0244",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2424,7 +2442,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0244",
+                    "id": "nova-text-0245",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2432,7 +2450,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0245",
+                    "id": "nova-text-0246",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2444,19 +2462,19 @@
             ]
           },
           {
-            "id": "nova-sec-0250",
+            "id": "nova-sec-0251",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-split nova-terminal nova-continue--tail"
+              "cssClass": "problem split terminal-split tail-continue"
             },
             "columns": [
               {
-                "id": "nova-col-0251",
+                "id": "nova-col-0252",
                 "span": 6,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-code-0248",
+                    "id": "nova-code-0249",
                     "block": "code",
                     "settings": {},
                     "data": {
@@ -2468,12 +2486,12 @@
                 ]
               },
               {
-                "id": "nova-col-0252",
+                "id": "nova-col-0253",
                 "span": 6,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-features-0249",
+                    "id": "nova-features-0250",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -2486,20 +2504,20 @@
             ]
           },
           {
-            "id": "nova-sec-0256",
+            "id": "nova-sec-0257",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-continue--head",
+              "cssClass": "why head-continue",
               "anchor": "build-plugin"
             },
             "columns": [
               {
-                "id": "nova-col-0257",
+                "id": "nova-col-0258",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0253",
+                    "id": "nova-heading-0254",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2509,7 +2527,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0254",
+                    "id": "nova-text-0255",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2517,7 +2535,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0255",
+                    "id": "nova-text-0256",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2529,19 +2547,19 @@
             ]
           },
           {
-            "id": "nova-sec-0260",
+            "id": "nova-sec-0261",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-split nova-terminal nova-continue--tail"
+              "cssClass": "why split terminal-split tail-continue"
             },
             "columns": [
               {
-                "id": "nova-col-0261",
+                "id": "nova-col-0262",
                 "span": 6,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-features-0258",
+                    "id": "nova-features-0259",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -2552,12 +2570,12 @@
                 ]
               },
               {
-                "id": "nova-col-0262",
+                "id": "nova-col-0263",
                 "span": 6,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-code-0259",
+                    "id": "nova-code-0260",
                     "block": "code",
                     "settings": {},
                     "data": {
@@ -2571,19 +2589,19 @@
             ]
           },
           {
-            "id": "nova-sec-0266",
+            "id": "nova-sec-0267",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-rows"
+              "cssClass": "problem feat-rows"
             },
             "columns": [
               {
-                "id": "nova-col-0267",
+                "id": "nova-col-0268",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0263",
+                    "id": "nova-heading-0264",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2593,7 +2611,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0264",
+                    "id": "nova-text-0265",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2601,7 +2619,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0265",
+                    "id": "nova-features-0266",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -2614,20 +2632,20 @@
             ]
           },
           {
-            "id": "nova-sec-0272",
+            "id": "nova-sec-0273",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0273",
+                "id": "nova-col-0274",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0268",
+                    "id": "nova-text-0269",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2635,7 +2653,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0269",
+                    "id": "nova-text-0270",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2643,7 +2661,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0270",
+                    "id": "nova-button-0271",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2655,7 +2673,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0271",
+                    "id": "nova-button-0272",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2683,19 +2701,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0279",
+            "id": "nova-sec-0280",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0280",
+                "id": "nova-col-0281",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0274",
+                    "id": "nova-heading-0275",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2705,7 +2723,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0275",
+                    "id": "nova-text-0276",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2713,7 +2731,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0276",
+                    "id": "nova-text-0277",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2721,7 +2739,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0277",
+                    "id": "nova-button-0278",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2733,7 +2751,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0278",
+                    "id": "nova-button-0279",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2749,19 +2767,19 @@
             ]
           },
           {
-            "id": "nova-sec-0284",
+            "id": "nova-sec-0285",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem"
+              "cssClass": "problem prose"
             },
             "columns": [
               {
-                "id": "nova-col-0285",
+                "id": "nova-col-0286",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0281",
+                    "id": "nova-heading-0282",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2771,7 +2789,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0282",
+                    "id": "nova-text-0283",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2779,7 +2797,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0283",
+                    "id": "nova-text-0284",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2791,19 +2809,19 @@
             ]
           },
           {
-            "id": "nova-sec-0289",
+            "id": "nova-sec-0290",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cards"
+              "cssClass": "why"
             },
             "columns": [
               {
-                "id": "nova-col-0290",
+                "id": "nova-col-0291",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0286",
+                    "id": "nova-heading-0287",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2813,7 +2831,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0287",
+                    "id": "nova-text-0288",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2821,7 +2839,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0288",
+                    "id": "nova-features-0289",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -2834,19 +2852,19 @@
             ]
           },
           {
-            "id": "nova-sec-0296",
+            "id": "nova-sec-0298",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cases nova-foot"
+              "cssClass": "cases cases-foot"
             },
             "columns": [
               {
-                "id": "nova-col-0297",
+                "id": "nova-col-0299",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0291",
+                    "id": "nova-heading-0292",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2856,7 +2874,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0292",
+                    "id": "nova-text-0293",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2864,7 +2882,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0293",
+                    "id": "nova-text-0294",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2872,44 +2890,62 @@
                     }
                   },
                   {
-                    "id": "nova-text-0294",
-                    "block": "text",
-                    "settings": {},
+                    "id": "nova-container-0297",
+                    "block": "container",
+                    "settings": {
+                      "style": {
+                        "direction": "row",
+                        "wrap": "wrap",
+                        "alignItems": "center",
+                        "justifyContent": "space-between",
+                        "childGap": "24px"
+                      }
+                    },
                     "data": {
-                      "body": "<p>Stop reselling hours. Start reselling architecture.</p>"
-                    }
-                  },
-                  {
-                    "id": "nova-button-0295",
-                    "block": "button",
-                    "settings": {},
-                    "data": {
-                      "label": "See the Plugin Ecosystem",
-                      "url": "/plugins",
-                      "style": "ghost",
-                      "size": "md",
-                      "target": "_self"
-                    }
+                      "tag": "div"
+                    },
+                    "children": [
+                      {
+                        "id": "nova-text-0295",
+                        "block": "text",
+                        "settings": {},
+                        "data": {
+                          "body": "<p>Stop reselling hours. Start reselling architecture.</p>"
+                        }
+                      },
+                      {
+                        "id": "nova-button-0296",
+                        "block": "button",
+                        "settings": {},
+                        "data": {
+                          "label": "See the Plugin Ecosystem",
+                          "url": "/plugins",
+                          "style": "ghost",
+                          "size": "md",
+                          "target": "_self"
+                        }
+                      }
+                    ]
                   }
                 ]
               }
             ]
           },
           {
-            "id": "nova-sec-0302",
+            "id": "nova-sec-0304",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0303",
+                "id": "nova-col-0305",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0298",
+                    "id": "nova-text-0300",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2917,7 +2953,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0299",
+                    "id": "nova-text-0301",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2925,7 +2961,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0300",
+                    "id": "nova-button-0302",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2937,7 +2973,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0301",
+                    "id": "nova-button-0303",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -2965,19 +3001,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0307",
+            "id": "nova-sec-0309",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0308",
+                "id": "nova-col-0310",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0304",
+                    "id": "nova-heading-0306",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -2987,7 +3023,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0305",
+                    "id": "nova-text-0307",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -2995,7 +3031,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0306",
+                    "id": "nova-text-0308",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3007,19 +3043,19 @@
             ]
           },
           {
-            "id": "nova-sec-0352",
+            "id": "nova-sec-0354",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cardgrid"
+              "cssClass": "why aud-grid"
             },
             "columns": [
               {
-                "id": "nova-col-0353",
+                "id": "nova-col-0355",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0309",
+                    "id": "nova-heading-0311",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -3029,7 +3065,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0310",
+                    "id": "nova-text-0312",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3037,7 +3073,7 @@
                     }
                   },
                   {
-                    "id": "nova-container-0351",
+                    "id": "nova-container-0353",
                     "block": "container",
                     "settings": {
                       "style": {
@@ -3051,21 +3087,21 @@
                     },
                     "children": [
                       {
-                        "id": "nova-container-0315",
+                        "id": "nova-container-0317",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3073,7 +3109,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0311",
+                            "id": "nova-heading-0313",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3083,7 +3119,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0312",
+                            "id": "nova-heading-0314",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3093,7 +3129,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0313",
+                            "id": "nova-text-0315",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3101,7 +3137,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0314",
+                            "id": "nova-features-0316",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3112,21 +3148,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0320",
+                        "id": "nova-container-0322",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3134,7 +3170,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0316",
+                            "id": "nova-heading-0318",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3144,7 +3180,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0317",
+                            "id": "nova-heading-0319",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3154,7 +3190,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0318",
+                            "id": "nova-text-0320",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3162,7 +3198,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0319",
+                            "id": "nova-features-0321",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3173,21 +3209,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0325",
+                        "id": "nova-container-0327",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3195,7 +3231,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0321",
+                            "id": "nova-heading-0323",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3205,7 +3241,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0322",
+                            "id": "nova-heading-0324",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3215,7 +3251,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0323",
+                            "id": "nova-text-0325",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3223,7 +3259,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0324",
+                            "id": "nova-features-0326",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3234,21 +3270,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0330",
+                        "id": "nova-container-0332",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3256,7 +3292,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0326",
+                            "id": "nova-heading-0328",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3266,7 +3302,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0327",
+                            "id": "nova-heading-0329",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3276,7 +3312,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0328",
+                            "id": "nova-text-0330",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3284,7 +3320,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0329",
+                            "id": "nova-features-0331",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3295,21 +3331,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0335",
+                        "id": "nova-container-0337",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3317,7 +3353,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0331",
+                            "id": "nova-heading-0333",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3327,7 +3363,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0332",
+                            "id": "nova-heading-0334",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3337,7 +3373,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0333",
+                            "id": "nova-text-0335",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3345,7 +3381,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0334",
+                            "id": "nova-features-0336",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3356,21 +3392,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0340",
+                        "id": "nova-container-0342",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3378,7 +3414,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0336",
+                            "id": "nova-heading-0338",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3388,7 +3424,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0337",
+                            "id": "nova-heading-0339",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3398,7 +3434,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0338",
+                            "id": "nova-text-0340",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3406,7 +3442,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0339",
+                            "id": "nova-features-0341",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3417,21 +3453,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0345",
+                        "id": "nova-container-0347",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3439,7 +3475,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0341",
+                            "id": "nova-heading-0343",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3449,7 +3485,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0342",
+                            "id": "nova-heading-0344",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3459,7 +3495,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0343",
+                            "id": "nova-text-0345",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3467,7 +3503,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0344",
+                            "id": "nova-features-0346",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3478,21 +3514,21 @@
                         ]
                       },
                       {
-                        "id": "nova-container-0350",
+                        "id": "nova-container-0352",
                         "block": "container",
                         "settings": {
                           "style": {
-                            "background": "var(--nova-card)",
+                            "background": "var(--bg-white)",
                             "borderWidth": "1px",
                             "borderStyle": "solid",
-                            "borderColor": "var(--nova-border)",
-                            "borderRadius": "var(--nova-radius-lg)",
-                            "paddingTop": "34px",
-                            "paddingRight": "32px",
-                            "paddingBottom": "34px",
-                            "paddingLeft": "32px",
+                            "borderColor": "var(--border)",
+                            "borderRadius": "var(--radius-lg)",
+                            "paddingTop": "42px",
+                            "paddingRight": "38px",
+                            "paddingBottom": "42px",
+                            "paddingLeft": "38px",
                             "direction": "column",
-                            "childGap": "10px"
+                            "childGap": "0px"
                           }
                         },
                         "data": {
@@ -3500,7 +3536,7 @@
                         },
                         "children": [
                           {
-                            "id": "nova-heading-0346",
+                            "id": "nova-heading-0348",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3510,7 +3546,7 @@
                             }
                           },
                           {
-                            "id": "nova-heading-0347",
+                            "id": "nova-heading-0349",
                             "block": "heading",
                             "settings": {},
                             "data": {
@@ -3520,7 +3556,7 @@
                             }
                           },
                           {
-                            "id": "nova-text-0348",
+                            "id": "nova-text-0350",
                             "block": "text",
                             "settings": {},
                             "data": {
@@ -3528,7 +3564,7 @@
                             }
                           },
                           {
-                            "id": "nova-features-0349",
+                            "id": "nova-features-0351",
                             "block": "features",
                             "settings": {},
                             "data": {
@@ -3545,20 +3581,20 @@
             ]
           },
           {
-            "id": "nova-sec-0358",
+            "id": "nova-sec-0360",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0359",
+                "id": "nova-col-0361",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0354",
+                    "id": "nova-text-0356",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3566,7 +3602,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0355",
+                    "id": "nova-text-0357",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3574,7 +3610,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0356",
+                    "id": "nova-button-0358",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -3586,7 +3622,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0357",
+                    "id": "nova-button-0359",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -3614,19 +3650,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0365",
+            "id": "nova-sec-0367",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0366",
+                "id": "nova-col-0368",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0360",
+                    "id": "nova-heading-0362",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -3636,7 +3672,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0361",
+                    "id": "nova-text-0363",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3644,7 +3680,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0362",
+                    "id": "nova-text-0364",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3652,7 +3688,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0363",
+                    "id": "nova-button-0365",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -3664,7 +3700,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0364",
+                    "id": "nova-button-0366",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -3680,19 +3716,19 @@
             ]
           },
           {
-            "id": "nova-sec-0371",
+            "id": "nova-sec-0373",
             "type": "section",
             "settings": {
-              "cssClass": "nova-plugins nova-center nova-steps"
+              "cssClass": "plugins center"
             },
             "columns": [
               {
-                "id": "nova-col-0372",
+                "id": "nova-col-0374",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0367",
+                    "id": "nova-heading-0369",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -3702,7 +3738,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0368",
+                    "id": "nova-text-0370",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3710,7 +3746,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0369",
+                    "id": "nova-text-0371",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3718,7 +3754,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0370",
+                    "id": "nova-features-0372",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -3731,20 +3767,20 @@
             ]
           },
           {
-            "id": "nova-sec-0377",
+            "id": "nova-sec-0379",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-rows",
+              "cssClass": "problem feat-rows",
               "anchor": "official"
             },
             "columns": [
               {
-                "id": "nova-col-0378",
+                "id": "nova-col-0380",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0373",
+                    "id": "nova-heading-0375",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -3754,7 +3790,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0374",
+                    "id": "nova-text-0376",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3762,7 +3798,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0375",
+                    "id": "nova-text-0377",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3770,7 +3806,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0376",
+                    "id": "nova-features-0378",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -3783,19 +3819,19 @@
             ]
           },
           {
-            "id": "nova-sec-0382",
+            "id": "nova-sec-0384",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cards nova-grid-2"
+              "cssClass": "why grid-2"
             },
             "columns": [
               {
-                "id": "nova-col-0383",
+                "id": "nova-col-0385",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0379",
+                    "id": "nova-heading-0381",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -3805,7 +3841,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0380",
+                    "id": "nova-text-0382",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3813,7 +3849,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0381",
+                    "id": "nova-features-0383",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -3826,19 +3862,19 @@
             ]
           },
           {
-            "id": "nova-sec-0389",
+            "id": "nova-sec-0392",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cases nova-foot"
+              "cssClass": "cases cases-foot"
             },
             "columns": [
               {
-                "id": "nova-col-0390",
+                "id": "nova-col-0393",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0384",
+                    "id": "nova-heading-0386",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -3848,7 +3884,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0385",
+                    "id": "nova-text-0387",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3856,7 +3892,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0386",
+                    "id": "nova-text-0388",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3864,44 +3900,62 @@
                     }
                   },
                   {
-                    "id": "nova-text-0387",
-                    "block": "text",
-                    "settings": {},
+                    "id": "nova-container-0391",
+                    "block": "container",
+                    "settings": {
+                      "style": {
+                        "direction": "row",
+                        "wrap": "wrap",
+                        "alignItems": "center",
+                        "justifyContent": "space-between",
+                        "childGap": "24px"
+                      }
+                    },
                     "data": {
-                      "body": "<p>A platform should grow the way your project does: piece by deliberate piece.</p>"
-                    }
-                  },
-                  {
-                    "id": "nova-button-0388",
-                    "block": "button",
-                    "settings": {},
-                    "data": {
-                      "label": "Build a Plugin",
-                      "url": "/for-developers#build-plugin",
-                      "style": "ghost",
-                      "size": "md",
-                      "target": "_self"
-                    }
+                      "tag": "div"
+                    },
+                    "children": [
+                      {
+                        "id": "nova-text-0389",
+                        "block": "text",
+                        "settings": {},
+                        "data": {
+                          "body": "<p>A platform should grow the way your project does: piece by deliberate piece.</p>"
+                        }
+                      },
+                      {
+                        "id": "nova-button-0390",
+                        "block": "button",
+                        "settings": {},
+                        "data": {
+                          "label": "Build a Plugin",
+                          "url": "/for-developers#build-plugin",
+                          "style": "ghost",
+                          "size": "md",
+                          "target": "_self"
+                        }
+                      }
+                    ]
                   }
                 ]
               }
             ]
           },
           {
-            "id": "nova-sec-0395",
+            "id": "nova-sec-0398",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0396",
+                "id": "nova-col-0399",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0391",
+                    "id": "nova-text-0394",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3909,7 +3963,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0392",
+                    "id": "nova-text-0395",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3917,7 +3971,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0393",
+                    "id": "nova-button-0396",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -3929,7 +3983,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0394",
+                    "id": "nova-button-0397",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -3957,19 +4011,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0400",
+            "id": "nova-sec-0403",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0401",
+                "id": "nova-col-0404",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0397",
+                    "id": "nova-heading-0400",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -3979,7 +4033,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0398",
+                    "id": "nova-text-0401",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3987,7 +4041,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0399",
+                    "id": "nova-text-0402",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -3999,19 +4053,19 @@
             ]
           },
           {
-            "id": "nova-sec-0405",
+            "id": "nova-sec-0408",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem"
+              "cssClass": "problem prose"
             },
             "columns": [
               {
-                "id": "nova-col-0406",
+                "id": "nova-col-0409",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0402",
+                    "id": "nova-heading-0405",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4021,7 +4075,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0403",
+                    "id": "nova-text-0406",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4029,7 +4083,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0404",
+                    "id": "nova-text-0407",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4041,19 +4095,19 @@
             ]
           },
           {
-            "id": "nova-sec-0411",
+            "id": "nova-sec-0414",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-cards nova-grid-2"
+              "cssClass": "why grid-2"
             },
             "columns": [
               {
-                "id": "nova-col-0412",
+                "id": "nova-col-0415",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0407",
+                    "id": "nova-heading-0410",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4063,7 +4117,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0408",
+                    "id": "nova-text-0411",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4071,7 +4125,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0409",
+                    "id": "nova-text-0412",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4079,7 +4133,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0410",
+                    "id": "nova-features-0413",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -4092,19 +4146,19 @@
             ]
           },
           {
-            "id": "nova-sec-0418",
+            "id": "nova-sec-0422",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cases nova-foot"
+              "cssClass": "cases cases-foot"
             },
             "columns": [
               {
-                "id": "nova-col-0419",
+                "id": "nova-col-0423",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0413",
+                    "id": "nova-heading-0416",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4114,7 +4168,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0414",
+                    "id": "nova-text-0417",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4122,7 +4176,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0415",
+                    "id": "nova-text-0418",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4130,44 +4184,62 @@
                     }
                   },
                   {
-                    "id": "nova-text-0416",
-                    "block": "text",
-                    "settings": {},
+                    "id": "nova-container-0421",
+                    "block": "container",
+                    "settings": {
+                      "style": {
+                        "direction": "row",
+                        "wrap": "wrap",
+                        "alignItems": "center",
+                        "justifyContent": "space-between",
+                        "childGap": "24px"
+                      }
+                    },
                     "data": {
-                      "body": "<p>If that&#x27;s the kind of foundation you want under your work, we&#x27;d like you building on it, or with us.</p>"
-                    }
-                  },
-                  {
-                    "id": "nova-button-0417",
-                    "block": "button",
-                    "settings": {},
-                    "data": {
-                      "label": "Why Magna →",
-                      "url": "/why-magna",
-                      "style": "ghost",
-                      "size": "md",
-                      "target": "_self"
-                    }
+                      "tag": "div"
+                    },
+                    "children": [
+                      {
+                        "id": "nova-text-0419",
+                        "block": "text",
+                        "settings": {},
+                        "data": {
+                          "body": "<p>If that&#x27;s the kind of foundation you want under your work, we&#x27;d like you building on it, or with us.</p>"
+                        }
+                      },
+                      {
+                        "id": "nova-button-0420",
+                        "block": "button",
+                        "settings": {},
+                        "data": {
+                          "label": "Why Magna →",
+                          "url": "/why-magna",
+                          "style": "ghost",
+                          "size": "md",
+                          "target": "_self"
+                        }
+                      }
+                    ]
                   }
                 ]
               }
             ]
           },
           {
-            "id": "nova-sec-0424",
+            "id": "nova-sec-0428",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0425",
+                "id": "nova-col-0429",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0420",
+                    "id": "nova-text-0424",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4175,7 +4247,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0421",
+                    "id": "nova-text-0425",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4183,7 +4255,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0422",
+                    "id": "nova-button-0426",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -4195,7 +4267,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0423",
+                    "id": "nova-button-0427",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -4223,19 +4295,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0429",
+            "id": "nova-sec-0433",
             "type": "section",
             "settings": {
-              "cssClass": "nova-hero nova-hero--short"
+              "cssClass": "hero short"
             },
             "columns": [
               {
-                "id": "nova-col-0430",
+                "id": "nova-col-0434",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0426",
+                    "id": "nova-heading-0430",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4245,7 +4317,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0427",
+                    "id": "nova-text-0431",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4253,7 +4325,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0428",
+                    "id": "nova-text-0432",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4265,19 +4337,19 @@
             ]
           },
           {
-            "id": "nova-sec-0432",
+            "id": "nova-sec-0436",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem"
+              "cssClass": "problem prose"
             },
             "columns": [
               {
-                "id": "nova-col-0433",
+                "id": "nova-col-0437",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0431",
+                    "id": "nova-text-0435",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4289,19 +4361,19 @@
             ]
           },
           {
-            "id": "nova-sec-0437",
+            "id": "nova-sec-0441",
             "type": "section",
             "settings": {
-              "cssClass": "nova-why nova-compare"
+              "cssClass": "why cmp-wrap"
             },
             "columns": [
               {
-                "id": "nova-col-0438",
+                "id": "nova-col-0442",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0434",
+                    "id": "nova-heading-0438",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4311,7 +4383,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0435",
+                    "id": "nova-text-0439",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4319,7 +4391,7 @@
                     }
                   },
                   {
-                    "id": "nova-table-0436",
+                    "id": "nova-table-0440",
                     "block": "table",
                     "settings": {},
                     "data": {
@@ -4334,19 +4406,19 @@
             ]
           },
           {
-            "id": "nova-sec-0443",
+            "id": "nova-sec-0447",
             "type": "section",
             "settings": {
-              "cssClass": "nova-problem nova-compare"
+              "cssClass": "problem cmp-wrap"
             },
             "columns": [
               {
-                "id": "nova-col-0444",
+                "id": "nova-col-0448",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0439",
+                    "id": "nova-heading-0443",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4356,7 +4428,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0440",
+                    "id": "nova-text-0444",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4364,7 +4436,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0441",
+                    "id": "nova-text-0445",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4372,7 +4444,7 @@
                     }
                   },
                   {
-                    "id": "nova-table-0442",
+                    "id": "nova-table-0446",
                     "block": "table",
                     "settings": {},
                     "data": {
@@ -4387,19 +4459,19 @@
             ]
           },
           {
-            "id": "nova-sec-0450",
+            "id": "nova-sec-0455",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cases nova-chips nova-grid-2 nova-foot"
+              "cssClass": "cases grid-2 cases-foot"
             },
             "columns": [
               {
-                "id": "nova-col-0451",
+                "id": "nova-col-0456",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0445",
+                    "id": "nova-heading-0449",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4409,7 +4481,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0446",
+                    "id": "nova-text-0450",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4417,7 +4489,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0447",
+                    "id": "nova-text-0451",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4425,7 +4497,7 @@
                     }
                   },
                   {
-                    "id": "nova-features-0448",
+                    "id": "nova-features-0452",
                     "block": "features",
                     "settings": {},
                     "data": {
@@ -4434,32 +4506,50 @@
                     }
                   },
                   {
-                    "id": "nova-text-0449",
-                    "block": "text",
-                    "settings": {},
+                    "id": "nova-container-0454",
+                    "block": "container",
+                    "settings": {
+                      "style": {
+                        "direction": "row",
+                        "wrap": "wrap",
+                        "alignItems": "center",
+                        "justifyContent": "space-between",
+                        "childGap": "24px"
+                      }
+                    },
                     "data": {
-                      "body": "<p>If several of those describe you, Magna deserves a serious look.</p>"
-                    }
+                      "tag": "div"
+                    },
+                    "children": [
+                      {
+                        "id": "nova-text-0453",
+                        "block": "text",
+                        "settings": {},
+                        "data": {
+                          "body": "<p>If several of those describe you, Magna deserves a serious look.</p>"
+                        }
+                      }
+                    ]
                   }
                 ]
               }
             ]
           },
           {
-            "id": "nova-sec-0456",
+            "id": "nova-sec-0461",
             "type": "section",
             "settings": {
-              "cssClass": "nova-cta",
+              "cssClass": "cta",
               "anchor": "get-started"
             },
             "columns": [
               {
-                "id": "nova-col-0457",
+                "id": "nova-col-0462",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0452",
+                    "id": "nova-text-0457",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4467,7 +4557,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0453",
+                    "id": "nova-text-0458",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4475,7 +4565,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0454",
+                    "id": "nova-button-0459",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -4487,7 +4577,7 @@
                     }
                   },
                   {
-                    "id": "nova-button-0455",
+                    "id": "nova-button-0460",
                     "block": "button",
                     "settings": {},
                     "data": {
@@ -4517,19 +4607,19 @@
         "schemaVersion": "1.0",
         "sections": [
           {
-            "id": "nova-sec-0467",
+            "id": "nova-sec-0472",
             "type": "section",
             "settings": {
-              "cssClass": "nova-footer-main"
+              "cssClass": "footer-main"
             },
             "columns": [
               {
-                "id": "nova-col-0468",
+                "id": "nova-col-0473",
                 "span": 6,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-logo-0458",
+                    "id": "nova-logo-0463",
                     "block": "logo",
                     "settings": {},
                     "data": {
@@ -4542,7 +4632,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0459",
+                    "id": "nova-text-0464",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4550,7 +4640,7 @@
                     }
                   },
                   {
-                    "id": "nova-text-0460",
+                    "id": "nova-text-0465",
                     "block": "text",
                     "settings": {},
                     "data": {
@@ -4560,12 +4650,12 @@
                 ]
               },
               {
-                "id": "nova-col-0469",
+                "id": "nova-col-0474",
                 "span": 2,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0461",
+                    "id": "nova-heading-0466",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4575,7 +4665,7 @@
                     }
                   },
                   {
-                    "id": "nova-nav-0462",
+                    "id": "nova-nav-0467",
                     "block": "nav",
                     "settings": {},
                     "data": {
@@ -4585,12 +4675,12 @@
                 ]
               },
               {
-                "id": "nova-col-0470",
+                "id": "nova-col-0475",
                 "span": 2,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0463",
+                    "id": "nova-heading-0468",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4600,7 +4690,7 @@
                     }
                   },
                   {
-                    "id": "nova-nav-0464",
+                    "id": "nova-nav-0469",
                     "block": "nav",
                     "settings": {},
                     "data": {
@@ -4610,12 +4700,12 @@
                 ]
               },
               {
-                "id": "nova-col-0471",
+                "id": "nova-col-0476",
                 "span": 2,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-heading-0465",
+                    "id": "nova-heading-0470",
                     "block": "heading",
                     "settings": {},
                     "data": {
@@ -4625,7 +4715,7 @@
                     }
                   },
                   {
-                    "id": "nova-nav-0466",
+                    "id": "nova-nav-0471",
                     "block": "nav",
                     "settings": {},
                     "data": {
@@ -4637,19 +4727,19 @@
             ]
           },
           {
-            "id": "nova-sec-0473",
+            "id": "nova-sec-0478",
             "type": "section",
             "settings": {
-              "cssClass": "nova-footer-bottom"
+              "cssClass": "footer-bottom"
             },
             "columns": [
               {
-                "id": "nova-col-0474",
+                "id": "nova-col-0479",
                 "span": 12,
                 "settings": {},
                 "blocks": [
                   {
-                    "id": "nova-text-0472",
+                    "id": "nova-text-0477",
                     "block": "text",
                     "settings": {},
                     "data": {

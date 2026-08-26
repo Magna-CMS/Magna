@@ -24,7 +24,7 @@ function auditSetup(): void
 it('passes the shipped themes and reference addon clean', function (): void {
     auditSetup();
 
-    foreach (['magna/launch', 'magna/theme-studio', 'magna/studio-pages-kit'] as $theme) {
+    foreach (['magna/launch', 'magna/nova', 'magna/theme-studio', 'magna/studio-pages-kit'] as $theme) {
         $errors = array_filter(
             app(ThemeAuditor::class)->audit($theme),
             fn (array $f): bool => $f['level'] === 'error',
