@@ -271,6 +271,33 @@
         .hero > .magna-section__inner { position: relative; z-index: 2; width: 100%; }
         .hero > .magna-section__inner > .magna-columns { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 60px; align-items: center; }
 
+        /*
+            The hero's entrance. The original staggers its four `.anim`
+            children; here the children ARE the blocks, so the delays walk
+            the block list instead. The base opacity is unconditional, as
+            the original's is — this theme's script is already load-bearing
+            (nothing dismisses the preloader without it), so a no-script
+            visitor was never seeing the hero either way.
+        */
+@unless($builderMode ?? false)
+        /* The canvas runs this layout with the behaviour script suppressed,
+           so nothing there would ever add `.loaded` — and an editor would
+           open the hero to find it blank. */
+        .hero .magna-column > .magna-block, .hero .magna-container { opacity: 0; }
+@endunless
+        .hero.loaded .magna-column > .magna-block,
+        .hero.loaded .magna-container { animation: fadeUp 0.9s var(--ease) both; }
+        .hero.loaded .magna-column > .magna-block:nth-child(1) { animation-delay: .05s; }
+        .hero.loaded .magna-column > .magna-block:nth-child(2) { animation-delay: .15s; }
+        .hero.loaded .magna-column > .magna-block:nth-child(3) { animation-delay: .25s; }
+        .hero.loaded .magna-column > .magna-block:nth-child(4) { animation-delay: .35s; }
+        .hero.loaded .magna-column > .magna-block:nth-child(5) { animation-delay: .35s; }
+        .hero.loaded .magna-column > .magna-block:nth-child(n+6) { animation-delay: .45s; }
+        /* The card is also the first block of its column, so it needs to
+           out-specify the nth-child stagger to keep the original's 0.3s. */
+        .hero.loaded .magna-column > .magna-block--container.magna-container { animation-delay: .3s; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
         .hero .magna-prose h1 { font-family: var(--serif); font-size: clamp(38px, 5.4vw, 64px); line-height: 1.06; letter-spacing: -0.04em; color: #fff; font-weight: 700; max-width: none; }
         .hero .magna-prose h1 em { font-style: normal; font-weight: 800; background: linear-gradient(100deg, var(--accent-3), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
         .hero .magna-prose p { color: #c3c8de; font-size: 18px; max-width: 560px; }
@@ -576,9 +603,41 @@
         /* ===== PLUGINS ===== */
         .plugins { background: var(--bg-soft); overflow: hidden; }
         .plugins .magna-column > .magna-block--features.magna-features--icon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; position: relative; }
+        /*
+            The connector, drawn when the band scrolls in: the line grows
+            from the left and a dot runs its length once. Both hang off the
+            features block, because the original's spare .plugin-line
+            element is markup the document would otherwise have to carry.
+        */
         .plugins .magna-column > .magna-block--features.magna-features--icon-grid::before {
             content:""; position: absolute; top: 36px; left: 16%; right: 16%; height: 3px; border-radius: 3px;
             background: linear-gradient(90deg, var(--accent-3), var(--accent), var(--accent-2)); opacity: 0.85;
+            transform-origin: left center;
+            transition: transform 1.6s var(--ease) 0.15s;
+        }
+        .plugins .reveal .magna-column > .magna-block--features.magna-features--icon-grid::before { transform: scaleX(0); }
+        .plugins .reveal.in .magna-column > .magna-block--features.magna-features--icon-grid::before { transform: scaleX(1); }
+        .plugins .magna-column > .magna-block--features.magna-features--icon-grid::after {
+            content:""; position: absolute; top: 36px; left: 16%; width: 16px; height: 16px; border-radius: 50%;
+            background: var(--accent); transform: translate(-50%,-50%); margin-top: 1.5px;
+            box-shadow: 0 0 0 7px rgba(99,102,241,0.16); opacity: 0; pointer-events: none;
+        }
+        .plugins .reveal.in .magna-column > .magna-block--features.magna-features--icon-grid::after {
+            animation: travelDot 2.4s var(--ease) 0.4s forwards;
+        }
+        @keyframes travelDot { 0%{ left: 16%; opacity: 1; } 88%{ opacity: 1; } 100%{ left: 84%; opacity: 0; } }
+
+        /* The step numbers pop in behind the line. */
+        .plugins .reveal .magna-column > .magna-block--features.magna-features--icon-grid .magna-features__icon { opacity: 0; }
+        .plugins .reveal.in .magna-column > .magna-block--features.magna-features--icon-grid .magna-features__icon {
+            opacity: 1; animation: numPop 0.85s var(--ease) backwards;
+        }
+        .plugins .reveal.in .magna-features__item:nth-child(2) .magna-features__icon { animation-delay: 0.2s; }
+        .plugins .reveal.in .magna-features__item:nth-child(3) .magna-features__icon { animation-delay: 0.4s; }
+        @keyframes numPop {
+            0%   { opacity: 0; transform: scale(0.2) translateY(16px); }
+            55%  { opacity: 1; transform: scale(1.12) translateY(-2px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
         }
         .plugins .magna-column > .magna-block--features.magna-features--icon-grid .magna-features__item { text-align: center; padding: 0 26px; position: relative; }
         .plugins .magna-column > .magna-block--features.magna-features--icon-grid .magna-features__icon {
@@ -646,6 +705,21 @@
         /* ===== CTA ===== */
         .cta { background: var(--bg-darker); color: #fff; text-align: center; padding: 120px 0; position: relative; overflow: hidden; }
         .cta::before { content:""; position: absolute; inset: 0; background: radial-gradient(600px circle at 50% 0%, rgba(99,102,241,0.26), transparent 55%); }
+        /*
+            The two drifting blobs. The original gives each its own element;
+            a section has two pseudo-elements and its inner has more, which
+            is enough to keep both blobs AND the glow without asking the
+            document to carry decoration.
+        */
+        .cta::after, .cta > .magna-section__inner::before {
+            content:""; position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.35; pointer-events: none;
+        }
+        .cta::after { width: 340px; height: 340px; background: var(--accent); top: -120px; left: -80px; animation: floaty 8s ease-in-out infinite; }
+        .cta > .magna-section__inner::before {
+            width: 300px; height: 300px; background: var(--accent-2); bottom: -120px; right: -60px;
+            z-index: -1; animation: floaty 7s ease-in-out infinite reverse;
+        }
+        @keyframes floaty { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-10px); } }
         .cta > .magna-section__inner { position: relative; z-index: 1; }
         .cta .magna-column { max-width: 636px; margin: 0 auto; }
         .cta .magna-prose { max-width: none; margin: 0 auto; text-align: center; }
@@ -779,7 +853,11 @@
             html { scroll-behavior: auto; }
         .trust .magna-column > .magna-block--features, .cursor-glow, .running-line, .scroll-hint .mouse::before, 
             .magna-heading h6::before { animation: none !important; }
-            .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+            .reveal,
+            .hero .magna-column > .magna-block,
+            .hero .magna-container { opacity: 1 !important; transform: none !important; transition: none !important; animation: none !important; }
+            .plugins .reveal .magna-column > .magna-block--features.magna-features--icon-grid::before { transform: scaleX(1) !important; }
+            .plugins .magna-column > .magna-block--features.magna-features--icon-grid::after { animation: none !important; }
             .cursor-glow { display: none; }
             ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
         }
@@ -793,8 +871,10 @@
             .builder-grid > .magna-section__inner > .magna-columns { grid-template-columns: 1fr; gap: 40px; }
         .why:not(.feat-rows) .magna-column > .magna-block--features.magna-features--icon-grid { grid-template-columns: repeat(2, 1fr); }
         .cases .magna-column > .magna-block--features.magna-features--icon-grid { grid-template-columns: repeat(2, 1fr); }
-        .plugins:not(.feat-rows) .magna-column > .magna-block--features { grid-template-columns: 1fr; gap: 40px; }
-        .plugins:not(.feat-rows) .magna-column > .magna-block--features::before { display: none; }
+        .plugins .magna-column > .magna-block--features.magna-features--icon-grid { grid-template-columns: 1fr; gap: 40px; }
+        /* The connector is a desktop composition; its dot goes with it. */
+        .plugins .magna-column > .magna-block--features.magna-features--icon-grid::before,
+        .plugins .magna-column > .magna-block--features.magna-features--icon-grid::after { display: none; }
             footer .footer-main > .magna-section__inner > .magna-columns { grid-template-columns: 1fr 1fr; }
             .scroll-hint { display: none; }
             .hero { padding-bottom: 70px; }
@@ -1028,6 +1108,27 @@
                         preloader.classList.add('done');
                         try { window.sessionStorage.setItem('magnaSplash', '1'); } catch (e) {}
                     }, root.classList.contains('no-splash') ? 0 : 1300);
+                }
+
+                /*
+                    The hero's entrance. Armed and fired from here rather
+                    than left to CSS alone: the armed class is what hides
+                    the blocks, so a visitor whose script never runs sees
+                    the hero rather than an empty band. Skipped entirely
+                    under reduced motion — arming it there would hide the
+                    hero and then decline to bring it back.
+                */
+                var hero = document.querySelector('main .magna-section.hero');
+                if (hero) {
+                    /*
+                        Set directly, NOT inside requestAnimationFrame: rAF
+                        does not fire in a background tab, and a hero that
+                        stays hidden until someone happens to focus the tab
+                        is worse than one that animates a frame early. The
+                        keyframes fill `both`, so starting from the hidden
+                        state needs no separate frame anyway.
+                    */
+                    hero.classList.add('loaded');
                 }
 
                 var header = document.querySelector('[data-header]');
