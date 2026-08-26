@@ -876,6 +876,14 @@
 
 @php
     /*
+        Where the wordmark points. The layout contract supplies it because
+        "/" is not always the site's front door — an install whose admin
+        panel is mounted at the root never lets the page router answer it.
+        A theme older than that contract falls back to "/".
+    */
+    $home = $homeUrl ?? '/';
+
+    /*
         The wordmark. The site's name is drawn the way the original drew it:
         the last word set apart as a small accent suffix when there is one
         ("Magna CMS"), the whole name otherwise — so a site called something
@@ -910,7 +918,7 @@
 @else
     <header data-header>
         <div class="container nav-wrap">
-            <a href="/" class="logo">
+            <a href="{{ $home }}" class="logo">
                 <svg class="logo-mark"><use href="#magna-mark"/></svg>
                 {{ $brandName }}@if($brandSuffix !== '')<span class="cms">{{ $brandSuffix }}</span>@endif
             </a>
@@ -937,7 +945,7 @@
 @unless($builderMode ?? false)
     <div class="mobile-menu" data-menu aria-hidden="true">
         <div class="mm-top">
-            <a href="/" class="logo">
+            <a href="{{ $home }}" class="logo">
                 <svg class="logo-mark"><use href="#magna-mark"/></svg>
                 {{ $brandName }}@if($brandSuffix !== '')<span class="cms">{{ $brandSuffix }}</span>@endif
             </a>
@@ -971,7 +979,7 @@
 @else
     <footer>
         <div class="container footer-fallback">
-            <a href="/" class="logo">
+            <a href="{{ $home }}" class="logo">
                 <svg class="logo-mark"><use href="#magna-mark"/></svg>
                 {{ $brandName }}@if($brandSuffix !== '')<span class="cms">{{ $brandSuffix }}</span>@endif
             </a>

@@ -891,8 +891,11 @@ def footer_part() -> dict:
     is only the fallback for a site that has not designed one.
     """
     brand = [
+        # The home page's own address, not "/": this install's root belongs
+        # to the admin panel, and a page is addressable by its slug on every
+        # install, so this link is correct either way.
         block("logo", {"media_id": None, "text": "magna", "height": "40px",
-                       "alt": "Magna CMS", "url": "/", "heading": "no"}),
+                       "alt": "Magna CMS", "url": "/home", "heading": "no"}),
         prose("<p>An extensible, developer-grade CMS for the web as it is today. "
               "Open source, and built to be built on.</p>"),
         prose(f'<p><a href="{DOC_URL}">GitHub</a></p>'),
