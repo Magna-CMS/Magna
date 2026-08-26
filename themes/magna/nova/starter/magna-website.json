@@ -220,7 +220,7 @@
             "id": "nova-sec-0025",
             "type": "section",
             "settings": {
-              "cssClass": "problem split tail-continue"
+              "cssClass": "problem split problem-grid tail-continue"
             },
             "columns": [
               {
@@ -314,7 +314,7 @@
             "id": "nova-sec-0039",
             "type": "section",
             "settings": {
-              "cssClass": "arch split",
+              "cssClass": "arch split arch-grid",
               "anchor": "architecture"
             },
             "columns": [
@@ -438,7 +438,7 @@
             "id": "nova-sec-0051",
             "type": "section",
             "settings": {
-              "cssClass": "headless split terminal-split tail-continue"
+              "cssClass": "headless split headless-grid tail-continue"
             },
             "columns": [
               {
@@ -650,7 +650,7 @@
             "id": "nova-sec-0074",
             "type": "section",
             "settings": {
-              "cssClass": "builder",
+              "cssClass": "builder builder-grid",
               "anchor": "builder"
             },
             "columns": [
@@ -1997,7 +1997,7 @@
             "id": "nova-sec-0205",
             "type": "section",
             "settings": {
-              "cssClass": "builder"
+              "cssClass": "builder builder-grid"
             },
             "columns": [
               {
@@ -2465,7 +2465,7 @@
             "id": "nova-sec-0251",
             "type": "section",
             "settings": {
-              "cssClass": "problem split terminal-split tail-continue"
+              "cssClass": "problem split headless-grid tail-continue"
             },
             "columns": [
               {
@@ -2550,7 +2550,7 @@
             "id": "nova-sec-0261",
             "type": "section",
             "settings": {
-              "cssClass": "why split terminal-split tail-continue"
+              "cssClass": "why split headless-grid tail-continue"
             },
             "columns": [
               {

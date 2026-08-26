@@ -17,10 +17,20 @@ The rule the whole theme is built around:
 That is why there is exactly one theme block view in here. Everything else
 is CSS against classes the renderer already produces.
 
-**Verified against the original**, band by band, at 1440×900: on the home
-page every section is within 7px of the hand-written page and the whole
-document is within 9px of 10,173px. On Why Magna every section is within
-13px.
+**Verified against the original** at 1440×900, page by page. Document
+heights, mine against the hand-written page:
+
+| | | | |
+|---|---|---|---|
+| compare | 5008 / 5008 | why-magna | 5354 / 5340 |
+| home | 10196 / 10173 | developers | 5309 / 5316 |
+| features | 6496 / 6505 | agencies | 4026 / 4048 |
+| use-cases | 3494 / 3467 | about | 4118 / 4169 |
+| plugins | 5127 / 5183 | page-builder | 3906 / 4025 |
+
+On home every band is within 8px. Page Builder's 119px is the decorative
+builder wireframe, which carries no content and could only exist as raw
+markup.
 
 ---
 
@@ -64,10 +74,10 @@ inspector; combine one band with any patterns it needs.
 | `hero` | The dark hero: grid overlay, gradient mesh, two-up with a card. Add `short` for a sub-page hero (single column, 820px measure). |
 | `problem` | White, hairline rule beneath |
 | `why` | Off-white; a features block becomes the card grid |
-| `arch` | White, rules above and below; the second column becomes the dark architecture panel |
-| `headless` | Off-white; pairs a terminal with two path cards |
+| `arch` | White, rules above and below |
+| `headless` | Off-white |
 | `plugins` | Soft grey; a features block becomes the numbered steps with the connecting line |
-| `builder` | White, rule above; a features list becomes tick points |
+| `builder` | White, rule above |
 | `audiences` | Off-white |
 | `faq` | Soft grey |
 | `cases` | Dark; a features block becomes the use-case chips |
@@ -78,13 +88,13 @@ inspector; combine one band with any patterns it needs.
 
 | Class | Effect |
 |---|---|
-| `split` | Two columns, vertically centred (the band decides the ratio) |
+| `split` | Marks a two-column row |
+| `problem-grid` / `arch-grid` / `builder-grid` / `headless-grid` | The original's two-column compositions, each with its own ratio and its own card treatment. A grid is independent of the band it sits in — the developers page puts a `headless-grid` inside a `why` band — so the class travels with the section. Kept even when one of the two columns held only decoration. |
 | `center` | Centres the section's headings, prose and buttons |
 | `grid-2` | Two-up instead of the band's default column count |
 | `feat-rows` | A features block becomes full-width rows with a status pill |
 | `aud-grid` | Nested container blocks become the two-up card grid |
 | `cmp-wrap` | The comparison table's frame |
-| `terminal-split` | Marks the column pairing that holds a code block |
 | `cases-foot` | The closing line and button beneath a pattern |
 | `prose` | A long-form column: 780px measure, 16.5px paragraphs, 20px apart |
 | `marquee` | The ribbon's scrolling track |

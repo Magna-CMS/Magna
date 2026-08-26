@@ -56,3 +56,6 @@ frankenphp-worker.php
 rr
 .rr.yaml
 /test-results
+
+# Python bytecode from the site-kit build script
+website-content/build/__pycache__/

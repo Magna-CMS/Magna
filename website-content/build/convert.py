@@ -605,7 +605,6 @@ def convert_children(nodes: list[Tag]) -> list[tuple[list[dict], str]]:
             blocks = [features(card_items(el, ".path-card"), "horizontal-list")]
         elif "terminal" in classes:
             blocks = [terminal_block(el)]
-            extra = "terminal-split"
         elif "builder-mock" in classes or "plugin-line" in classes:
             continue  # pure decoration; the theme draws its own
         elif el.name in ("h2", "h3", "p", "a", "ul"):
@@ -767,7 +766,11 @@ def convert_section(sec: Tag) -> list[dict]:
     if split:
         columns, extra = split_columns(container_el)
         if columns:
-            layout = "split" if len(columns) > 1 else ""
+            # Which two-column grid a band holds is part of the design — the
+            # original puts a headless-grid inside a `why` band on the
+            # developers page — so the grid's own class travels with the
+            # section rather than being flattened to "two columns here".
+            layout = f"split {split}" if len(columns) > 1 else split
             css = " ".join(dict.fromkeys(f"{band} {layout} {extra}".split()))
             sections.append(section(css, columns, anchor=anchor))
         return sections
@@ -796,7 +799,7 @@ def convert_section(sec: Tag) -> list[dict]:
             flush_lead("head-continue")
             columns, extra = split_columns(child)
             if columns:
-                layout = "split" if len(columns) > 1 else ""
+                layout = f"split {inner_split}" if len(columns) > 1 else inner_split
                 tail = "tail-continue" if sections else ""
                 css = " ".join(dict.fromkeys(f"{band} {layout} {extra} {tail}".split()))
                 sections.append(section(css, columns, anchor=anchor))
