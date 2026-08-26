@@ -98,12 +98,6 @@
         .logo { display: inline-flex; align-items: center; gap: 11px; font-family: var(--serif); font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.04em; transition: color 0.4s var(--ease); }
         .logo .logo-mark { width: 34px; height: 34px; flex-shrink: 0; }
         .logo .cms { font-weight: 500; color: var(--accent-3); font-size: 15px; margin-left: 2px; letter-spacing: 0.08em; text-transform: uppercase; align-self: center; margin-top: 4px; }
-        .running-line { stroke-dasharray: 28 56; stroke-dashoffset: 84; animation: pulse-chase 2s cubic-bezier(0.25,1,0.5,1) infinite; }
-        @keyframes pulse-chase {
-            0%   { stroke-dasharray: 15 69; stroke-dashoffset: 84; }
-            40%  { stroke-dasharray: 38 46; }
-            100% { stroke-dasharray: 15 69; stroke-dashoffset: 0; }
-        }
 
         /* ===== SCROLL PROGRESS ===== */
         .scroll-progress {
@@ -832,6 +826,29 @@
      stores a NAME and never markup — the same rule the core icon registry
      enforces, kept here because a theme cannot register icons of its own. --}}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    {{--
+        The mark's chase animation lives HERE, inside the sprite, not in the
+        page stylesheet — and that is not a preference.
+
+        Every wordmark draws the mark through <use>, which clones the symbol
+        into a shadow tree. WebKit does not apply the document's stylesheets
+        to that tree for non-inherited properties, and `animation` is one, so
+        a rule in <head> animates the symbol nobody looks at and leaves every
+        clone still. A style element inside the referenced fragment reaches
+        the clones on every engine. The reduced-motion guard has to live in
+        here with it for exactly the same reason.
+    --}}
+    <style>
+        .running-line { stroke-dasharray: 28 56; stroke-dashoffset: 84; animation: pulse-chase 2s cubic-bezier(0.25,1,0.5,1) infinite; }
+        @keyframes pulse-chase {
+            0%   { stroke-dasharray: 15 69; stroke-dashoffset: 84; }
+            40%  { stroke-dasharray: 38 46; }
+            100% { stroke-dasharray: 15 69; stroke-dashoffset: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .running-line { animation: none !important; }
+        }
+    </style>
     <defs>
         <linearGradient id="mg" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
             <stop stop-color="#6366f1"/>
