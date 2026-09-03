@@ -134,6 +134,12 @@ class SettingsPage extends Page implements HasForms
             'username' => $mail->username,
             'from_address' => $mail->from_address,
             'from_name' => $mail->from_name,
+            'ses_key' => $mail->ses_key,
+            'ses_secret' => null,
+            'ses_region' => $mail->ses_region,
+            'mailgun_domain' => $mail->mailgun_domain,
+            'mailgun_secret' => null,
+            'mailgun_endpoint' => $mail->mailgun_endpoint,
             // Storage
             'disk' => $storage->disk,
             's3_key' => $storage->s3_key,
@@ -328,8 +334,18 @@ class SettingsPage extends Page implements HasForms
         $mail->username = ($data['username'] ?? null) ?: null;
         $mail->from_address = $str($data['from_address'] ?? '');
         $mail->from_name = $str($data['from_name'] ?? '');
+        $mail->ses_key = ($data['ses_key'] ?? null) ?: null;
+        $mail->ses_region = $str($data['ses_region'] ?? 'us-east-1');
+        $mail->mailgun_domain = ($data['mailgun_domain'] ?? null) ?: null;
+        $mail->mailgun_endpoint = $str($data['mailgun_endpoint'] ?? 'api.mailgun.net');
         if (filled($data['password'] ?? null)) {
             $mail->password = $str($data['password']);
+        }
+        if (filled($data['ses_secret'] ?? null)) {
+            $mail->ses_secret = $str($data['ses_secret']);
+        }
+        if (filled($data['mailgun_secret'] ?? null)) {
+            $mail->mailgun_secret = $str($data['mailgun_secret']);
         }
         $mail->save();
 

@@ -15,6 +15,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
 use Magna\Settings\MailSettings;
+use Magna\Settings\MailTransports;
 
 /**
  * @property ComponentContainer $form
@@ -58,6 +59,13 @@ class MailSettingsPage extends Page implements HasForms
             'password' => null,
             'from_address' => $settings->from_address,
             'from_name' => $settings->from_name,
+            'ses_key' => $settings->ses_key,
+            // Secrets are never sent back to the browser; blank means "keep".
+            'ses_secret' => null,
+            'ses_region' => $settings->ses_region,
+            'mailgun_domain' => $settings->mailgun_domain,
+            'mailgun_secret' => null,
+            'mailgun_endpoint' => $settings->mailgun_endpoint,
         ]);
     }
 
@@ -122,9 +130,33 @@ class MailSettingsPage extends Page implements HasForms
         ];
     }
 
+    /**
+     * What is missing, and what would bring it back.
+     *
+     * A driver absent from the picker looks like a feature that was removed.
+     * Naming the one package each needs turns it into a decision the
+     * administrator can act on.
+     */
+    private static function missingDriversNote(): ?string
+    {
+        $available = MailTransports::options();
+
+        $missing = [];
+
+        foreach (['ses' => 'Amazon SES', 'mailgun' => 'Mailgun', 'postmark' => 'Postmark', 'resend' => 'Resend'] as $driver => $label) {
+            if (! array_key_exists($driver, $available)) {
+                $missing[] = sprintf('%s (%s)', $label, MailTransports::packageFor($driver));
+            }
+        }
+
+        return $missing === []
+            ? null
+            : 'Not installed on this server: '.implode(', ', $missing).'. Install the package to use one.';
+    }
+
     public function save(): void
     {
-        /** @var array{driver: string, host: string, port: int|string, username: ?string, password: ?string, from_address: ?string, from_name: string} $data */
+        /** @var array<string, mixed> $data */
         $data = $this->form->getState();
 
         $settings = MailSettings::get();
@@ -137,9 +169,23 @@ class MailSettingsPage extends Page implements HasForms
         $settings->from_address = $data['from_address'] ?? $settings->from_address;
         $settings->from_name = (string) ($data['from_name'] ?? '');
 
-        // Only overwrite the secret password if the user supplied a new value.
+        $settings->ses_key = ($data['ses_key'] ?? null) ?: null;
+        $settings->ses_region = (string) ($data['ses_region'] ?? 'us-east-1');
+        $settings->mailgun_domain = ($data['mailgun_domain'] ?? null) ?: null;
+        $settings->mailgun_endpoint = (string) ($data['mailgun_endpoint'] ?? 'api.mailgun.net');
+
+        // Only overwrite a secret if the user supplied a new value. Blank means
+        // "leave it alone", which is what the placeholder promises.
         if (filled($data['password'])) {
             $settings->password = $data['password'];
+        }
+
+        if (filled($data['ses_secret'] ?? null)) {
+            $settings->ses_secret = (string) $data['ses_secret'];
+        }
+
+        if (filled($data['mailgun_secret'] ?? null)) {
+            $settings->mailgun_secret = (string) $data['mailgun_secret'];
         }
 
         $settings->save();

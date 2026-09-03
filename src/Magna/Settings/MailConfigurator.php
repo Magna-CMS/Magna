@@ -56,6 +56,20 @@ final class MailConfigurator
 
         $mailer = $settings->driver === '' ? 'smtp' : $settings->driver;
 
+        /*
+         * A driver this installation cannot build is worse than no choice at
+         * all: `mail.default` would point at a transport whose package is
+         * absent, and every send would throw where the previous setting had
+         * been working. The page only offers what is installed (see
+         * MailTransports), but a value can outlive the package that justified
+         * it — a settings row written before a `composer remove`, or a database
+         * copied to a leaner server. Falling back to SMTP keeps such a site
+         * sending.
+         */
+        if (! MailTransports::available($mailer)) {
+            $mailer = 'smtp';
+        }
+
         $this->config->set('mail.default', $mailer);
 
         // Only the SMTP transport takes host and credentials. The other drivers
@@ -75,6 +89,29 @@ final class MailConfigurator
                 'ssl', 'smtps' => 'smtps',
                 default => null,
             });
+        }
+
+        /*
+         * The API drivers authenticate through `services`, not through the
+         * mailer entry, which is why host and port say nothing about them.
+         */
+        if ($mailer === 'ses') {
+            $this->config->set('services.ses.key', $settings->ses_key);
+            $this->config->set('services.ses.secret', $settings->ses_secret);
+            $this->config->set('services.ses.region', $settings->ses_region);
+        }
+
+        if ($mailer === 'mailgun') {
+            $this->config->set('services.mailgun.domain', $settings->mailgun_domain);
+            $this->config->set('services.mailgun.secret', $settings->mailgun_secret);
+            $this->config->set('services.mailgun.endpoint', $settings->mailgun_endpoint);
+
+            // config/mail.php carries no `mailgun` entry — the driver was
+            // offered by the page and defined nowhere, so choosing it failed
+            // with `Mailer [mailgun] is not defined` before any credential was
+            // even read. Declared here so the mailer exists wherever the
+            // transport package does.
+            $this->config->set('mail.mailers.mailgun.transport', 'mailgun');
         }
 
         $this->applyFrom($settings);

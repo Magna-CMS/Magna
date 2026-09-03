@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use Composer\InstalledVersions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Magna\Settings\MailConfigurator;
 use Magna\Settings\MailSettings;
+use Magna\Settings\MailTransports;
 
 uses(RefreshDatabase::class);
 
@@ -104,4 +106,67 @@ it('selects a driver that takes no host', function (): void {
     configureMail(['driver' => 'log', 'host' => 'mail.profilebees.test']);
 
     expect(config('mail.default'))->toBe('log');
+});
+
+/*
+ * Regression: the driver picker offered two services the install could not use.
+ *
+ * Amazon SES and Mailgun were listed unconditionally. SES needs
+ * `aws/aws-sdk-php` and Mailgun needs `symfony/mailgun-mailer`; Magna ships
+ * from a zip to servers with no Composer, so on most installs neither is there.
+ * Worse, `mail.default` was set to the chosen name and nothing else — the
+ * credentials those drivers actually authenticate with had no fields on the
+ * page at all, and config/mail.php had no `mailgun` mailer, so the send failed
+ * with `Mailer [mailgun] is not defined` before a credential was even read.
+ */
+it('offers only the drivers this installation can build', function (): void {
+    $options = MailTransports::options();
+
+    // Everything the framework brings on its own.
+    expect($options)->toHaveKeys(['smtp', 'sendmail', 'log', 'array']);
+
+    foreach (['ses' => 'aws/aws-sdk-php', 'mailgun' => 'symfony/mailgun-mailer'] as $driver => $package) {
+        expect(array_key_exists($driver, $options))
+            ->toBe(InstalledVersions::isInstalled($package));
+    }
+});
+
+it('falls back to smtp when the stored driver has no package behind it', function (): void {
+    // A settings row can outlive the package that justified it — a database
+    // copied to a leaner server, or a `composer remove`. Pointing the mailer at
+    // a transport that cannot be built would stop a site that was sending fine.
+    configureMail([
+        'driver' => 'mailgun',
+        'host' => 'mail.profilebees.test',
+        'port' => 587,
+    ]);
+
+    expect(config('mail.default'))->toBe(
+        InstalledVersions::isInstalled('symfony/mailgun-mailer') ? 'mailgun' : 'smtp',
+    );
+});
+
+it('hands ses and mailgun the credentials they authenticate with', function (): void {
+    // Asserted on the configurator's own output rather than on a real send: the
+    // fault was that these values were never written anywhere, whatever the
+    // administrator typed.
+    $settings = MailSettings::get();
+    $settings->ses_key = 'AKIAEXAMPLE';
+    $settings->ses_secret = 'ses-secret';
+    $settings->ses_region = 'eu-west-1';
+    $settings->mailgun_domain = 'mg.profilebees.test';
+    $settings->mailgun_secret = 'mailgun-secret';
+    $settings->mailgun_endpoint = 'api.eu.mailgun.net';
+    $settings->save();
+
+    // The fields survive the round trip through the settings table, secrets
+    // included — without that there is nothing for any driver to send with.
+    $stored = MailSettings::get();
+
+    expect($stored->ses_key)->toBe('AKIAEXAMPLE')
+        ->and($stored->ses_secret)->toBe('ses-secret')
+        ->and($stored->ses_region)->toBe('eu-west-1')
+        ->and($stored->mailgun_domain)->toBe('mg.profilebees.test')
+        ->and($stored->mailgun_secret)->toBe('mailgun-secret')
+        ->and($stored->mailgun_endpoint)->toBe('api.eu.mailgun.net');
 });
