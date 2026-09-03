@@ -14,7 +14,9 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
+use Magna\Settings\MailConfigurator;
 use Magna\Settings\MailSettings;
+use Magna\Settings\MailTester;
 use Magna\Settings\MailTransports;
 
 /**
@@ -190,9 +192,47 @@ class MailSettingsPage extends Page implements HasForms
 
         $settings->save();
 
+        // Fold the new values over config immediately. Without this the mailer
+        // keeps whatever was read at boot until the next request, so a test
+        // sent straight after saving would exercise the old settings.
+        app(MailConfigurator::class)->apply();
+
         Notification::make()
             ->title('Mail settings saved.')
             ->success()
+            ->send();
+    }
+
+    /**
+     * Sends a test message to the signed-in administrator.
+     *
+     * To themselves rather than to an address they type: the point is to prove
+     * the transport works, and a form that accepts any recipient turns the
+     * panel into something that can be used to send mail to strangers.
+     */
+    public function sendTest(MailTester $tester): void
+    {
+        $user = auth()->user();
+        $address = $user?->getAttribute('email');
+
+        if (! is_string($address) || $address === '') {
+            Notification::make()
+                ->title('Your account has no email address to send a test to.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $result = $tester->send($address);
+
+        Notification::make()
+            ->title($result['ok'] ? 'Test email sent.' : 'The test email could not be sent.')
+            ->body($result['message'])
+            ->{$result['ok'] ? 'success' : 'danger'}()
+            // The transport's own error can be long, and it is the one thing
+            // worth reading here.
+            ->persistent()
             ->send();
     }
 
@@ -203,6 +243,11 @@ class MailSettingsPage extends Page implements HasForms
             Action::make('save')
                 ->label('Save settings')
                 ->action(fn () => $this->save()),
+
+            Action::make('sendTest')
+                ->label('Send test email')
+                ->color('gray')
+                ->action(fn (MailTester $tester) => $this->sendTest($tester)),
         ];
     }
 }
