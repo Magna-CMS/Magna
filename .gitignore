@@ -59,3 +59,8 @@ rr
 
 # Python bytecode from the site-kit build script
 website-content/build/__pycache__/
+
+# Themes are first-party design work and are never published with the core.
+# bin/build-release.php already excludes them from the release zip; this keeps
+# them out of the repository too.
+/themes
