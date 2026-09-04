@@ -216,36 +216,21 @@ class MailSettingsPage extends Page implements HasForms
     }
 
     /**
-     * What is missing, and what would bring it back.
+     * Folds submitted form state onto the stored mail settings.
      *
-     * A driver absent from the picker looks like a feature that was removed.
-     * Naming the one package each needs turns it into a decision the
-     * administrator can act on.
+     * Shared with SettingsPage's "Email" tab, which draws the same fields from
+     * {@see self::fields()} and used to write them back with a second copy of
+     * this logic. The two drifted exactly as such pairs do: the unified page —
+     * the one an administrator actually reaches, since this one is hidden from
+     * the navigation — never learned about the Resend and Postmark tokens, and
+     * still read hidden fields as empty values. One writer, both surfaces.
+     *
+     * @param  array<string, mixed>  $data
      */
-    private static function missingDriversNote(): ?string
+    public static function persist(array $data): MailSettings
     {
-        $available = MailTransports::options();
-
-        $missing = [];
-
-        foreach (['ses' => 'Amazon SES', 'mailgun' => 'Mailgun', 'postmark' => 'Postmark', 'resend' => 'Resend'] as $driver => $label) {
-            if (! array_key_exists($driver, $available)) {
-                $missing[] = sprintf('%s (%s)', $label, MailTransports::packageFor($driver));
-            }
-        }
-
-        return $missing === []
-            ? null
-            : 'Not installed on this server: '.implode(', ', $missing).'. Install the package to use one.';
-    }
-
-    public function save(): void
-    {
-        /** @var array<string, mixed> $data */
-        $data = $this->form->getState();
-
         $settings = MailSettings::get();
-        $settings->driver = $data['driver'];
+        $settings->driver = is_string($data['driver'] ?? null) ? $data['driver'] : 'smtp';
 
         /*
          * Only the fields the chosen driver actually showed.
@@ -268,8 +253,13 @@ class MailSettingsPage extends Page implements HasForms
             $settings->username = $data['username'] ?: null;
         }
 
-        $settings->from_address = $data['from_address'] ?? $settings->from_address;
-        $settings->from_name = (string) ($data['from_name'] ?? '');
+        if (filled($data['from_address'] ?? null)) {
+            $settings->from_address = (string) $data['from_address'];
+        }
+
+        if (array_key_exists('from_name', $data)) {
+            $settings->from_name = (string) ($data['from_name'] ?? '');
+        }
 
         if (array_key_exists('ses_key', $data)) {
             $settings->ses_key = $data['ses_key'] ?: null;
@@ -298,6 +288,40 @@ class MailSettingsPage extends Page implements HasForms
                 $settings->{$secret} = (string) $data[$secret];
             }
         }
+
+        return $settings;
+    }
+
+    /**
+     * What is missing, and what would bring it back.
+     *
+     * A driver absent from the picker looks like a feature that was removed.
+     * Naming the one package each needs turns it into a decision the
+     * administrator can act on.
+     */
+    private static function missingDriversNote(): ?string
+    {
+        $available = MailTransports::options();
+
+        $missing = [];
+
+        foreach (['ses' => 'Amazon SES', 'mailgun' => 'Mailgun', 'postmark' => 'Postmark', 'resend' => 'Resend'] as $driver => $label) {
+            if (! array_key_exists($driver, $available)) {
+                $missing[] = sprintf('%s (%s)', $label, MailTransports::packageFor($driver));
+            }
+        }
+
+        return $missing === []
+            ? null
+            : 'Not installed on this server: '.implode(', ', $missing).'. Install the package to use one.';
+    }
+
+    public function save(): void
+    {
+        /** @var array<string, mixed> $data */
+        $data = $this->form->getState();
+
+        $settings = self::persist($data);
 
         $settings->save();
 

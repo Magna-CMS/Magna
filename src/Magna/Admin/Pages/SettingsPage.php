@@ -25,6 +25,7 @@ use Magna\Settings\ContentSettings;
 use Magna\Settings\GeneralSettings;
 use Magna\Settings\LocalizationSettings;
 use Magna\Settings\MailSettings;
+use Magna\Settings\MailTester;
 use Magna\Settings\MediaSettings;
 use Magna\Settings\PerformanceSettings;
 use Magna\Settings\SecuritySettings;
@@ -140,6 +141,9 @@ class SettingsPage extends Page implements HasForms
             'mailgun_domain' => $mail->mailgun_domain,
             'mailgun_secret' => null,
             'mailgun_endpoint' => $mail->mailgun_endpoint,
+            // Secrets are never sent back to the browser; blank means "keep".
+            'resend_key' => null,
+            'postmark_token' => null,
             // Storage
             'disk' => $storage->disk,
             's3_key' => $storage->s3_key,
@@ -327,27 +331,11 @@ class SettingsPage extends Page implements HasForms
         $media->avif_enabled = (bool) ($data['avif_enabled'] ?? false);
         $media->save();
 
-        $mail = MailSettings::get();
-        $mail->driver = $str($data['driver'] ?? 'smtp');
-        $mail->host = $str($data['host'] ?? '');
-        $mail->port = $int($data['port'] ?? 25);
-        $mail->username = ($data['username'] ?? null) ?: null;
-        $mail->from_address = $str($data['from_address'] ?? '');
-        $mail->from_name = $str($data['from_name'] ?? '');
-        $mail->ses_key = ($data['ses_key'] ?? null) ?: null;
-        $mail->ses_region = $str($data['ses_region'] ?? 'us-east-1');
-        $mail->mailgun_domain = ($data['mailgun_domain'] ?? null) ?: null;
-        $mail->mailgun_endpoint = $str($data['mailgun_endpoint'] ?? 'api.mailgun.net');
-        if (filled($data['password'] ?? null)) {
-            $mail->password = $str($data['password']);
-        }
-        if (filled($data['ses_secret'] ?? null)) {
-            $mail->ses_secret = $str($data['ses_secret']);
-        }
-        if (filled($data['mailgun_secret'] ?? null)) {
-            $mail->mailgun_secret = $str($data['mailgun_secret']);
-        }
-        $mail->save();
+        // One writer for both settings surfaces. This tab draws its fields
+        // from MailSettingsPage::fields(), and a second copy of the write-back
+        // is how the Resend and Postmark tokens reached that page and never
+        // reached this one.
+        MailSettingsPage::persist($data)->save();
 
         $storage = StorageSettings::get();
         $storage->disk = $str($data['disk'] ?? 'local');
@@ -403,11 +391,58 @@ class SettingsPage extends Page implements HasForms
         Notification::make()->title('Settings saved.')->success()->send();
     }
 
+    /**
+     * Sends a test message to the signed-in administrator.
+     *
+     * To themselves rather than to an address they type: the point is to prove
+     * the transport works, and a form that accepts any recipient turns the
+     * panel into something that can be used to send mail to strangers.
+     */
+    public function sendTestEmail(MailTester $tester): void
+    {
+        $address = auth()->user()?->getAttribute('email');
+
+        if (! is_string($address) || $address === '') {
+            Notification::make()
+                ->title('Your account has no email address to send a test to.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $result = $tester->send($address);
+
+        Notification::make()
+            ->title($result['ok'] ? 'Test email sent.' : 'The test email could not be sent.')
+            ->body($result['message'])
+            ->{$result['ok'] ? 'success' : 'danger'}()
+            // The transport's own error can be long, and it is the one thing
+            // worth reading here.
+            ->persistent()
+            ->send();
+    }
+
     /** @return array<int, Action> */
     protected function getHeaderActions(): array
     {
         return [
             Action::make('save')->label('Save all settings')->action(fn () => $this->save()),
+
+            /*
+             * Proving the mail settings work belongs where they are edited.
+             *
+             * The test send was built on MailSettingsPage, which is hidden from
+             * the navigation — so on every install the only reachable Email tab
+             * was this one, and it had no way to find out whether a single
+             * value on it was right. An administrator configuring a relay could
+             * only save and hope, then wait for somebody to report that a
+             * notification never arrived.
+             */
+            Action::make('sendTestEmail')
+                ->label('Send test email')
+                ->color('gray')
+                ->action(fn (MailTester $tester) => $this->sendTestEmail($tester)),
         ];
     }
 }

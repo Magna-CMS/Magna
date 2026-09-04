@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Composer\InstalledVersions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Magna\Admin\Pages\MailSettingsPage;
+use Magna\Admin\Pages\SettingsPage;
 use Magna\Settings\MailConfigurator;
 use Magna\Settings\MailSettings;
 use Magna\Settings\MailTransports;
@@ -244,4 +246,61 @@ it('keeps a resend key and a postmark token, and hands them to the transport', f
     } else {
         expect(config('mail.default'))->toBe('smtp');
     }
+});
+/*
+|--------------------------------------------------------------------------
+| Both settings surfaces write the same way
+|--------------------------------------------------------------------------
+|
+| The Email tab on the unified settings page draws its fields from
+| MailSettingsPage::fields() and used to write them back with a second copy of
+| the logic. The copies drifted exactly as such pairs do: the unified page —
+| the only one an administrator can reach, since the dedicated page is hidden
+| from the navigation — never learned about the Resend and Postmark tokens, and
+| still read a hidden field as an empty value. One writer now serves both.
+*/
+
+it('keeps the SMTP host when a driver that has no host is saved', function (): void {
+    configureMail(['driver' => 'smtp', 'host' => 'relay.profilebees.test', 'port' => 587]);
+
+    // What the form submits for Resend: no host, no port, no username — those
+    // inputs are not shown for that driver, so they are absent from the state.
+    MailSettingsPage::persist([
+        'driver' => 'resend',
+        'resend_key' => 're_example_key',
+        'from_address' => 'noreply@profilebees.test',
+        'from_name' => 'Roya',
+    ])->save();
+
+    $stored = MailSettings::get();
+
+    expect($stored->driver)->toBe('resend')
+        ->and($stored->resend_key)->toBe('re_example_key')
+        // Still there for the moment they switch back.
+        ->and($stored->host)->toBe('relay.profilebees.test')
+        ->and($stored->port)->toBe(587);
+});
+
+it('leaves a stored secret alone when the field comes back blank', function (): void {
+    configureMail(['driver' => 'smtp', 'host' => 'relay.profilebees.test', 'password' => 'relay-secret']);
+
+    // Secrets are never sent to the browser, so every save arrives blank.
+    MailSettingsPage::persist([
+        'driver' => 'smtp',
+        'host' => 'relay.profilebees.test',
+        'port' => 587,
+        'password' => null,
+    ])->save();
+
+    expect(MailSettings::get()->password)->toBe('relay-secret');
+});
+
+it('offers the test send from the page an administrator can actually reach', function (): void {
+    // MailSettingsPage is hidden from the navigation, so a test action only on
+    // it is a test action nobody finds.
+    $actions = (new ReflectionClass(SettingsPage::class))
+        ->getMethod('getHeaderActions');
+
+    expect($actions->isPublic() || $actions->isProtected())->toBeTrue()
+        ->and(method_exists(SettingsPage::class, 'sendTestEmail'))->toBeTrue();
 });
