@@ -170,3 +170,78 @@ it('hands ses and mailgun the credentials they authenticate with', function (): 
         ->and($stored->mailgun_secret)->toBe('mailgun-secret')
         ->and($stored->mailgun_endpoint)->toBe('api.eu.mailgun.net');
 });
+/*
+|--------------------------------------------------------------------------
+| A driver with no host still has to be honoured
+|--------------------------------------------------------------------------
+|
+| The "was anything configured here?" guard asked whether the SMTP host had
+| been touched, and asked it of every driver before the driver was even read.
+| An API driver has no host — Resend, SES, Mailgun and Postmark are addressed by
+| token alone, and the page is right not to ask for one — so an administrator
+| who picked Resend, pasted the key and saved got a page reporting success,
+| `mail.default` still on SMTP, and mail going to localhost:25. The single field
+| that would have let them through was the one their driver made irrelevant.
+*/
+
+it('honours an API driver whose host was never touched', function (): void {
+    // `localhost` is the untouched class default, which is exactly the state a
+    // Resend install is in: the host field is not shown for that driver.
+    configureMail(['driver' => 'log']);
+
+    expect(MailSettings::get()->host)->toBe('localhost')
+        ->and(config('mail.default'))->toBe('log');
+});
+
+it('still ignores an untouched SMTP host, which says nothing was configured', function (): void {
+    config(['mail.mailers.smtp.host' => 'env-relay.test']);
+
+    configureMail(['driver' => 'smtp']);
+
+    // Writing the placeholder over a working .env would stop a site that never
+    // opened the page — the reason the guard exists at all.
+    expect(config('mail.mailers.smtp.host'))->toBe('env-relay.test');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Resend and Postmark were listed with nowhere to put their token
+|--------------------------------------------------------------------------
+|
+| MailTransports offers both once their package is installed, and neither had a
+| settings field or a configurator branch. Picking one set `mail.default` and
+| left the transport looking for a key in `.env` that a panel-configured install
+| has never written — the same fault SES and Mailgun had, one release earlier.
+*/
+
+it('offers resend and postmark exactly when their package is installed', function (): void {
+    $options = MailTransports::options();
+
+    foreach (['resend' => 'resend/resend-laravel', 'postmark' => 'symfony/postmark-mailer'] as $driver => $package) {
+        expect(array_key_exists($driver, $options))
+            ->toBe(InstalledVersions::isInstalled($package));
+    }
+});
+
+it('keeps a resend key and a postmark token, and hands them to the transport', function (): void {
+    $settings = MailSettings::get();
+    $settings->resend_key = 're_example_key';
+    $settings->postmark_token = 'postmark-server-token';
+    $settings->save();
+
+    // Encrypted at rest and readable back: without the round trip there is
+    // nothing for either transport to authenticate with.
+    expect(MailSettings::get()->resend_key)->toBe('re_example_key')
+        ->and(MailSettings::get()->postmark_token)->toBe('postmark-server-token');
+
+    configureMail(['driver' => 'resend']);
+
+    // Only where the package is present. Elsewhere the configurator falls back
+    // to SMTP rather than pointing the mailer at a transport it cannot build.
+    if (MailTransports::available('resend')) {
+        expect(config('mail.default'))->toBe('resend')
+            ->and(config('services.resend.key'))->toBe('re_example_key');
+    } else {
+        expect(config('mail.default'))->toBe('smtp');
+    }
+});

@@ -68,6 +68,8 @@ class MailSettingsPage extends Page implements HasForms
             'mailgun_domain' => $settings->mailgun_domain,
             'mailgun_secret' => null,
             'mailgun_endpoint' => $settings->mailgun_endpoint,
+            'resend_key' => null,
+            'postmark_token' => null,
         ]);
     }
 
@@ -87,39 +89,120 @@ class MailSettingsPage extends Page implements HasForms
     public static function fields(): array
     {
         return [
+            /*
+             * Only what this server can actually build.
+             *
+             * The list used to be written out here, which meant it offered SES
+             * and Mailgun on installs missing their packages — the exact
+             * failure MailTransports was added to prevent — and never offered
+             * Resend or Postmark on installs that had them. Asking
+             * MailTransports keeps the picker and the transports in step, and
+             * the note underneath names the package each absent driver wants.
+             */
             Select::make('driver')
                 ->label('Mail driver')
-                ->options([
-                    'smtp' => 'SMTP',
-                    'sendmail' => 'Sendmail',
-                    'log' => 'Log (development)',
-                    'array' => 'Array (testing)',
-                    'ses' => 'Amazon SES',
-                    'mailgun' => 'Mailgun',
-                ])
+                ->options(MailTransports::options())
+                ->helperText(self::missingDriversNote())
+                // The credential fields below appear per driver, so the form
+                // has to re-evaluate them as soon as the choice changes.
+                ->live()
                 ->required(),
 
+            /*
+             * The host and its credentials, for the one driver addressed that
+             * way. Shown for SMTP alone: asking an administrator configuring
+             * Resend for a mail host is asking a question with no answer, and
+             * the wrong answer they invent is then the value MailConfigurator
+             * reads.
+             */
             TextInput::make('host')
                 ->label('SMTP host')
-                ->maxLength(255),
+                ->maxLength(255)
+                ->visible(fn (callable $get): bool => $get('driver') === 'smtp'),
 
             TextInput::make('port')
                 ->label('SMTP port')
                 ->numeric()
                 ->minValue(1)
-                ->maxValue(65535),
+                ->maxValue(65535)
+                ->visible(fn (callable $get): bool => $get('driver') === 'smtp'),
 
             TextInput::make('username')
                 ->label('Username')
                 ->maxLength(255)
-                ->nullable(),
+                ->nullable()
+                ->visible(fn (callable $get): bool => $get('driver') === 'smtp'),
 
             TextInput::make('password')
                 ->label('Password')
                 ->password()
                 ->nullable()
                 ->placeholder('[secret — leave blank to keep current]')
-                ->helperText('Leave blank to keep the existing password unchanged.'),
+                ->helperText('Leave blank to keep the existing password unchanged.')
+                ->visible(fn (callable $get): bool => $get('driver') === 'smtp'),
+
+            /* ------------------------------------------------ Amazon SES */
+
+            TextInput::make('ses_key')
+                ->label('Access key ID')
+                ->maxLength(255)
+                ->nullable()
+                ->visible(fn (callable $get): bool => $get('driver') === 'ses'),
+
+            TextInput::make('ses_secret')
+                ->label('Secret access key')
+                ->password()
+                ->nullable()
+                ->placeholder('[secret — leave blank to keep current]')
+                ->visible(fn (callable $get): bool => $get('driver') === 'ses'),
+
+            TextInput::make('ses_region')
+                ->label('Region')
+                ->maxLength(64)
+                ->helperText('For example eu-west-1.')
+                ->visible(fn (callable $get): bool => $get('driver') === 'ses'),
+
+            /* --------------------------------------------------- Mailgun */
+
+            TextInput::make('mailgun_domain')
+                ->label('Sending domain')
+                ->maxLength(255)
+                ->nullable()
+                ->visible(fn (callable $get): bool => $get('driver') === 'mailgun'),
+
+            TextInput::make('mailgun_secret')
+                ->label('API key')
+                ->password()
+                ->nullable()
+                ->placeholder('[secret — leave blank to keep current]')
+                ->visible(fn (callable $get): bool => $get('driver') === 'mailgun'),
+
+            TextInput::make('mailgun_endpoint')
+                ->label('API endpoint')
+                ->maxLength(255)
+                ->helperText('api.eu.mailgun.net for a domain created in the EU region.')
+                ->visible(fn (callable $get): bool => $get('driver') === 'mailgun'),
+
+            /* ---------------------------------------------------- Resend */
+
+            TextInput::make('resend_key')
+                ->label('API key')
+                ->password()
+                ->nullable()
+                ->placeholder('[secret — leave blank to keep current]')
+                ->helperText('From the API Keys page of your Resend dashboard.')
+                ->visible(fn (callable $get): bool => $get('driver') === 'resend'),
+
+            /* -------------------------------------------------- Postmark */
+
+            TextInput::make('postmark_token')
+                ->label('Server token')
+                ->password()
+                ->nullable()
+                ->placeholder('[secret — leave blank to keep current]')
+                ->visible(fn (callable $get): bool => $get('driver') === 'postmark'),
+
+            /* --------------------------------------- every driver's sender */
 
             TextInput::make('from_address')
                 ->label('From address')
@@ -163,31 +246,57 @@ class MailSettingsPage extends Page implements HasForms
 
         $settings = MailSettings::get();
         $settings->driver = $data['driver'];
-        // host and from_name are optional inputs → null when cleared; coerce to
-        // string since the settings properties are non-nullable.
-        $settings->host = (string) ($data['host'] ?? '');
-        $settings->port = (int) $data['port'];
-        $settings->username = $data['username'] ?: null;
+
+        /*
+         * Only the fields the chosen driver actually showed.
+         *
+         * A hidden field is absent from the form state, not blank in it — so
+         * reading it unconditionally is how configuring Resend wiped the SMTP
+         * host and port that an administrator would want back the moment they
+         * switched the driver again. Present means "the form asked, and this is
+         * the answer"; absent means "not this driver's business, leave it".
+         */
+        if (array_key_exists('host', $data)) {
+            $settings->host = (string) ($data['host'] ?? '');
+        }
+
+        if (array_key_exists('port', $data)) {
+            $settings->port = (int) $data['port'];
+        }
+
+        if (array_key_exists('username', $data)) {
+            $settings->username = $data['username'] ?: null;
+        }
+
         $settings->from_address = $data['from_address'] ?? $settings->from_address;
         $settings->from_name = (string) ($data['from_name'] ?? '');
 
-        $settings->ses_key = ($data['ses_key'] ?? null) ?: null;
-        $settings->ses_region = (string) ($data['ses_region'] ?? 'us-east-1');
-        $settings->mailgun_domain = ($data['mailgun_domain'] ?? null) ?: null;
-        $settings->mailgun_endpoint = (string) ($data['mailgun_endpoint'] ?? 'api.mailgun.net');
-
-        // Only overwrite a secret if the user supplied a new value. Blank means
-        // "leave it alone", which is what the placeholder promises.
-        if (filled($data['password'])) {
-            $settings->password = $data['password'];
+        if (array_key_exists('ses_key', $data)) {
+            $settings->ses_key = $data['ses_key'] ?: null;
         }
 
-        if (filled($data['ses_secret'] ?? null)) {
-            $settings->ses_secret = (string) $data['ses_secret'];
+        if (array_key_exists('ses_region', $data)) {
+            $settings->ses_region = (string) ($data['ses_region'] ?? 'us-east-1');
         }
 
-        if (filled($data['mailgun_secret'] ?? null)) {
-            $settings->mailgun_secret = (string) $data['mailgun_secret'];
+        if (array_key_exists('mailgun_domain', $data)) {
+            $settings->mailgun_domain = $data['mailgun_domain'] ?: null;
+        }
+
+        if (array_key_exists('mailgun_endpoint', $data)) {
+            $settings->mailgun_endpoint = (string) ($data['mailgun_endpoint'] ?? 'api.mailgun.net');
+        }
+
+        /*
+         * Secrets are never sent back to the browser, so the field arrives
+         * blank on every load. Blank therefore has to mean "keep what is
+         * stored" — which is what the placeholder promises — and only a value
+         * typed now overwrites one.
+         */
+        foreach (['password', 'ses_secret', 'mailgun_secret', 'resend_key', 'postmark_token'] as $secret) {
+            if (filled($data[$secret] ?? null)) {
+                $settings->{$secret} = (string) $data[$secret];
+            }
         }
 
         $settings->save();

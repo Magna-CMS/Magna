@@ -45,16 +45,28 @@ final class MailConfigurator
             return;
         }
 
-        // An unconfigured install still holds the class defaults. Writing those
-        // over a working `.env` would break a site that never used the page, so
-        // the placeholder host is treated as "nothing was configured here".
-        if ($settings->host === '' || $settings->host === 'localhost') {
+        $mailer = $settings->driver === '' ? 'smtp' : $settings->driver;
+
+        /*
+         * An unconfigured install still holds the class defaults. Writing those
+         * over a working `.env` would break a site that never used the page, so
+         * the placeholder host is treated as "nothing was configured here".
+         *
+         * Asked only of the drivers that have a host. An API driver does not:
+         * Resend, SES, Mailgun and Postmark are addressed by token alone, and
+         * `host` sitting at its untouched default says nothing about whether
+         * they were configured. This used to be checked before the driver was
+         * read, so an administrator who picked Resend, pasted the key and
+         * saved — never touching a host they had correctly been told nothing
+         * about — got a page reporting success, `mail.default` still on SMTP,
+         * and mail going to localhost:25. The one field that could have saved
+         * them was the one the driver made irrelevant.
+         */
+        if (self::needsHost($mailer) && ($settings->host === '' || $settings->host === 'localhost')) {
             $this->applyFrom($settings);
 
             return;
         }
-
-        $mailer = $settings->driver === '' ? 'smtp' : $settings->driver;
 
         /*
          * A driver this installation cannot build is worse than no choice at
@@ -114,7 +126,29 @@ final class MailConfigurator
             $this->config->set('mail.mailers.mailgun.transport', 'mailgun');
         }
 
+        if ($mailer === 'resend') {
+            $this->config->set('services.resend.key', $settings->resend_key);
+        }
+
+        if ($mailer === 'postmark') {
+            // `token` first, `key` as the fallback — the order MailManager
+            // reads them in, and config/services.php ships the second name.
+            $this->config->set('services.postmark.token', $settings->postmark_token);
+        }
+
         $this->applyFrom($settings);
+    }
+
+    /**
+     * Whether this driver is addressed by host and port at all.
+     *
+     * SMTP is, and sendmail takes a local binary path rather than either. The
+     * API drivers take a token and nothing else, so an untouched host says
+     * nothing about whether they were set up.
+     */
+    private static function needsHost(string $mailer): bool
+    {
+        return $mailer === 'smtp';
     }
 
     /**
