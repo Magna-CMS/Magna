@@ -24,6 +24,7 @@ use Magna\Plugins\PluginRecord;
 use Magna\Settings\ContentSettings;
 use Magna\Settings\GeneralSettings;
 use Magna\Settings\LocalizationSettings;
+use Magna\Settings\MailConfigurator;
 use Magna\Settings\MailSettings;
 use Magna\Settings\MailTester;
 use Magna\Settings\MediaSettings;
@@ -336,6 +337,13 @@ class SettingsPage extends Page implements HasForms
         // is how the Resend and Postmark tokens reached that page and never
         // reached this one.
         MailSettingsPage::persist($data)->save();
+
+        // Fold the new values over config immediately, as the dedicated page
+        // does. Without it the mailer keeps whatever was read at boot, so
+        // anything sent in the rest of this request — a test send, a
+        // notification raised by another setting on this very form — goes out
+        // through the settings the administrator has just replaced.
+        app(MailConfigurator::class)->apply();
 
         $storage = StorageSettings::get();
         $storage->disk = $str($data['disk'] ?? 'local');
