@@ -3,11 +3,15 @@
 declare(strict_types=1);
 
 /**
- * Pure composer.json transformations used by bin/build-release.php.
+ * Pure composer.json transformations used by bin/build-release.php, and the
+ * readers that answer what a `type: path` repository actually holds.
  *
  * Kept side-effect free and in their own file so tests can exercise them
- * without running a five-minute build. Every rule here was a shipped bug at
- * some point:
+ * without running a five-minute build — build-release.php runs on include, so
+ * anything left in it can only be covered by building a release. The path-repo
+ * readers moved here for exactly that reason: whether a package is a plugin
+ * decides whether it is published, and that answer is worth a test. Every rule
+ * here was a shipped bug at some point:
  *
  *   - a hub archive that stopped claiming its bundled plugins, so the
  *     `composer require` the Marketplace runs for a plugin install pruned
@@ -15,7 +19,9 @@ declare(strict_types=1);
  *   - path repositories left pointing at absolute build-machine directories,
  *     which no Composer command on the target could resolve;
  *   - a shipped require-dev section, so that same install dragged the whole
- *     dev toolchain onto production.
+ *     dev toolchain onto production;
+ *   - a client's plugin wired in by absolute path, which the "is it under
+ *     plugins-dev/?" test read as a library and shipped in a public archive.
  *
  * @see tests/Unit/Release/ReleaseComposerTest.php
  */
@@ -191,4 +197,75 @@ function release_drop_require_dev(array $composer): array
     unset($composer['require-dev']);
 
     return $composer;
+}
+
+/**
+ * Composer package name declared by a `type: path` repository's source
+ * directory. A plugin's directory name does not have to match its package name
+ * (plugins-dev/magna/docs ships magna-cms/docs), so decide what a repository
+ * provides by reading its composer.json rather than parsing the URL.
+ */
+function path_repo_package_name(string $root, string $url): ?string
+{
+    $manifest = @file_get_contents(path_repo_dir($root, $url).'/composer.json');
+    if ($manifest === false) {
+        return null;
+    }
+
+    $decoded = json_decode($manifest, true);
+
+    return is_array($decoded) && is_string($decoded['name'] ?? null) ? $decoded['name'] : null;
+}
+
+/**
+ * Whether a `type: path` repository holds a Magna plugin rather than a library.
+ *
+ * Asked of the source itself: a plugin carries a `magna.json` manifest and a
+ * library does not, which is what separates the SDK — kept, because the core
+ * plugin system needs it — from a customer's plugin, which must never ship.
+ *
+ * Deliberately not a question about the URL. Reading "plugins-dev/" out of the
+ * path missed a plugin wired in by absolute path, and missed a plugins-dev/
+ * entry that is a symlink to a working copy elsewhere; either then shipped,
+ * which is a client's source published in a public archive. Where a package
+ * happens to sit on one machine is a convention, and a convention is not a safe
+ * answer to "may this be published".
+ */
+function path_repo_is_plugin(string $root, string $url): bool
+{
+    return is_file(path_repo_dir($root, $url).'/magna.json');
+}
+
+/**
+ * The public constraint a path-repository package is required at once the
+ * repository is gone, read from the source's own composer.json.
+ */
+function path_repo_public_constraint(string $root, string $url): ?string
+{
+    $manifest = @file_get_contents(path_repo_dir($root, $url).'/composer.json');
+    if ($manifest === false) {
+        return null;
+    }
+
+    $decoded = json_decode($manifest, true);
+
+    return is_array($decoded) ? release_public_constraint($decoded) : null;
+}
+
+/**
+ * Directory a `type: path` repository URL points at.
+ *
+ * Both shapes occur: repositories are relative in a working copy
+ * ("plugins-dev/magna/docs", "../magna-plugin-sdk") and absolute once the hub
+ * build has resolved them ("/srv/src/..." on POSIX, "C:/Users/..." on
+ * Windows). A sibling checkout reached through "../" has to resolve as a real
+ * path — trimming the dots off instead pointed it back inside the app root,
+ * where nothing lives, and the SDK repository then looked unidentifiable.
+ */
+function path_repo_dir(string $root, string $url): string
+{
+    $isAbsolute = str_starts_with($url, '/') || preg_match('#^[A-Za-z]:[/\\\\]#', $url) === 1;
+    $dir = $isAbsolute ? $url : $root.'/'.$url;
+
+    return rtrim(str_replace('\\', '/', realpath($dir) ?: $dir), '/');
 }

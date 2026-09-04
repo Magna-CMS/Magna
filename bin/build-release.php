@@ -206,8 +206,14 @@ if (! is_array($composerJson)) {
 // Discovered from the working copy's own path repositories, not hardcoded.
 // A hardcoded list silently ships whatever it has not been told about: a
 // client plugin wired in after the list was written is not in $stripPlugins,
-// so nothing strips it and the hub bundles another customer's source. Only
-// packages under plugins-dev/ count — the SDK is a library, not a plugin.
+// so nothing strips it and the hub bundles another customer's source.
+//
+// What counts is whether the package *is* a plugin — see path_repo_is_plugin()
+// — not where its URL happens to point. The test used to read "the URL contains
+// plugins-dev/", which a plugin wired in by absolute path, or reached through a
+// symlink out of plugins-dev/, walks straight past: it is not recognised as a
+// plugin, so it is never stripped, and the release ships a client's source in
+// vendor/. That is the exact failure the paragraph above was written to prevent.
 $allPlugins = [];
 foreach (($composerJson['repositories'] ?? []) as $repo) {
     if (($repo['type'] ?? null) !== 'path' || ! isset($repo['url'])) {
@@ -216,7 +222,7 @@ foreach (($composerJson['repositories'] ?? []) as $repo) {
 
     $repoUrl = str_replace('\\', '/', (string) $repo['url']);
 
-    if (! str_contains($repoUrl, 'plugins-dev/')) {
+    if (! path_repo_is_plugin($root, $repoUrl)) {
         continue;
     }
 
@@ -499,58 +505,6 @@ say("Done. {$count} files, {$sizeMb} MB -> downloads/{$archiveName}", C_GREEN);
 // ===========================================================================
 // Helpers.
 // ===========================================================================
-
-/**
- * Composer package name declared by a `type: path` repository's source
- * directory. A plugin's directory name does not have to match its package name
- * (plugins-dev/magna/docs ships magna-cms/docs), so decide what a repository
- * provides by reading its composer.json rather than parsing the URL.
- */
-function path_repo_package_name(string $root, string $url): ?string
-{
-    $manifest = @file_get_contents(path_repo_dir($root, $url).'/composer.json');
-    if ($manifest === false) {
-        return null;
-    }
-
-    $decoded = json_decode($manifest, true);
-
-    return is_array($decoded) && is_string($decoded['name'] ?? null) ? $decoded['name'] : null;
-}
-
-/**
- * The public constraint a path-repository package is required at once the
- * repository is gone, read from the source's own composer.json.
- */
-function path_repo_public_constraint(string $root, string $url): ?string
-{
-    $manifest = @file_get_contents(path_repo_dir($root, $url).'/composer.json');
-    if ($manifest === false) {
-        return null;
-    }
-
-    $decoded = json_decode($manifest, true);
-
-    return is_array($decoded) ? release_public_constraint($decoded) : null;
-}
-
-/**
- * Directory a `type: path` repository URL points at.
- *
- * Both shapes occur: repositories are relative in a working copy
- * ("plugins-dev/magna/docs", "../magna-plugin-sdk") and absolute once the hub
- * build has resolved them ("/srv/src/..." on POSIX, "C:/Users/..." on
- * Windows). A sibling checkout reached through "../" has to resolve as a real
- * path — trimming the dots off instead pointed it back inside the app root,
- * where nothing lives, and the SDK repository then looked unidentifiable.
- */
-function path_repo_dir(string $root, string $url): string
-{
-    $isAbsolute = str_starts_with($url, '/') || preg_match('#^[A-Za-z]:[/\\\\]#', $url) === 1;
-    $dir = $isAbsolute ? $url : $root.'/'.$url;
-
-    return rtrim(str_replace('\\', '/', realpath($dir) ?: $dir), '/');
-}
 
 /**
  * Open the finished archive and assert it is actually installable: the files

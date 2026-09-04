@@ -162,3 +162,87 @@ it('reads the public constraint from a source version or its branch alias', func
         ->and(release_public_constraint(['extra' => ['branch-alias' => ['dev-next' => '2.3.x-dev']]]))->toBe('^2.3')
         ->and(release_public_constraint([]))->toBeNull();
 });
+/*
+|--------------------------------------------------------------------------
+| What may be published
+|--------------------------------------------------------------------------
+|
+| The builder decides what to strip by asking which path repositories hold
+| plugins. It used to ask that by looking for "plugins-dev/" in the URL, and a
+| plugin wired in by absolute path — a client working copy on the Desktop,
+| reached through a symlink in plugins-dev/ — answered "library", so nothing
+| stripped it and a public archive carried a customer's source.
+|
+| The question is now asked of the package: a plugin has a magna.json, a
+| library does not.
+*/
+
+/** A directory that looks like whatever the test needs it to look like. */
+function fakePackage(string $name, bool $plugin): string
+{
+    $dir = sys_get_temp_dir().'/magna-release-'.$name.'-'.($plugin ? 'plugin' : 'lib');
+
+    if (! is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+
+    file_put_contents($dir.'/composer.json', json_encode(['name' => $name]));
+
+    if ($plugin) {
+        file_put_contents($dir.'/magna.json', json_encode(['name' => $name, 'version' => '1.0.0']));
+    } elseif (is_file($dir.'/magna.json')) {
+        unlink($dir.'/magna.json');
+    }
+
+    return str_replace(DIRECTORY_SEPARATOR, '/', $dir);
+}
+
+it('calls a package with a manifest a plugin, wherever it sits', function (): void {
+    // The shape that shipped the bug: an absolute path, nowhere near
+    // plugins-dev/, holding somebody's paid plugin.
+    $elsewhere = fakePackage('client/erp', plugin: true);
+
+    expect(path_repo_is_plugin(getcwd(), $elsewhere))->toBeTrue()
+        ->and(str_contains($elsewhere, 'plugins-dev/'))->toBeFalse();
+});
+
+it('calls a package without a manifest a library, so the SDK still ships', function (): void {
+    $sdk = fakePackage('magna-cms/plugin-sdk', plugin: false);
+
+    expect(path_repo_is_plugin(getcwd(), $sdk))->toBeFalse();
+});
+
+it('says nothing is a plugin when the directory is not there at all', function (): void {
+    expect(path_repo_is_plugin(getcwd(), sys_get_temp_dir().'/magna-release-absent'))->toBeFalse();
+});
+
+it('strips a plugin reached by absolute path, and keeps the library beside it', function (): void {
+    $plugin = fakePackage('client/erp', plugin: true);
+    $library = fakePackage('magna-cms/plugin-sdk', plugin: false);
+
+    $composer = [
+        'require' => ['client/erp' => '@dev', 'magna-cms/plugin-sdk' => '@dev'],
+        'repositories' => [
+            ['type' => 'path', 'url' => $plugin],
+            ['type' => 'path', 'url' => $library],
+        ],
+    ];
+
+    // The builder's own discovery loop, in miniature.
+    $strip = [];
+
+    foreach ($composer['repositories'] as $repo) {
+        $url = (string) $repo['url'];
+
+        if (path_repo_is_plugin(getcwd(), $url)) {
+            $strip[] = path_repo_package_name(getcwd(), $url);
+        }
+    }
+
+    expect($strip)->toBe(['client/erp']);
+
+    $result = release_apply_plugin_profile($composer, $strip, []);
+
+    expect($result['require'])->not->toHaveKey('client/erp')
+        ->and($result['require'])->toHaveKey('magna-cms/plugin-sdk');
+});
