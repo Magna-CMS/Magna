@@ -38,6 +38,26 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Where a backup taken on this server lands.
+         *
+         * A sibling of 'local' and 'public', never inside either. Backups are
+         * refused onto the media disk on purpose — an archive kept inside the
+         * thing it is backing up is lost with it — and 'public' is served over
+         * HTTP, which would put the whole database and file tree behind a URL.
+         * That left an install whose media is local with nowhere safe to write,
+         * so this is the somewhere.
+         *
+         * Not in 'links' below, deliberately: nothing about this may ever be
+         * reachable from the web.
+         */
+        'magna_backups' => [
+            'driver' => 'local',
+            'root' => storage_path('app/backups'),
+            'serve' => false,
+            'throw' => true,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

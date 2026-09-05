@@ -203,3 +203,69 @@ it('encrypts the archive when encryption_password is set, regardless of destinat
 
     $zip->close();
 });
+/*
+|--------------------------------------------------------------------------
+| Backing up onto the same server
+|--------------------------------------------------------------------------
+|
+| The destination is refused when it resolves to the media disk — an archive
+| kept inside the thing it is backing up goes when that goes. Right, but on a
+| default install the media disk IS 'local', and the only other on-machine
+| choice was 'public', which is served over HTTP: the whole database and file
+| tree behind a URL. So an install with local media had nowhere safe to write
+| and never produced a single backup, failing every run with a message about a
+| collision it could do nothing about.
+|
+| 'server' is that somewhere: its own disk, a sibling of the media disk rather
+| than inside it, and outside the webroot.
+*/
+
+it('does not collide with a media disk that is also local', function (): void {
+    $storage = StorageSettings::get();
+    $storage->disk = 'local';
+    $storage->save();
+
+    $settings = backupSettingsFor(['disk' => 'server']);
+
+    expect($settings->collidesWithMediaDisk(StorageSettings::get()))->toBeFalse();
+});
+
+it('still refuses the media disk itself', function (): void {
+    // The guard this works around must keep working.
+    $storage = StorageSettings::get();
+    $storage->disk = 'local';
+    $storage->save();
+
+    expect(backupSettingsFor(['disk' => 'local'])->collidesWithMediaDisk(StorageSettings::get()))->toBeTrue();
+});
+
+it('writes the archive to a private directory outside the media disk and the webroot', function (): void {
+    $root = config('filesystems.disks.magna_backups.root');
+
+    expect($root)->toBe(storage_path('app/backups'))
+        // Not inside either of Laravel's own disks — a sibling of both.
+        ->and($root)->not->toStartWith(config('filesystems.disks.local.root').DIRECTORY_SEPARATOR)
+        ->and($root)->not->toStartWith(config('filesystems.disks.public.root').DIRECTORY_SEPARATOR)
+        // storage/app/public is the only storage path symlinked into public/.
+        ->and(config('filesystems.disks.magna_backups.serve'))->toBeFalse();
+});
+
+it('produces a real archive on the server destination', function (): void {
+    $storage = StorageSettings::get();
+    $storage->disk = 'local';
+    $storage->save();
+
+    $settings = backupSettingsFor(['disk' => 'server']);
+
+    $result = (new BackupService)->run($settings, 'server-destination-test.zip');
+
+    expect($result->path)->not->toBeNull()
+        ->and(Storage::disk('magna_backups')->exists($result->path))->toBeTrue();
+
+    Storage::disk('magna_backups')->delete($result->path);
+});
+
+it('needs no encryption password, because the archive never leaves the machine', function (): void {
+    // Required for a bucket, where the archive does leave — not here.
+    expect(backupSettingsFor(['disk' => 'server'])->requiresEncryption())->toBeFalse();
+});

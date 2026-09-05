@@ -7,6 +7,8 @@ namespace Magna\Backup;
 use Illuminate\Support\Facades\Config as ConfigFacade;
 use Illuminate\Support\Facades\Storage;
 use Magna\Backup\Exceptions\BackupConfigurationException;
+use Magna\Plugins\PluginDiscovery;
+use Magna\Plugins\PluginInfo;
 use Magna\Settings\BackupSettings;
 use Magna\Settings\ContentSettings;
 use Magna\Settings\GeneralSettings;
@@ -39,6 +41,19 @@ class BackupService
     private const PRIMARY_DISK_NAME = 'magna_backup_primary';
 
     private const SECONDARY_DISK_NAME = 'magna_backup_secondary';
+
+    /**
+     * "This server", as the settings store it.
+     *
+     * A label of its own rather than reusing 'local': that one is Laravel's
+     * media disk, and the collision guard compares these labels — so pointing
+     * a backup at 'local' on an install whose media is also local is refused,
+     * correctly, and used to leave nowhere on the machine to write at all.
+     */
+    private const SERVER_DISK_LABEL = 'server';
+
+    /** The filesystem disk that label resolves to. */
+    private const SERVER_DISK = 'magna_backups';
 
     private const SETTINGS_EXPORT_DIR = 'magna-config-export';
 
@@ -111,6 +126,28 @@ class BackupService
     }
 
     /**
+     * The private on-server destination, declared if this install predates it.
+     *
+     * config/filesystems.php carries it, but an install that has customised
+     * that file will not have picked the new entry up on update — and a
+     * backup failing because a config file is a version behind is the least
+     * useful failure there is.
+     */
+    private function serverDisk(): string
+    {
+        if (! is_array(config('filesystems.disks.'.self::SERVER_DISK))) {
+            config(['filesystems.disks.'.self::SERVER_DISK => [
+                'driver' => 'local',
+                'root' => storage_path('app/backups'),
+                'serve' => false,
+                'throw' => true,
+            ]]);
+        }
+
+        return self::SERVER_DISK;
+    }
+
+    /**
      * 'local'/'public' are Laravel's own disks (the same ones StorageSettings
      * points at) — reused directly so the Decision #1 collision check stays
      * physically true. 's3'/'s3-like' get a dedicated runtime disk built
@@ -128,6 +165,10 @@ class BackupService
         ?string $region,
         ?string $url,
     ): string {
+        if ($diskLabel === self::SERVER_DISK_LABEL) {
+            return $this->serverDisk();
+        }
+
         if (in_array($diskLabel, ['local', 'public'], true)) {
             return $diskLabel;
         }
@@ -145,6 +186,41 @@ class BackupService
         ]]);
 
         return $runtimeDiskName;
+    }
+
+    /**
+     * What a backup leaves out.
+     *
+     * node_modules and the framework's scratch directory are simply noise.
+     * vendor/ is excluded a directory at a time rather than whole, so the
+     * installed plugins survive — see {@see VendorSelection} for why that
+     * matters and what it keeps.
+     *
+     * @return list<string>
+     */
+    private function excludedPaths(): array
+    {
+        $exclude = [
+            base_path('node_modules'),
+            storage_path('framework'),
+        ];
+
+        $vendor = base_path('vendor');
+        $entries = glob($vendor.'/*', GLOB_ONLYDIR);
+
+        if ($entries === false) {
+            // Nothing to walk — exclude it by name, as before.
+            $exclude[] = $vendor;
+
+            return $exclude;
+        }
+
+        $plugins = array_map(
+            static fn (PluginInfo $plugin): string => $plugin->basePath,
+            app(PluginDiscovery::class)->discover(),
+        );
+
+        return array_merge($exclude, VendorSelection::toExclude($vendor, $entries, $plugins));
     }
 
     private function configureSpatie(BackupSettings $settings, string $diskName, ?string $secondaryDiskName, ?string $settingsExportPath): void
@@ -178,11 +254,7 @@ class BackupService
             // destination directory automatically (see BackupJob::
             // directoriesUsedByBackupJob()) — no need to hand-exclude those.
             'backup.backup.source.files.include' => $include,
-            'backup.backup.source.files.exclude' => [
-                base_path('vendor'),
-                base_path('node_modules'),
-                storage_path('framework'),
-            ],
+            'backup.backup.source.files.exclude' => $this->excludedPaths(),
             // Clean relative zip entry names (e.g. "storage/app/..." instead
             // of the full absolute path) for anything under the app root.
             'backup.backup.source.files.relative_path' => base_path(),

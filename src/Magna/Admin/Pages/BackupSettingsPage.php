@@ -112,7 +112,8 @@ class BackupSettingsPage extends Page implements HasForms
                         Select::make('disk')
                             ->label('Storage driver')
                             ->options([
-                                'local' => 'Local filesystem',
+                                'server' => 'This server (private folder)',
+                                'local' => 'Local filesystem (media disk)',
                                 'public' => 'Public (local, web-accessible)',
                                 's3' => 'Amazon S3',
                                 's3-like' => 'S3-compatible (R2, MinIO, etc.)',
@@ -140,7 +141,8 @@ class BackupSettingsPage extends Page implements HasForms
                         Select::make('secondary_disk')
                             ->label('Storage driver')
                             ->options([
-                                'local' => 'Local filesystem',
+                                'server' => 'This server (private folder)',
+                                'local' => 'Local filesystem (media disk)',
                                 'public' => 'Public (local, web-accessible)',
                                 's3' => 'Amazon S3',
                                 's3-like' => 'S3-compatible (R2, MinIO, etc.)',
