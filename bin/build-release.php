@@ -559,6 +559,33 @@ function verify_release(string $zipPath): void
         }
     }
 
+    /*
+     * And no dev constraint. The release checklist has always said an archive
+     * must carry neither a path repository nor an `@dev` / `dev-*` constraint,
+     * and this function only ever checked the first of those.
+     *
+     * A working copy pins the SDK at `@dev` against a sibling checkout, and the
+     * builder rewrites that to the SDK's published constraint by reading the
+     * sibling's composer.json. Build from somewhere that sibling is not beside
+     * — a git worktree, say — and the read fails, the rewrite is skipped, and
+     * `@dev` ships. The archive still installs, because the lock pins a real
+     * version; the damage arrives later, when a plugin install runs `composer
+     * require` on the customer's server and Composer is free to resolve the SDK
+     * to an unreleased dev branch. v1.3.25 was one upload away from going out
+     * like that.
+     */
+    $devPins = release_dev_constraints(is_array($shippedComposer) ? $shippedComposer : []);
+
+    if ($devPins !== []) {
+        $zip->close();
+        $named = [];
+        foreach ($devPins as $package => $constraint) {
+            $named[] = "{$package} ({$constraint})";
+        }
+        fail('Archive composer.json pins '.implode(', ', $named).' to a development constraint. '
+            .'A released site would be free to resolve them to an unreleased branch.');
+    }
+
     // Permission bits: scan every entry, flag any regular file whose stored
     // unix mode is 0 (which becomes 0000/unreadable on strict extractors).
     $badPerms = 0;

@@ -246,3 +246,63 @@ it('strips a plugin reached by absolute path, and keeps the library beside it', 
     expect($result['require'])->not->toHaveKey('client/erp')
         ->and($result['require'])->toHaveKey('magna-cms/plugin-sdk');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Development constraints
+|--------------------------------------------------------------------------
+|
+| The release checklist has always required that an archive carry neither a
+| path repository nor an `@dev` / `dev-*` constraint. Only the first of those
+| was ever checked. A working copy pins the SDK at `@dev` against a sibling
+| checkout and the builder rewrites it by reading that sibling's composer.json;
+| build from somewhere the sibling is not beside — a git worktree — and the
+| read fails, the rewrite is skipped and `@dev` ships.
+|
+| The archive still installs, because composer.lock pins a real version. The
+| damage lands the first time a plugin install runs `composer require` on the
+| customer's server and Composer is free to take the SDK from a dev branch.
+| v1.3.25 was one upload away from going out like that.
+|
+*/
+
+it('finds a dev constraint wherever it is pinned', function (): void {
+    expect(release_dev_constraints([
+        'require' => [
+            'php' => '^8.3',
+            'magna-cms/plugin-sdk' => '@dev',
+        ],
+        'require-dev' => [
+            'pestphp/pest' => '^4.7',
+            'magna/plugin-manager' => 'dev-main',
+        ],
+    ]))->toBe([
+        'magna-cms/plugin-sdk' => '@dev',
+        'magna/plugin-manager' => 'dev-main',
+    ]);
+});
+
+it('passes an archive whose constraints are all published', function (): void {
+    expect(release_dev_constraints([
+        'require' => [
+            'php' => '^8.3',
+            'laravel/framework' => '^13.8',
+            'magna-cms/plugin-sdk' => '^1.5',
+        ],
+    ]))->toBe([]);
+});
+
+it('is not fooled by a version that merely mentions dev', function (): void {
+    // "^1.5" with a stability flag is a dev pin; a package whose name contains
+    // "dev" is not, and neither is a normal caret range.
+    expect(release_dev_constraints([
+        'require' => [
+            'some/dev-tools' => '^2.0',
+            'other/package' => '^1.0@dev',
+        ],
+    ]))->toBe(['other/package' => '^1.0@dev']);
+});
+
+it('tolerates a manifest with no requires at all', function (): void {
+    expect(release_dev_constraints([]))->toBe([]);
+});

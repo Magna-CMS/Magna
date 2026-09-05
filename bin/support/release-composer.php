@@ -269,3 +269,43 @@ function path_repo_dir(string $root, string $url): string
 
     return rtrim(str_replace('\\', '/', realpath($dir) ?: $dir), '/');
 }
+
+/**
+ * Dependencies a release archive would let a target resolve to a dev branch.
+ *
+ * A working copy pins packages it develops alongside — the SDK above all — at
+ * `@dev` against a sibling checkout, and the builder rewrites those to the
+ * published constraint by reading the sibling's own composer.json. When the
+ * sibling is not where the repository URL says it is, that read fails, the
+ * rewrite is skipped silently, and `@dev` ships.
+ *
+ * The archive still installs: composer.lock pins a real version. The damage
+ * arrives later, the first time a plugin install runs `composer require` on the
+ * customer's server, when Composer is free to resolve the SDK to an unreleased
+ * branch and every plugin on the site is then built against it.
+ *
+ * @param  array<string, mixed>  $composer
+ * @return array<string, string> package name to the offending constraint
+ */
+function release_dev_constraints(array $composer): array
+{
+    $found = [];
+
+    foreach (['require', 'require-dev'] as $section) {
+        $packages = $composer[$section] ?? [];
+
+        if (! is_array($packages)) {
+            continue;
+        }
+
+        foreach ($packages as $package => $constraint) {
+            $constraint = is_string($constraint) ? $constraint : '';
+
+            if (str_contains($constraint, '@dev') || str_starts_with($constraint, 'dev-')) {
+                $found[(string) $package] = $constraint;
+            }
+        }
+    }
+
+    return $found;
+}
