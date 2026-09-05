@@ -406,8 +406,17 @@ class SettingsPage extends Page implements HasForms
      * the transport works, and a form that accepts any recipient turns the
      * panel into something that can be used to send mail to strangers.
      */
-    public function sendTestEmail(MailTester $tester): void
+    public function sendTestEmail(): void
     {
+        /*
+         * Resolved here rather than type-hinted on the action's closure.
+         * Filament evaluates that closure with its own injection rules, and
+         * the parameter never arrived — the button ran, returned 200 and did
+         * nothing at all, which is worse than a button that fails, because
+         * the one thing it exists to report is whether mail works.
+         */
+        $tester = app(MailTester::class);
+
         $address = auth()->user()?->getAttribute('email');
 
         if (! is_string($address) || $address === '') {
@@ -450,7 +459,7 @@ class SettingsPage extends Page implements HasForms
             Action::make('sendTestEmail')
                 ->label('Send test email')
                 ->color('gray')
-                ->action(fn (MailTester $tester) => $this->sendTestEmail($tester)),
+                ->action(fn () => $this->sendTestEmail()),
         ];
     }
 }
