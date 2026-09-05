@@ -34,7 +34,7 @@ use Magna\Webhooks\WebhookServiceProvider;
  */
 class MagnaServiceProvider extends ServiceProvider
 {
-    public const VERSION = '1.3.24';
+    public const VERSION = '1.3.25';
 
     public function register(): void
     {
