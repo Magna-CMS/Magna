@@ -267,8 +267,6 @@ CARD_STYLE = {
     "paddingRight": "38px",
     "paddingBottom": "42px",
     "paddingLeft": "38px",
-    "direction": "column",
-    "childGap": "0px",
 }
 
 
@@ -394,7 +392,14 @@ def terminal_block(term: Tag) -> dict:
     bar = term.find(class_="term-bar")
     caption = txt(bar.find("span")) if bar and bar.find("span") else ""
     body = term.find(class_="term-body")
-    text = body.get_text("", strip=False)
+    # <br> is the ONLY line break in a terminal body: the newlines in the
+    # source file are indentation, and a doubled <br> is a blank line that
+    # carries no newline of its own. Reading the text alone closed those
+    # blank lines up and lost two lines from every listing.
+    marker = "␛"
+    for br in body.find_all("br"):
+        br.replace_with(marker)
+    text = body.get_text("", strip=False).replace("\n", "").replace(marker, "\n")
     text = html.unescape(text.replace("\u00a0", " "))
     lines = [line.rstrip() for line in text.splitlines()]
     while lines and not lines[0].strip():
