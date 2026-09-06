@@ -116,6 +116,11 @@ final class PluginAutoloader
                 // in authoritative mode.
                 $loader?->addPsr4($prefix, $absolute);
 
+                // And repoint anything Composer's classmap still claims to
+                // know about this plugin but can no longer find — see
+                // repairClassMap().
+                $this->repairClassMap($loader, $prefix, $absolute);
+
                 // And ours, which answers whatever mode Composer is in.
                 $this->prefixes[$prefix][] = $absolute;
                 $this->registerFallback();
@@ -158,6 +163,59 @@ final class PluginAutoloader
                 }
             }
         });
+    }
+
+    /**
+     * Repoint classmap entries for this plugin that name a file that is gone.
+     *
+     * The appended fallback above answers when Composer says "no". It cannot
+     * help when Composer says "yes" and is wrong, because ClassLoader::findFile
+     * consults its classmap BEFORE any PSR-4 rule and returns that path without
+     * checking it exists — so the include fatals and no later autoloader is
+     * ever asked.
+     *
+     * That is not hypothetical. A plugin installed through Composer as a path
+     * repository is mapped into vendor/{vendor}/{package}; if that directory
+     * later goes (a failed install rolling its files back, a deploy that did
+     * not carry a symlink, a vendor/ restored from a machine that had it), the
+     * classmap keeps pointing there. On a host with no Composer binary nothing
+     * can regenerate it, and every attempt to enable the plugin dies on
+     *
+     *   include(.../vendor/magna/restaurant-finance/src/…Plugin.php):
+     *   Failed to open stream: No such file or directory
+     *
+     * for files that are sitting in plugins-dev/ the whole time. addClassMap()
+     * merges with the later value winning, so pointing the dead entries at the
+     * real files repairs the loader for this request — and, because this runs
+     * on every boot for every enabled plugin, for every request after it.
+     *
+     * Only entries under this plugin's own prefix are touched, and only ones
+     * whose file is missing and whose class is found in the directory the
+     * plugin actually declares.
+     */
+    private function repairClassMap(?ClassLoader $loader, string $prefix, string $directory): void
+    {
+        if ($loader === null) {
+            return;
+        }
+
+        $repairs = [];
+
+        foreach ($loader->getClassMap() as $class => $file) {
+            if (! str_starts_with($class, $prefix) || is_file($file)) {
+                continue;
+            }
+
+            $candidate = $directory.'/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
+
+            if (is_file($candidate)) {
+                $repairs[$class] = $candidate;
+            }
+        }
+
+        if ($repairs !== []) {
+            $loader->addClassMap($repairs);
+        }
     }
 
     private function loader(): ?ClassLoader
