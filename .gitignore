@@ -40,6 +40,15 @@
 # republished whenever the bundle it came from changes, so committing it would
 # put a second copy of another repo's build output in this one.
 /public/erp
+# Plugin-published assets. Plugins are their own repositories;
+# `php artisan filament:assets` drops theirs in here alongside the core's, and
+# untracked is not the same as safe — one wide `git add` and they are in.
+/public/css/magna-cms
+/public/js/magna-cms
+/public/css/magna
+/public/js/magna
+/public/css/roya
+/public/js/roya
 /public/storage
 /storage/*.key
 /storage/pail
