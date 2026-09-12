@@ -338,12 +338,27 @@ final class SystemHealthCollector
         }
     }
 
+    /**
+     * Write a value and read it back, which is the only check that proves the
+     * cache is actually usable rather than merely configured.
+     *
+     * The probe value is a fresh random string, and both halves of that
+     * matter. A string because Redis does not round-trip a number as one:
+     * RedisStore stores anything numeric verbatim rather than serialising it,
+     * and hands it back as the string "1" — so the old `=== 1` was false on
+     * every working Redis install, and Magna reported "Cache connection
+     * failed" on a cache that was fine. Fresh each call because a constant
+     * value cannot tell a successful write apart from a leftover read of the
+     * previous one.
+     */
     public function cacheStatus(): string
     {
         try {
-            Cache::put('magna_health_check', 1, 5);
+            $probe = bin2hex(random_bytes(8));
 
-            return Cache::get('magna_health_check') === 1 ? 'ok' : 'error';
+            Cache::put('magna_health_check', $probe, 5);
+
+            return Cache::get('magna_health_check') === $probe ? 'ok' : 'error';
         } catch (Throwable) {
             return 'error';
         }

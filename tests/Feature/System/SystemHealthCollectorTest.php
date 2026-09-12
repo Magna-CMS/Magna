@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Magna\System\SystemHealthCollector;
 use Tests\TestCase;
@@ -74,4 +75,43 @@ it('does not claim a queue age it cannot measure', function (): void {
     config(['queue.default' => 'sync']);
 
     expect(app(SystemHealthCollector::class)->queueOldestPendingMinutes())->toBeNull();
+});
+
+// Redis does not round-trip a number as a number. RedisStore writes anything
+// numeric verbatim instead of serialising it, and reads it back as the string
+// "1" — so a probe of int 1 compared with === was false on every working Redis
+// install, and the diagnostics panel announced "Cache connection failed" about
+// a cache that was fine. The probe is a string now, which every store returns
+// unchanged.
+it('reports ok on a store that hands values back as strings, the way Redis does', function (): void {
+    $stored = null;
+
+    Cache::shouldReceive('put')->once()->andReturnUsing(function (string $key, mixed $value) use (&$stored): bool {
+        $stored = $value;
+
+        return true;
+    });
+
+    // RedisStore::get(): numeric values come back as the raw string, never an int.
+    Cache::shouldReceive('get')->once()->andReturnUsing(function () use (&$stored): mixed {
+        return is_numeric($stored) ? (string) $stored : $stored;
+    });
+
+    expect((new SystemHealthCollector)->cacheStatus())->toBe('ok');
+});
+
+it('reports an error when the value read back is not the one written', function (): void {
+    // A store that accepts writes and silently serves something else is broken
+    // in the way this check exists to catch — a stale read, a wrong database,
+    // a shared key. The probe is random per call so this cannot pass by luck.
+    Cache::shouldReceive('put')->once()->andReturnTrue();
+    Cache::shouldReceive('get')->once()->andReturn('a value from somewhere else');
+
+    expect((new SystemHealthCollector)->cacheStatus())->toBe('error');
+});
+
+it('reports an error when the cache store throws', function (): void {
+    Cache::shouldReceive('put')->once()->andThrow(new RuntimeException('Connection refused'));
+
+    expect((new SystemHealthCollector)->cacheStatus())->toBe('error');
 });
