@@ -6,8 +6,12 @@ namespace Magna\Licensing\Concerns;
 
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Admin\Pages\AccountCentrePage;
 use Magna\Licensing\LicenseClient;
+use Magna\Licensing\LicenseInstaller;
+use Magna\Marketplace\MarketplaceClient;
+use Throwable;
 
 /**
  * The buying half of a Filament page: open a gateway window, then wait for
@@ -53,13 +57,163 @@ trait ChecksOutWithRazorpay
     /** The operator's refund policy, shown beside the payment window. */
     public string $pendingRefundTerms = '';
 
-    /** What to do once the marketplace confirms the sale. */
-    abstract protected function onOrderSettled(int $licenseId, string $productSlug): void;
-
     /** Whether any checkout — order or subscription — is awaiting settlement. */
     public function checkoutInFlight(): bool
     {
         return $this->pendingOrderId !== null || $this->pendingSubscriptionId !== null;
+    }
+
+    /**
+     * Buy a product. No price travels from here: the term is a name, the
+     * marketplace prices it, and the amount that comes back is only used to
+     * render the gateway window. This page never handles card data.
+     *
+     * This used to be copy-pasted between the plugin catalog and the themes
+     * page — one notification string apart — which is exactly how the two
+     * would have drifted on the next change to the risky part.
+     */
+    public function buy(string $package, string $term, bool $autoRenew = false): void
+    {
+        if (! $this->requireConnectedAccount($this->purchaseNeedsAccountBecause())) {
+            return;
+        }
+
+        if (! in_array($term, ['lifetime', 'annual'], true)) {
+            return;
+        }
+
+        // Auto-renew is a property of the annual term only; the flag is
+        // simply dropped for lifetime rather than refused, since the UI
+        // never offers it there.
+        $this->beginCheckout(
+            app(LicenseClient::class)->checkout($package, $term, $autoRenew && $term === 'annual'),
+            $package,
+        );
+    }
+
+    /**
+     * Start a product's free trial straight from the catalog, then install
+     * it — a trial someone has to go and find on another page is a trial
+     * most people never start.
+     */
+    public function startTrial(string $package): void
+    {
+        if (! $this->requireConnectedAccount($this->trialNeedsAccountBecause())) {
+            return;
+        }
+
+        $client = app(LicenseClient::class);
+        $result = $client->startTrial($package);
+
+        if (($result['ok'] ?? false) !== true) {
+            Notification::make()
+                ->title('Trial could not be started')
+                ->body(is_string($result['message'] ?? null) ? $result['message'] : 'The marketplace refused this trial.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $client->forgetCache();
+
+        // The trial licence exists now, but its id is not in the reply — the
+        // wallet is the one place that knows it, and reading it back also
+        // proves the licence really landed.
+        $licenseId = $this->walletLicenseIdFor($package);
+
+        if ($licenseId === null) {
+            Notification::make()
+                ->title('Trial started')
+                ->body('Install it from the Magna Account page.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        $this->onOrderSettled($licenseId, $package);
+    }
+
+    /**
+     * The sale is real — install what was bought.
+     *
+     * A failure here is reported as a failure to INSTALL, never as a failure
+     * to buy: the licence is already in the account, and telling someone who
+     * has just paid that something "failed" without that distinction is how
+     * support tickets are made.
+     *
+     * The default suits a first purchase (catalog pages); a page whose
+     * settle means something else — the Account Centre's renewals — replaces
+     * it wholesale.
+     */
+    protected function onOrderSettled(int $licenseId, string $productSlug): void
+    {
+        try {
+            $message = app(LicenseInstaller::class)->installLicense($licenseId, $productSlug);
+        } catch (Throwable $e) {
+            Notification::make()
+                ->title('Purchased — but the install did not finish')
+                ->body($e->getMessage().' Your licence is safe; install it from the Magna Account page.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        app(MarketplaceClient::class)->clearCache();
+
+        Notification::make()->title($message)->success()->send();
+
+        $url = static::getUrl();
+        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 800)');
+    }
+
+    /**
+     * Anything sold or issued here belongs to a Magna Account. Returns
+     * whether the caller may proceed; when not connected, points the admin
+     * at the Account Centre instead of opening the checkout.
+     */
+    protected function requireConnectedAccount(?string $because = null): bool
+    {
+        if (AccountCentreSettings::get()->connected) {
+            return true;
+        }
+
+        Notification::make()
+            ->title('Connect your Magna Account first')
+            ->body($because ?? 'This action is tied to your Magna Account, so connect one first.')
+            ->warning()
+            ->actions([
+                Action::make('connect')->label('Go to Magna Account')->url(AccountCentrePage::getUrl()),
+            ])
+            ->send();
+
+        return false;
+    }
+
+    /** Page-specific copy for why buying needs an account; null = generic. */
+    protected function purchaseNeedsAccountBecause(): ?string
+    {
+        return null;
+    }
+
+    /** Page-specific copy for why a trial needs an account; null = generic. */
+    protected function trialNeedsAccountBecause(): ?string
+    {
+        return null;
+    }
+
+    /** The wallet licence id for a product, or null when it is not there. */
+    protected function walletLicenseIdFor(string $package): ?int
+    {
+        foreach (app(LicenseClient::class)->wallet() ?? [] as $licence) {
+            if (($licence['product_slug'] ?? null) === $package && is_numeric($licence['id'] ?? null)) {
+                return (int) $licence['id'];
+            }
+        }
+
+        return null;
     }
 
     /**

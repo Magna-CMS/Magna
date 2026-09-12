@@ -13,10 +13,8 @@ use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
-use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Contracts\RegistersSettingsPages;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
-use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseInstaller;
 use Magna\Licensing\LicenseStore;
 use Magna\Marketplace\InstallState;
@@ -353,7 +351,7 @@ class PluginsPage extends Page
 
     public function requestReview(string $name): void
     {
-        if (! $this->requireConnectedAccount()) {
+        if (! $this->requireConnectedAccount('Reviews and reports are tied to your Magna Account so they can be traced back to a real install.')) {
             return;
         }
 
@@ -363,35 +361,12 @@ class PluginsPage extends Page
 
     public function requestReport(string $name): void
     {
-        if (! $this->requireConnectedAccount()) {
+        if (! $this->requireConnectedAccount('Reviews and reports are tied to your Magna Account so they can be traced back to a real install.')) {
             return;
         }
 
         $this->feedbackPackage = $name;
         $this->mountAction('report');
-    }
-
-    /**
-     * Reviews and reports both require a connected Magna Account. Returns
-     * whether the caller may proceed; when not connected, points the admin
-     * at the Account Centre instead of opening the modal.
-     */
-    private function requireConnectedAccount(?string $because = null): bool
-    {
-        if (AccountCentreSettings::get()->connected) {
-            return true;
-        }
-
-        Notification::make()
-            ->title('Connect your Magna Account first')
-            ->body($because ?? 'Reviews and reports are tied to your Magna Account so they can be traced back to a real install.')
-            ->warning()
-            ->actions([
-                Action::make('connect')->label('Go to Magna Account')->url(AccountCentrePage::getUrl()),
-            ])
-            ->send();
-
-        return false;
     }
 
     /** Write-a-review sheet: star rating + optional name and text, sent to the marketplace. */
@@ -474,117 +449,17 @@ class PluginsPage extends Page
     }
 
     // ── Storefront ────────────────────────────────────────────────────────────
+    // buy(), startTrial(), onOrderSettled() and requireConnectedAccount()
+    // live in ChecksOutWithRazorpay — this page only supplies its copy.
 
-    /**
-     * Open a checkout for a paid product.
-     *
-     * No price travels from here: the term is a name, the marketplace prices
-     * it, and the amount that comes back is only used to render the gateway
-     * window. This page never handles card data.
-     */
-    public function buy(string $package, string $term, bool $autoRenew = false): void
+    protected function purchaseNeedsAccountBecause(): ?string
     {
-        if (! $this->requireConnectedAccount('Buying a plugin needs a Magna Account — that is who the licence belongs to.')) {
-            return;
-        }
-
-        if (! in_array($term, ['lifetime', 'annual'], true)) {
-            return;
-        }
-
-        // Auto-renew is a property of the annual term only; the flag is
-        // simply dropped for lifetime rather than refused, since the UI
-        // never offers it there.
-        $this->beginCheckout(
-            app(LicenseClient::class)->checkout($package, $term, $autoRenew && $term === 'annual'),
-            $package,
-        );
+        return 'Buying a plugin needs a Magna Account — that is who the licence belongs to.';
     }
 
-    /**
-     * The sale is real — install what was bought.
-     *
-     * A failure here is reported as a failure to INSTALL, never as a failure
-     * to buy: the licence is already in the account, and telling someone who
-     * has just paid that something "failed" without that distinction is how
-     * support tickets are made.
-     */
-    protected function onOrderSettled(int $licenseId, string $productSlug): void
+    protected function trialNeedsAccountBecause(): ?string
     {
-        try {
-            $message = app(LicenseInstaller::class)->installLicense($licenseId, $productSlug);
-        } catch (Throwable $e) {
-            Notification::make()
-                ->title('Purchased — but the install did not finish')
-                ->body($e->getMessage().' Your licence is safe; install it from the Magna Account page.')
-                ->warning()
-                ->send();
-
-            return;
-        }
-
-        app(MarketplaceClient::class)->clearCache();
-
-        Notification::make()->title($message)->success()->send();
-
-        $url = static::getUrl();
-        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 800)');
-    }
-
-    /**
-     * Start a product's free trial straight from the catalog, then install
-     * it — a trial someone has to go and find on another page is a trial
-     * most people never start.
-     */
-    public function startTrial(string $package): void
-    {
-        if (! $this->requireConnectedAccount('A trial is issued to your Magna Account, so connect one first.')) {
-            return;
-        }
-
-        $client = app(LicenseClient::class);
-        $result = $client->startTrial($package);
-
-        if (($result['ok'] ?? false) !== true) {
-            Notification::make()
-                ->title('Trial could not be started')
-                ->body($result['message'] ?? 'The marketplace refused this trial.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $client->forgetCache();
-
-        // The trial licence exists now, but its id is not in the reply — the
-        // wallet is the one place that knows it, and reading it back also
-        // proves the licence really landed.
-        $licenseId = $this->walletLicenseIdFor($package);
-
-        if ($licenseId === null) {
-            Notification::make()
-                ->title('Trial started')
-                ->body('Install it from the Magna Account page.')
-                ->success()
-                ->send();
-
-            return;
-        }
-
-        $this->onOrderSettled($licenseId, $package);
-    }
-
-    /** The wallet licence id for a product, or null when it is not there. */
-    private function walletLicenseIdFor(string $package): ?int
-    {
-        foreach (app(LicenseClient::class)->wallet() ?? [] as $licence) {
-            if (($licence['product_slug'] ?? null) === $package && is_numeric($licence['id'] ?? null)) {
-                return (int) $licence['id'];
-            }
-        }
-
-        return null;
+        return 'A trial is issued to your Magna Account, so connect one first.';
     }
 
     private function feedbackDisplayName(): string

@@ -7,10 +7,7 @@ namespace Magna\Admin\Pages;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
-use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
-use Magna\Licensing\LicenseClient;
-use Magna\Licensing\LicenseInstaller;
 use Magna\Marketplace\MarketplaceClient;
 use Magna\Marketplace\PluginListing;
 use Magna\Themes\ThemeManager;
@@ -182,90 +179,16 @@ class ThemesPage extends Page
         Notification::make()->title('Theme removed.')->success()->send();
     }
 
-    /** Buy a theme. Same order → gateway → webhook path as a plugin. */
-    public function buy(string $package, string $term, bool $autoRenew = false): void
+    // buy(), startTrial(), onOrderSettled() and requireConnectedAccount()
+    // live in ChecksOutWithRazorpay — this page only supplies its copy.
+
+    protected function purchaseNeedsAccountBecause(): ?string
     {
-        if (! $this->requireConnectedAccount()) {
-            return;
-        }
-
-        if (! in_array($term, ['lifetime', 'annual'], true)) {
-            return;
-        }
-
-        $this->beginCheckout(
-            app(LicenseClient::class)->checkout($package, $term, $autoRenew && $term === 'annual'),
-            $package,
-        );
+        return 'A theme licence belongs to your Magna Account, so connect one before buying.';
     }
 
-    public function startTrial(string $package): void
+    protected function trialNeedsAccountBecause(): ?string
     {
-        if (! $this->requireConnectedAccount()) {
-            return;
-        }
-
-        $client = app(LicenseClient::class);
-        $result = $client->startTrial($package);
-
-        if (($result['ok'] ?? false) !== true) {
-            Notification::make()
-                ->title('Trial could not be started')
-                ->body($result['message'] ?? 'The marketplace refused this trial.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $client->forgetCache();
-
-        foreach ($client->wallet() ?? [] as $licence) {
-            if (($licence['product_slug'] ?? null) === $package && is_numeric($licence['id'] ?? null)) {
-                $this->onOrderSettled((int) $licence['id'], $package);
-
-                return;
-            }
-        }
-
-        Notification::make()->title('Trial started')->body('Install it from the Magna Account page.')->success()->send();
-    }
-
-    /** The sale is real — fetch the theme and put it on disk. */
-    protected function onOrderSettled(int $licenseId, string $productSlug): void
-    {
-        try {
-            $message = app(LicenseInstaller::class)->installLicense($licenseId, $productSlug);
-        } catch (Throwable $e) {
-            Notification::make()
-                ->title('Purchased — but the install did not finish')
-                ->body($e->getMessage().' Your licence is safe; install it from the Magna Account page.')
-                ->warning()
-                ->send();
-
-            return;
-        }
-
-        app(MarketplaceClient::class)->clearCache();
-
-        Notification::make()->title($message)->success()->send();
-
-        $url = static::getUrl();
-        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 800)');
-    }
-
-    private function requireConnectedAccount(): bool
-    {
-        if (AccountCentreSettings::get()->connected) {
-            return true;
-        }
-
-        Notification::make()
-            ->title('Connect your Magna Account first')
-            ->body('A theme licence belongs to your Magna Account, so connect one before buying.')
-            ->warning()
-            ->send();
-
-        return false;
+        return 'A theme licence belongs to your Magna Account, so connect one before buying.';
     }
 }
