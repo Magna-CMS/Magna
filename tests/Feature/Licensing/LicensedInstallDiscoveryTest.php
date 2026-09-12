@@ -37,8 +37,14 @@ beforeEach(function (): void {
     $this->signingSecret = sodium_crypto_sign_secretkey($pair);
     config(['magna.licensing.public_key' => base64_encode(sodium_crypto_sign_publickey($pair))]);
 
+    // Fully isolated plugins root per test — these tests place real packages,
+    // and an interrupted run against the repository's real plugins-dev/ once
+    // left a LicenseInstaller rename half-done and gutted a working plugin.
+    $this->pluginsRoot = storage_path('framework/testing/plugins-dev-'.uniqid());
+    config(['magna.plugins.dev_path' => $this->pluginsRoot]);
+
     $this->package = 'acme/licensed-widget';
-    $this->target = base_path('plugins-dev/acme/licensed-widget');
+    $this->target = $this->pluginsRoot.'/acme/licensed-widget';
 
     // A real archive: the installer extracts it, reads magna.json and checks
     // the name matches the licence before writing anything.
@@ -66,8 +72,7 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     $files = new Filesystem;
-    $files->remove([$this->zipPath, $this->target]);
-    $files->remove(base_path('plugins-dev/acme'));
+    $files->remove([$this->zipPath, $this->pluginsRoot]);
 });
 
 /** A download grant exactly as PackageDownloadService issues one. */
@@ -116,6 +121,26 @@ it('finds a licensed plugin it has just written, even with discovery already war
 
     expect($record->base_path)->toBe($this->target)
         ->and($record->version)->toBe('2.0.0');
+});
+
+it('writes under the configured plugins root, never the repository plugins-dev', function (): void {
+    Http::fake(['*' => Http::response($this->zipBytes)]);
+
+    try {
+        app(LicenseInstaller::class)->installFromGrant($this->package, licensedGrant($this->zipSha, $this->signingSecret));
+    } catch (Throwable $e) {
+        expect($e->getMessage())->not->toContain('was not found');
+    }
+
+    // Both the files and the recorded base_path must land inside the
+    // configured root. The repository's own plugins-dev/ holds developers'
+    // working checkouts, and a test that writes (or half-renames) in there
+    // can destroy one — that is the incident this override exists for.
+    $record = PluginRecord::query()->where('name', $this->package)->firstOrFail();
+
+    expect(is_file($this->pluginsRoot.'/acme/licensed-widget/magna.json'))->toBeTrue()
+        ->and($record->base_path)->toBe($this->pluginsRoot.'/acme/licensed-widget')
+        ->and(is_dir(base_path('plugins-dev/acme')))->toBeFalse();
 });
 
 it('refuses a package whose manifest names a different product', function (): void {

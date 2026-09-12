@@ -41,6 +41,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Development plugins directory
+    |--------------------------------------------------------------------------
+    | Where licensed installs place plugin packages
+    | (plugins-dev/{vendor}/{package}). Only overridden in tests, which must
+    | never write into the repository's real plugins-dev/ tree; production
+    | installs use the repository default.
+    */
+    'plugins' => [
+        'dev_path' => env('MAGNA_PLUGINS_DEV_PATH'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | API Token Expiry (days)
     |--------------------------------------------------------------------------
     */

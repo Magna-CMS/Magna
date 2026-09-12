@@ -26,10 +26,16 @@ beforeEach(function (): void {
     $this->files->mkdir($this->themeRoot, 0755);
 
     config(['magna.themes_path' => $this->themeRoot]);
+
+    // Same isolation for the plugins root: the "nothing about a theme may
+    // reach the plugin tree" assertion below must look at a directory this
+    // test owns, never the repository's real plugins-dev/.
+    $this->pluginsRoot = storage_path('framework/testing/plugins-dev-'.uniqid());
+    config(['magna.plugins.dev_path' => $this->pluginsRoot]);
 });
 
 afterEach(function (): void {
-    $this->files->remove($this->themeRoot);
+    $this->files->remove([$this->themeRoot, $this->pluginsRoot]);
 });
 
 function writeTheme(string $name, array $overrides = []): string
@@ -149,7 +155,7 @@ it('installs a licensed theme into themes/ and leaves it inactive', function ():
         // Buying a theme must not silently change what a live site presents.
         ->and(ThemeSettings::get()->active)->toBeNull()
         // And nothing about a theme may end up in the plugin registry.
-        ->and(is_dir(base_path('plugins-dev/acme/aurora')))->toBeFalse();
+        ->and(is_dir($this->pluginsRoot.'/acme/aurora'))->toBeFalse();
 });
 
 it('refuses a theme archive that is not the product the licence covers', function (): void {

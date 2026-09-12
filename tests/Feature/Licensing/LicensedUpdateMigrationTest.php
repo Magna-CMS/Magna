@@ -34,8 +34,13 @@ beforeEach(function (): void {
     $this->signingSecret = sodium_crypto_sign_secretkey($pair);
     config(['magna.licensing.public_key' => base64_encode(sodium_crypto_sign_publickey($pair))]);
 
+    // Fully isolated plugins root per test — never the repository's real
+    // plugins-dev/, where an interrupted run once gutted a working plugin.
+    $this->pluginsRoot = storage_path('framework/testing/plugins-dev-'.uniqid());
+    config(['magna.plugins.dev_path' => $this->pluginsRoot]);
+
     $this->package = 'acme/licensed-widget';
-    $this->target = base_path('plugins-dev/acme/licensed-widget');
+    $this->target = $this->pluginsRoot.'/acme/licensed-widget';
     $this->table = 'acme_widget_things';
 
     $this->zipPath = tempnam(sys_get_temp_dir(), 'magna-licensed-update-').'.zip';
@@ -92,8 +97,7 @@ afterEach(function (): void {
     Schema::dropIfExists($this->table);
 
     $files = new Filesystem;
-    $files->remove([$this->zipPath, $this->target]);
-    $files->remove(base_path('plugins-dev/acme'));
+    $files->remove([$this->zipPath, $this->pluginsRoot]);
 });
 
 function updateGrant(string $sha, string $secret): array

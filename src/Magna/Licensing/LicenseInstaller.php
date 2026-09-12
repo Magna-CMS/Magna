@@ -282,7 +282,7 @@ class LicenseInstaller
             }
 
             [$vendor, $package] = explode('/', $manifest->name, 2);
-            $targetDir = base_path("plugins-dev/{$vendor}/{$package}");
+            $targetDir = $this->pluginsDevRoot()."/{$vendor}/{$package}";
             $isUpdate = is_dir($targetDir);
 
             if ($isUpdate) {
@@ -361,6 +361,23 @@ class LicenseInstaller
         } finally {
             $this->files->remove($tmp);
         }
+    }
+
+    /**
+     * Where installed plugin packages are placed — plugins-dev/{vendor}/{package}
+     * under this root. The configured override exists for the test suite, which
+     * must never write into the repository's real plugins-dev/ tree (an
+     * interrupted test run once left a rename here half-done and gutted a
+     * working plugin checkout); production installs use the default. Same
+     * arrangement as ThemeManager::directory().
+     */
+    private function pluginsDevRoot(): string
+    {
+        $configured = config('magna.plugins.dev_path');
+
+        return is_string($configured) && $configured !== ''
+            ? $configured
+            : base_path('plugins-dev');
     }
 
     /**
