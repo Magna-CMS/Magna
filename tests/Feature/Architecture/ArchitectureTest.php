@@ -314,3 +314,59 @@ it('renders raw Blade output only in the allowlisted views', function (): void {
 
     expect($offenders)->toBe([]);
 });
+
+/**
+ * Every management endpoint authorizes, mechanically.
+ *
+ * PreviewTokenController shipped without a Gate::authorize while all nine of
+ * its management siblings had one — a management-scope token could mint
+ * week-long draft-access tokens no matter what its holder was permitted to
+ * see. Nothing structural made that omission visible; this rule does. Every
+ * public action method in a management controller (plus the
+ * management-scoped controllers listed alongside them) must contain a
+ * Gate::authorize call in its own body.
+ */
+it('authorizes in every public management controller action', function (): void {
+    $root = dirname(__DIR__, 3);
+
+    $files = glob($root.'/src/Magna/Management/Controllers/*.php') ?: [];
+    // Management-scoped controllers living outside that namespace.
+    $files[] = $root.'/src/Magna/Delivery/Controllers/PreviewTokenController.php';
+
+    expect($files)->not->toBe([]);
+
+    $offenders = [];
+
+    foreach ($files as $file) {
+        $basename = basename($file);
+
+        // The abstract base holds shared protected helpers, not endpoints.
+        if ($basename === 'ManagementController.php') {
+            continue;
+        }
+
+        $source = (string) file_get_contents($file);
+
+        // Slice the class at every method boundary so a private helper's
+        // authorize call can never satisfy the check for the public action
+        // above it.
+        $slices = preg_split('/(?=(?:public|protected|private)\s+(?:static\s+)?function\s)/', $source) ?: [];
+
+        foreach ($slices as $slice) {
+            if (preg_match('/^public\s+(?:static\s+)?function\s+(\w+)/', $slice, $matches) !== 1) {
+                continue;
+            }
+
+            $method = $matches[1];
+            if ($method === '__construct') {
+                continue;
+            }
+
+            if (! str_contains($slice, 'Gate::authorize')) {
+                $offenders[] = $basename.'::'.$method;
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});

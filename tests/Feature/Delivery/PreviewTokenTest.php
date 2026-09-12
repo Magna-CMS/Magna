@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Magna\Auth\Role;
 use Magna\Content\ContentType;
 use Magna\Content\Entry;
 use Magna\Content\EntryStatus;
@@ -27,7 +28,15 @@ function previewDeliveryToken(): string
 
 function previewManagementToken(): string
 {
+    // Minting a preview token requires the same ability as reading the entry
+    // through the management API (content.{type}.view) — a management-scope
+    // token alone is not enough. See the authorization cases below.
+    $role = Role::factory()->create();
+    $role->grant('content.article.view');
+
     $user = User::factory()->create();
+    $user->assignRole($role);
+
     $result = $user->createToken('preview-management', ['management'], now()->addDay());
     $result->accessToken->forceFill(['scope' => 'management'])->save();
 
@@ -101,6 +110,31 @@ it('clamps an excessive ttl_seconds to the maximum allowed', function (): void {
 
     $expiresAt = Carbon::parse($response->json('expires_at'));
     expect($expiresAt->diffInSeconds(now()))->toBeLessThanOrEqual(604_800 + 5); // 7 days + small margin
+});
+
+// A preview token IS draft read access to the type for whoever holds it, so
+// minting one demands content.{type}.view. Before this check any
+// management-scope token — whatever its holder was actually permitted to see
+// — could mint week-long, non-revocable draft-access tokens.
+it('refuses to mint for a management token whose holder cannot view the type', function (): void {
+    setupPreviewType();
+
+    $draft = Entry::type('article')->create([
+        'title' => 'Off Limits',
+        'slug' => 'off-limits',
+        'status' => EntryStatus::Draft,
+        'locale' => '',
+    ]);
+
+    // Management scope, but no content.article.view — exactly the caller the
+    // missing check used to let through.
+    $user = User::factory()->create();
+    $result = $user->createToken('preview-unpermitted', ['management'], now()->addDay());
+    $result->accessToken->forceFill(['scope' => 'management'])->save();
+
+    $this->postJson("/api/v1/content/article/{$draft->id}/preview-token", [], [
+        'Authorization' => 'Bearer '.$result->plainTextToken,
+    ])->assertStatus(403);
 });
 
 it('delivery token cannot mint a preview token (403)', function (): void {
