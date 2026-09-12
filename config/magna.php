@@ -122,6 +122,21 @@ return [
     |   also defeats one who can forge both. Enable once Update Manager
     |   publishes `zip_sha256_signature` for every release.
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Trusted Hosts
+    |--------------------------------------------------------------------------
+    | Extra hostnames this install is legitimately served on, beyond APP_URL's
+    | host and its subdomains — a LAN address, a staging alias, a panel on its
+    | own hostname. Comma-separated. Everything else is refused with a 400
+    | before any absolute URL (password-reset links included) can be built
+    | from a spoofed Host or X-Forwarded-Host header; see the trustHosts()
+    | registration in bootstrap/app.php.
+    */
+    'security' => [
+        'trusted_hosts' => env('MAGNA_TRUSTED_HOSTS', ''),
+    ],
+
     'licensing' => [
         'public_key' => env('APP_ENV') === 'production' ? '' : env('MAGNA_LICENSE_PUBLIC_KEY', ''),
     ],

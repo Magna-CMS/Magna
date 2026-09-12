@@ -52,6 +52,26 @@ return Application::configure(basePath: dirname(__DIR__))
         // TrustProxies reads trustedproxy.proxies while handling a request,
         // when config is loaded, which is why the list lives in a config file.
 
+        // Bound the hostnames this application will believe it is served on.
+        // Host and X-Forwarded-Host are client-supplied, and Laravel builds
+        // absolute URLs — password-reset links first among them — from
+        // whatever they claim: without this, a spoofed header put an
+        // attacker's domain into a victim's reset email. Trusted are
+        // APP_URL's host with its subdomains (the middleware's default)
+        // plus the explicit MAGNA_TRUSTED_HOSTS list for installs reached
+        // at more than one address; anything else is refused with a 400
+        // before a URL is built. The closure is evaluated per request by
+        // the TrustHosts middleware, when config is loaded — the same
+        // reason the proxy list lives in a config file (see above).
+        $middleware->trustHosts(at: static function (): array {
+            $extra = config('magna.security.trusted_hosts');
+
+            return array_values(array_filter(
+                array_map(trim(...), explode(',', is_string($extra) ? $extra : '')),
+                static fn (string $host): bool => $host !== '',
+            ));
+        });
+
         // Appended to the GLOBAL stack, and both halves of that placement
         // matter: appending lands it after TrustProxies (also global), so
         // request()->isSecure() sees X-Forwarded-Proto behind a proxy, and the

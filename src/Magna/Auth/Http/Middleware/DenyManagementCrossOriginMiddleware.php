@@ -6,6 +6,7 @@ namespace Magna\Auth\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Magna\Support\OriginResolver;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -14,6 +15,13 @@ use Symfony\Component\HttpFoundation\Response;
  * The browser same-origin policy already blocks responses without CORS headers,
  * but an explicit 403 here adds defence-in-depth: it catches misconfigured
  * clients and makes the policy visible in logs and tests.
+ *
+ * "Same origin" means the origin of THIS request, not APP_URL: on an install
+ * reached at a second trusted address the panel's own management calls used
+ * to 403 because their origin matched the browser and this guard matched the
+ * config. A cross-site attacker gains nothing from the change — their page's
+ * Origin still names their domain, never this request's host, and TrustHosts
+ * bounds which hosts a request may claim at all. See OriginResolver.
  *
  * Delivery routes have their own CORS policy (config/cors.php) and must NOT
  * use this middleware.
@@ -25,7 +33,7 @@ final class DenyManagementCrossOriginMiddleware
     {
         $origin = $request->headers->get('Origin');
 
-        if ($origin !== null && ! $this->isSameOrigin($origin)) {
+        if ($origin !== null && ! OriginResolver::isSameRequestOrigin($origin, $request)) {
             return response()->json(
                 ['message' => 'Cross-origin requests are not permitted on the management API.'],
                 403,
@@ -33,29 +41,5 @@ final class DenyManagementCrossOriginMiddleware
         }
 
         return $next($request);
-    }
-
-    private function isSameOrigin(string $origin): bool
-    {
-        $appUrl = config('app.url', '');
-
-        if (! is_string($appUrl) || $appUrl === '') {
-            return false;
-        }
-
-        // Extract only scheme+host+port from APP_URL. Browsers always send the
-        // bare origin (no path), so "https://example.com/cms" must match
-        // "https://example.com", not require the /cms suffix in the header.
-        $parsed = parse_url($appUrl);
-        if (! is_array($parsed) || ! isset($parsed['host'])) {
-            return false;
-        }
-
-        $appOrigin = ($parsed['scheme'] ?? 'http').'://'.$parsed['host'];
-        if (isset($parsed['port'])) {
-            $appOrigin .= ':'.$parsed['port'];
-        }
-
-        return rtrim($origin, '/') === $appOrigin;
     }
 }

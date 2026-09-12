@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Magna\Admin\Pages\AccountCentrePage;
 use Magna\Marketplace\Marketplace;
 use Magna\Support\InstallFingerprint;
+use Magna\Support\OriginResolver;
 
 /**
  * The core-side legs of the connect handshake — see
@@ -156,9 +157,12 @@ class AccountCentreController
      * Both legs must agree on it, so callback() derives the site_url it sends
      * to the exchange endpoint from here too — Update Manager checks that the
      * value presented at exchange matches the one the code was issued for.
+     *
+     * Bounded by TrustHosts (see OriginResolver): "the origin the browser is
+     * on" can never be a host this install does not trust.
      */
     private function handshakeOrigin(Request $request): string
     {
-        return rtrim($request->getSchemeAndHttpHost(), '/');
+        return OriginResolver::requestOrigin($request);
     }
 }
