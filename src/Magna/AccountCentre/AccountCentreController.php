@@ -30,12 +30,14 @@ class AccountCentreController
         abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
         abort_unless(in_array($provider, self::ALLOWED_PROVIDERS, true), 404);
 
+        $siteUrl = $this->handshakeOrigin($request);
+
         $state = Str::random(40);
         $request->session()->put(self::SESSION_STATE_KEY, $state);
 
         $query = http_build_query([
-            'site_url' => rtrim($this->configuredAppUrl(), '/'),
-            'callback' => url('/account-centre/callback'),
+            'site_url' => $siteUrl,
+            'callback' => $siteUrl.'/account-centre/callback',
             'state' => $state,
         ]);
 
@@ -49,8 +51,26 @@ class AccountCentreController
         $expectedState = $request->session()->pull(self::SESSION_STATE_KEY);
         $accountPageUrl = AccountCentrePage::getUrl();
 
-        if ($request->query('error') !== null) {
-            return redirect($accountPageUrl)->with('account_centre_error', 'The connection attempt failed. Please try again.');
+        $error = $request->query('error');
+        if ($error !== null) {
+            // Update Manager names the reason, and each one needs a
+            // different thing done about it. Reporting them all as "the
+            // connection attempt failed" sent people round the same loop:
+            // retrying is the right answer for one of these and useless for
+            // the rest.
+            //
+            // Each message says only what the person reading it can act on.
+            // This is a panel a customer administers, so nothing here names
+            // our internals, points at a server log they cannot read, or
+            // assigns blame between the two sides — when the fault is ours,
+            // the detail belongs in Update Manager's own log, where support
+            // can reach it.
+            return redirect($accountPageUrl)->with('account_centre_error', match ($error) {
+                'provider_unavailable' => 'That sign-in method is not available at the moment. Please try another one.',
+                'no_email' => 'That account did not share an email address, and a Magna Account needs one. Try a different sign-in method, or make your email address public on that provider.',
+                'email_in_use' => 'A Magna Account already exists for that email address, registered with a different sign-in method. Please sign in with the method you used originally.',
+                default => 'The connection attempt did not complete. Please try again.',
+            });
         }
 
         $state = $request->query('state');
@@ -68,7 +88,10 @@ class AccountCentreController
 
         $result = $client->exchange(
             code: $code,
-            siteUrl: rtrim($this->configuredAppUrl(), '/'),
+            // Same derivation connect() used. The browser has just been sent
+            // back to this origin, so this is the value the code was issued
+            // for — and Update Manager rejects the exchange if it is not.
+            siteUrl: $this->handshakeOrigin($request),
             fingerprint: InstallFingerprint::derive(),
             siteLabel: is_string($appName) && $appName !== '' ? $appName : null,
         );
@@ -109,10 +132,33 @@ class AccountCentreController
         return redirect($accountPageUrl)->with('account_centre_status', 'Magna Account disconnected.');
     }
 
-    private function configuredAppUrl(): string
+    /**
+     * The origin the whole handshake is conducted on: scheme, host and port of
+     * the request the administrator is actually making.
+     *
+     * Update Manager refuses a connect whose callback is not same-origin with
+     * its site_url — that guard is what stops a caller pointing the exchange
+     * code at somewhere else entirely, so it is not going anywhere. site_url
+     * used to be read from APP_URL while the callback was built by url(),
+     * which follows the browser. On an install reached at a second address —
+     * a LAN IP, a staging alias, a panel on its own hostname — the two
+     * disagreed, the guard refused, and the browser landed on the Magna
+     * Account sign-in page with nothing to explain it.
+     *
+     * Using the browsing origin for both is what makes it work rather than
+     * merely agree. It is the one origin that is definitely reachable (the
+     * administrator is on it) and the one whose session holds the state nonce
+     * that has to come back — APP_URL is neither of those things when the
+     * panel is somewhere else. It costs nothing in identity terms: a site is
+     * recognised by its fingerprint, derived from APP_KEY, and site_url is
+     * label text in the account's site list.
+     *
+     * Both legs must agree on it, so callback() derives the site_url it sends
+     * to the exchange endpoint from here too — Update Manager checks that the
+     * value presented at exchange matches the one the code was issued for.
+     */
+    private function handshakeOrigin(Request $request): string
     {
-        $url = config('app.url');
-
-        return is_string($url) ? $url : '';
+        return rtrim($request->getSchemeAndHttpHost(), '/');
     }
 }
