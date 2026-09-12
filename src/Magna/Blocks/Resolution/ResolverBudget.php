@@ -75,7 +75,13 @@ final class ResolverBudget
             return null;
         }
 
-        $startedAt = microtime(true);
+        /*
+         * hrtime(), not microtime(): this measures how long something took,
+         * and the wall clock can be adjusted underneath it. A clock correction
+         * mid-render produced a duration shorter than the work — occasionally
+         * a negative one — which let an exhausted budget look unspent.
+         */
+        $startedAt = hrtime(true);
 
         try {
             return $resolve();
@@ -83,7 +89,7 @@ final class ResolverBudget
             // In `finally` so a throwing resolver is still charged for the
             // time it burnt: a resolver that takes two seconds and then fails
             // has cost the visitor exactly as much as one that succeeded.
-            $this->charge($kind, $handle, (microtime(true) - $startedAt) * 1000);
+            $this->charge($kind, $handle, (hrtime(true) - $startedAt) / 1_000_000);
         }
     }
 
