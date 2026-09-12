@@ -18,12 +18,16 @@ beforeEach(function (): void {
 
 /**
  * The page is reachable with `settings.view` (a read-only permission any
- * support/auditor role can hold), but two of its Livewire methods are not
- * read-only: toggleDebugMode() writes APP_DEBUG to .env — which turns stack
- * traces, SQL and environment dumps on for every visitor of the site — and
- * clearCache() flushes the application cache. Livewire methods are callable by
- * anyone who can render the component whether or not the button that calls them
- * was rendered for them, so page access alone must not authorize either.
+ * support/auditor role can hold), but clearCache() flushes the application
+ * cache — not read-only. Livewire methods are callable by anyone who can
+ * render the component whether or not the button that calls them was
+ * rendered for them, so page access alone must not authorize it.
+ *
+ * The page also used to expose toggleDebugMode(), which wrote APP_DEBUG to
+ * .env from the browser — stack traces, SQL and environment dumps for every
+ * visitor, one compromised admin session away. Removed outright: that flag
+ * is a server-operator decision made at the shell. The test below pins the
+ * removal.
  */
 function systemInfoViewer(): User
 {
@@ -45,16 +49,13 @@ function systemInfoAdmin(): User
     return $user;
 }
 
-it('refuses toggleDebugMode for a settings.view-only user', function (): void {
-    $this->actingAs(systemInfoViewer());
+it('offers no panel method that writes APP_DEBUG, for anyone', function (): void {
+    // Regression pin on the removal: no Livewire method on this page may
+    // toggle debug mode again — not even behind settings.manage.
+    expect(method_exists(SystemInfoPage::class, 'toggleDebugMode'))->toBeFalse();
 
-    $before = (string) file_get_contents(base_path('.env'));
-
-    Livewire::test(SystemInfoPage::class)
-        ->call('toggleDebugMode')
-        ->assertForbidden();
-
-    expect((string) file_get_contents(base_path('.env')))->toBe($before);
+    $source = (string) file_get_contents((new ReflectionClass(SystemInfoPage::class))->getFileName());
+    expect($source)->not->toContain("preg_replace('/^APP_DEBUG");
 });
 
 it('refuses clearCache for a settings.view-only user', function (): void {

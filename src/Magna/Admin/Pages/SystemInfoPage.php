@@ -404,61 +404,24 @@ class SystemInfoPage extends Page
     }
 
     /**
-     * Writing APP_DEBUG=true to .env turns stack traces, SQL and environment
-     * dumps on for every visitor, and clearing the cache is a site-wide
-     * side effect — neither is a read-only operation, so neither may be
-     * reachable with the settings.view that canAccess() asks for. Livewire
-     * methods are callable by anyone who can render the component, regardless
-     * of whether the button that calls them was rendered, so the check has to
-     * live in the method.
+     * Clearing the cache is a site-wide side effect — not a read-only
+     * operation, so it may not be reachable with the settings.view that
+     * canAccess() asks for. Livewire methods are callable by anyone who can
+     * render the component, regardless of whether the button that calls them
+     * was rendered, so the check has to live in the method.
+     *
+     * The page used to offer a toggleDebugMode() here that wrote
+     * APP_DEBUG=true into .env from the browser. It is gone deliberately:
+     * turning stack traces, SQL and environment dumps on for every visitor
+     * of a production site is a server-operator decision made at the shell,
+     * not a panel button — a compromised or over-permissioned admin session
+     * must not be able to switch the whole site into disclosure mode. The
+     * panel still SHOWS the flag's state; changing it means editing .env on
+     * the server.
      */
     private function authorizeSettingsManage(): void
     {
         abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
-    }
-
-    public function toggleDebugMode(): void
-    {
-        $this->authorizeSettingsManage();
-
-        $newValue = ! (bool) config('app.debug');
-        $envPath = base_path('.env');
-
-        if (! file_exists($envPath) || ! is_writable($envPath)) {
-            Notification::make()
-                ->title('Cannot update .env')
-                ->body('The .env file is missing or not writable by the web server.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $content = (string) file_get_contents($envPath);
-        $newLine = 'APP_DEBUG='.($newValue ? 'true' : 'false');
-
-        if (preg_match('/^APP_DEBUG=/m', $content) === 1) {
-            $content = (string) preg_replace('/^APP_DEBUG=.*/m', $newLine, $content);
-        } else {
-            $content .= "\n".$newLine;
-        }
-
-        file_put_contents($envPath, $content);
-
-        // Do NOT mutate config('app.debug') in-request: Livewire only records
-        // its render-timing $start when debug is on at the *start* of the
-        // request, so flipping it mid-request triggers "Undefined variable
-        // $start". Instead, clear any cached config and reload so the new .env
-        // value takes effect on a fresh request.
-        Artisan::call('config:clear');
-
-        Notification::make()
-            ->title('Debug mode '.($newValue ? 'enabled' : 'disabled'))
-            ->body('APP_DEBUG updated in .env.')
-            ->success()
-            ->send();
-
-        $this->redirect(static::getUrl(), navigate: false);
     }
 
     public function runDiagnostics(): void

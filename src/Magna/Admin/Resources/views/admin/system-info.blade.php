@@ -445,30 +445,21 @@
         <div class="space-y-8">
 
             {{-- Environment Flag panel --}}
-            <div class="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 rounded-3xl p-6 shadow-sm"
-                 x-data="{ debugOn: @js($debug_mode) }">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 rounded-3xl p-6 shadow-sm">
                 <span class="text-[10px] uppercase font-bold text-amber-500 tracking-wider block font-mono">App Environment</span>
                 <h4 class="text-md font-extrabold text-slate-900 dark:text-white mt-1">Environment Flag & Debug</h4>
 
-                {{-- Debug toggle --}}
+                {{-- Debug status (read-only: APP_DEBUG is changed in .env on the server, never from the panel) --}}
                 <div class="mt-5 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-2.5 h-2.5 rounded-full {{ $debug_mode ? 'pulse-amber' : '' }}" style="background:{{ $debug_mode ? '#f59e0b' : '#94a3b8' }}"></div>
-                            <div>
-                                <span class="text-xs font-bold text-slate-600 dark:text-slate-300 block">Debug Mode Status</span>
-                                <span class="text-[11px] font-mono font-semibold uppercase {{ $debug_mode ? 'text-amber-500' : 'text-slate-400' }}">{{ $debug_mode ? 'ENABLED' : 'DISABLED' }}</span>
-                            </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-2.5 h-2.5 rounded-full {{ $debug_mode ? 'pulse-amber' : '' }}" style="background:{{ $debug_mode ? '#f59e0b' : '#94a3b8' }}"></div>
+                        <div>
+                            <span class="text-xs font-bold text-slate-600 dark:text-slate-300 block">Debug Mode Status</span>
+                            <span class="text-[11px] font-mono font-semibold uppercase {{ $debug_mode ? 'text-amber-500' : 'text-slate-400' }}">{{ $debug_mode ? 'ENABLED' : 'DISABLED' }}</span>
                         </div>
-                        <button @click="debugOn = !debugOn; $wire.toggleDebugMode()"
-                            class="w-12 h-6 rounded-full p-0.5 transition-all relative flex items-center focus:outline-none"
-                            :class="debugOn ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'">
-                            <span class="w-5 h-5 rounded-full bg-white shadow-md transition-all duration-300"
-                                  :class="debugOn ? 'translate-x-6' : 'translate-x-0'"></span>
-                        </button>
                     </div>
                     <p class="text-[11px] text-slate-400 mt-3 leading-normal">
-                        Writes <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">APP_DEBUG</code> to <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">.env</code> — active immediately.
+                        Set <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">APP_DEBUG</code> in the server's <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">.env</code> file.
                     </p>
                 </div>
 
