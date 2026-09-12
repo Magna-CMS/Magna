@@ -42,6 +42,10 @@ class EntryManager
     {
         $type = $this->resolveType($typeHandle);
 
+        // A redaction placeholder is "unchanged", never a value to store —
+        // and on create there is nothing to be unchanged from, so it simply
+        // drops (and trips `required` where the field demands a real value).
+        $data = EncryptedFieldRedactor::stripPlaceholders($data, $type);
         $data = $this->autoSlugs->apply($type, $data);
         $validated = $this->validator->validate($type, $data);
         $validated = $this->prepareForStorage($type, $validated);
@@ -99,6 +103,11 @@ class EntryManager
     {
         $type = $this->getType($entry);
 
+        // Write-only secret round-trip: the management resource reads an
+        // encrypted value back as a placeholder, so a client resubmitting
+        // that payload means "leave the secret alone" — the key is dropped
+        // before the partial validation ever sees it.
+        $data = EncryptedFieldRedactor::stripPlaceholders($data, $type);
         $data = $this->autoSlugs->apply($type, $data, $entry);
         $validated = $this->validator->validate($type, $data, partial: true);
         $validated = $this->prepareForStorage($type, $validated);

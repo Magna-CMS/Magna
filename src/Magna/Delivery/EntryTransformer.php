@@ -85,6 +85,14 @@ final class EntryTransformer
                 continue;
             }
 
+            // Encrypted fields never leave through the public delivery API —
+            // the `encrypted` cast would hand out the decrypted plaintext.
+            // Omitted rather than redacted: a public consumer was never
+            // entitled to know the secret exists. See EncryptedFieldRedactor.
+            if ($field->encrypted) {
+                continue;
+            }
+
             $value = $entry->getAttribute($field->handle);
 
             if ($field->type instanceof MediaField) {

@@ -7,6 +7,7 @@ namespace Magna\Content\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Magna\Blocks\ReservedKeys;
+use Magna\Content\EncryptedFieldRedactor;
 use Magna\Content\Entry;
 use Magna\Content\FieldTypes\BlocksField;
 use Magna\Content\SchemaRegistry;
@@ -47,6 +48,17 @@ class EntryResource extends JsonResource
         if ($type !== null) {
             foreach ($type->columnFields() as $field) {
                 $value = $this->resource->getAttribute($field->handle);
+
+                // Write-only secret semantics: a set encrypted value reads
+                // back as the placeholder — in API responses AND in the
+                // audit_logs before/after snapshots built from this resource,
+                // which otherwise archived every secret in plaintext.
+                // EntryManager strips the placeholder on write, so a client
+                // round-tripping this payload can never overwrite the secret
+                // with it. See EncryptedFieldRedactor.
+                if ($field->encrypted && $value !== null) {
+                    $value = EncryptedFieldRedactor::PLACEHOLDER;
+                }
 
                 // Blocks documents shed renderer-reserved '_' keys on the way
                 // out — a document stored before the reserved-key rules must
