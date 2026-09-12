@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Magna\Delivery\Controllers;
+namespace Magna\Delivery;
 
 use Magna\Content\ContentType;
-use Magna\Delivery\SurrogateKeyCollector;
 
 /** Result of a successful DeliveryController::beginRequest() call. */
 final readonly class DeliveryRequestContext

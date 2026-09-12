@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace Magna\Delivery\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Magna\Content\ContentType;
 use Magna\Content\Entry;
 use Magna\Content\EntryStatus;
-use Magna\Content\FieldTypes\RelationField;
 use Magna\Content\SchemaRegistry;
 use Magna\Delivery\BlocksDocumentResolution;
 use Magna\Delivery\EntryTransformer;
@@ -18,7 +16,6 @@ use Magna\Delivery\PreviewTokenService;
 use Magna\Delivery\RelationLoader;
 use Magna\Delivery\ResponseCacheService;
 use Magna\Delivery\SurrogateKeyCollector;
-use Magna\Media\Media;
 use Magna\Settings\GeneralSettings;
 use Magna\Settings\LocalizationSettings;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,11 +34,8 @@ final class ContentSingleController extends DeliveryController
 
     public function __invoke(Request $request, string $type, string $id): Response
     {
-        $outcome = $this->beginRequest($request, $type, $this->schema, $this->etag);
-        if ($outcome instanceof Response) {
-            return $outcome;
-        }
-        [$contentType, $keys, $cacheKey] = [$outcome->contentType, $outcome->keys, $outcome->cacheKey];
+        $context = $this->beginRequest($request, $type, $this->schema, $this->etag);
+        [$contentType, $keys, $cacheKey] = [$context->contentType, $context->keys, $context->cacheKey];
 
         $preview = $request->boolean('preview');
         $previewToken = $request->string('preview_token')->value();
@@ -145,32 +139,11 @@ final class ContentSingleController extends DeliveryController
             }
         }
 
-        // Parse ?with=
-        $withParam = $request->string('with')->value();
-        /** @var list<string> $relationHandles */
-        $relationHandles = [];
-        if ($withParam !== '') {
-            foreach (array_map('trim', explode(',', $withParam)) as $handle) {
-                $field = $contentType->getField($handle);
-                if ($field === null || ! $field->type instanceof RelationField) {
-                    return response()->json(['message' => "Unknown relation field: '{$handle}'."], 400);
-                }
-                $relationHandles[] = $handle;
-            }
-        }
+        $relationHandles = $this->parseRelationHandles($request, $contentType);
+        $fields = $this->parseFieldSelection($request);
 
-        // Parse ?fields=
-        $fieldsParam = $request->string('fields')->value();
-        $fields = $fieldsParam !== '' ? array_map('trim', explode(',', $fieldsParam)) : null;
-
-        // Batch-load media
         $entries = collect([$entry]);
-        $mediaIds = $this->transformer->collectMediaIds($entries, $contentType);
-
-        /** @var Collection<array-key, Media> $mediaCache */
-        $mediaCache = $mediaIds !== []
-            ? Media::whereIn('id', $mediaIds)->get()->keyBy('id')
-            : collect();
+        $mediaCache = $this->loadMediaCache($entries, $contentType, $this->transformer);
 
         $relations = $relationHandles !== []
             ? $this->relationLoader->load($entries, $relationHandles, $type)
@@ -183,10 +156,7 @@ final class ContentSingleController extends DeliveryController
         }
 
         $body = ['data' => $data];
-        $json = json_encode($body);
-        if ($json === false) {
-            return response()->json(['message' => 'Response serialization failed.'], 500);
-        }
+        $json = $this->encodeOrFail($body);
 
         $etagValue = '"'.hash('sha256', $json).'"';
         $this->etag->store($cacheKey, $etagValue, $type);

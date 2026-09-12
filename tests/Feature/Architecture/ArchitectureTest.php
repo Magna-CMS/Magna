@@ -3,6 +3,7 @@
 declare(strict_types=1);
 use Illuminate\Database\Eloquent\Model;
 use Magna\Management\Controllers\ManagementController;
+use Symfony\Component\HttpFoundation\Response;
 
 // Architecture guardrails. These exist so the structural discipline won earned
 // during the 2026 architecture passes can't silently regress: a future change
@@ -364,6 +365,75 @@ it('authorizes in every public management controller action', function (): void 
 
             if (! str_contains($slice, 'Gate::authorize')) {
                 $offenders[] = $basename.'::'.$method;
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
+ * Error paths THROW; only success has a return type.
+ *
+ * A HELPER returning Response|SomethingElse forces every caller into an
+ * instanceof guard — the exact shape the community review flagged on the
+ * management side (Model|JsonResponse) and that later grew back in the
+ * Delivery layer (Response|DeliveryRequestContext). The framework's own
+ * carriers exist for this: HttpResponseException for "this response, now",
+ * NotFoundHttpException for 404s. No protected or private controller method
+ * may declare a union return type that mixes a Response subtype with
+ * anything else. PUBLIC route actions are exempt: View|RedirectResponse on
+ * an action is idiomatic Laravel — the framework consumes it, no code ever
+ * unpicks it.
+ */
+it('never declares a Response union on a controller helper', function (): void {
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        $path = str_replace(DIRECTORY_SEPARATOR, '/', $file->getPathname());
+        if (! str_contains($path, '/Controllers/')) {
+            continue;
+        }
+
+        $source = (string) file_get_contents($file->getPathname());
+        if (preg_match('/namespace\s+([^;]+);/', $source, $ns) !== 1
+            || preg_match('/(?:class|interface)\s+(\w+)/', $source, $cls) !== 1) {
+            continue;
+        }
+
+        $fqcn = $ns[1].'\\'.$cls[1];
+        if (! class_exists($fqcn)) {
+            continue;
+        }
+
+        $reflection = new ReflectionClass($fqcn);
+        foreach ($reflection->getMethods() as $method) {
+            if ($method->getDeclaringClass()->getName() !== $fqcn || $method->isPublic()) {
+                continue;
+            }
+
+            $return = $method->getReturnType();
+            if (! $return instanceof ReflectionUnionType) {
+                continue;
+            }
+
+            foreach ($return->getTypes() as $type) {
+                if ($type instanceof ReflectionNamedType
+                    && ! $type->isBuiltin()
+                    && is_a($type->getName(), Response::class, true)) {
+                    $offenders[] = $cls[1].'::'.$method->getName().'(): '.$return;
+                    break;
+                }
             }
         }
     }
