@@ -94,6 +94,7 @@ class ContentServiceProvider extends ServiceProvider
                 $app->make(AutoSlugApplier::class),
                 $app->make(EntryRevisionRecorder::class),
                 $app->make(HierarchyMaintainer::class),
+                $app->make(EntryLocales::class),
             );
         });
     }

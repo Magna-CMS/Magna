@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Magna\Content\ContentType;
 use Magna\Content\Entry;
 use Magna\Content\EntryManager;
@@ -146,8 +147,17 @@ it('does not auto-unpublish entries with future unpublish_at', function (): void
 
 // ── createTranslation() ────────────────────────────────────────────────────────
 
+/** A translation may only target a locale the site has enabled. */
+function enableLocalesForTranslation(string ...$locales): void
+{
+    $settings = LocalizationSettings::get();
+    $settings->available_locales = $locales;
+    $settings->save();
+}
+
 it('createTranslation() creates a new locale row as draft', function (): void {
     registerLocalizableType();
+    enableLocalesForTranslation('en', 'fr');
     /** @var EntryManager $manager */
     $manager = app(EntryManager::class);
 
@@ -176,6 +186,8 @@ it('createTranslation() deep-copies blocks_data from source', function (): void 
     $registry->register($type);
     app(SchemaSyncer::class)->syncAll($registry, allowDestructive: true);
 
+    enableLocalesForTranslation('en', 'fr');
+
     $blocksJson = json_encode([['type' => 'section', 'id' => 'aaa', 'columns' => []]]);
 
     $en = Entry::makeInstance('page', $registry);
@@ -191,6 +203,22 @@ it('createTranslation() deep-copies blocks_data from source', function (): void 
     $fr = $manager->createTranslation($en, 'fr');
 
     expect($fr->blocks_data)->toBe($blocksJson);
+});
+
+it('refuses a locale the site has not enabled, on create and on translate', function (): void {
+    // locale reaches create() from raw request input and used to be stored
+    // verbatim — any string became a permanent row discriminator.
+    registerLocalizableType();
+    enableLocalesForTranslation('en', 'fr');
+    /** @var EntryManager $manager */
+    $manager = app(EntryManager::class);
+
+    expect(fn () => $manager->create('article', ['title' => 'Nope', 'locale' => 'xx']))
+        ->toThrow(ValidationException::class, "Locale 'xx' is not enabled");
+
+    $en = createLocaleEntry('article', 'en', 'Hello');
+    expect(fn () => $manager->createTranslation($en, 'zz'))
+        ->toThrow(ValidationException::class, "Locale 'zz' is not enabled");
 });
 
 it('createTranslation() throws on non-localizable type', function (): void {

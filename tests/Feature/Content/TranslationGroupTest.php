@@ -19,10 +19,18 @@ use Magna\Content\FieldTypeRegistry;
 use Magna\Content\SchemaRegistry;
 use Magna\Content\SchemaSyncer;
 use Magna\Content\TableGenerator;
+use Magna\Settings\LocalizationSettings;
 use Magna\Users\User;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
+
+beforeEach(function (): void {
+    // A translation may only target a locale the site has enabled.
+    $settings = LocalizationSettings::get();
+    $settings->available_locales = ['en', 'de'];
+    $settings->save();
+});
 
 function registerLocalizedPageType(string $handle = 'tg_page'): ContentType
 {
