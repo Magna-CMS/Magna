@@ -242,7 +242,12 @@ class MediaResource extends \Filament\Resources\Resource
         // original over the wire. Falls back to the original automatically
         // (via MediaUrlResolver) if no conversion exists yet.
         $url = e(app(MediaUrlResolver::class)->publicUrl($record, 'hero'));
-        $originalUrl = e(Storage::disk($record->disk)->url($record->path));
+        // Through the resolver, never the raw disk URL: for an SVG the
+        // resolver hands back the serve-controller route, whose forced
+        // Content-Disposition: attachment is the contract that keeps SVG
+        // markup from ever rendering inline on this origin — a raw
+        // Storage::url() link was the one place that bypassed it.
+        $originalUrl = e(app(MediaUrlResolver::class)->publicUrl($record));
         $mime = $record->mime_type;
 
         if (str_starts_with($mime, 'image/')) {
