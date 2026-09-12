@@ -251,15 +251,25 @@ class PluginManager
             $this->booted[$name]->disable();
             unset($this->booted[$name]);
         } else {
-            $plugin = $this->instantiate($record->manifest, $record->base_path);
-            $plugin->disable();
+            try {
+                $plugin = $this->instantiate($record->manifest, $record->base_path);
+                $plugin->disable();
+            } catch (Throwable $e) {
+                // The disable() hook is a courtesy to the plugin; the record
+                // update below is the actual disable. When the entry class is
+                // gone (files deleted, or a broken upload that never wrote
+                // them), refusing here made uninstall() throw too — leaving
+                // the wreckage impossible to remove from the admin panel at
+                // all, the one place the error told people to use.
+                logger()->warning("Plugin [{$name}] disabled without running its disable() hook: {$e->getMessage()}");
+            }
         }
 
         // A disabled plugin must not leave its content types active — otherwise
         // SchemaRegistry::loadFromDatabase() keeps re-registering them and their
         // admin navigation lingers. Data tables are preserved (disable never
         // destroys data); re-enable restores the content_types records.
-        $this->contentTypes->deregister($record, dropTables: false);
+        $this->contentTypes->deregister($record);
 
         $record->update(['enabled' => false, 'disabled_at' => now()]);
 
@@ -287,21 +297,32 @@ class PluginManager
         // Remove the plugin's content types. Without --purge the entries data
         // tables are kept (data preserved); with --purge they are dropped along
         // with any tables the manifest declares.
-        // Stage 11 (S11-03): deregisterContentTypes (DML) and the final
-        // record delete (DML) wrapped together — if the delete failed
-        // after purge() already dropped tables (DDL, can't be transactional
-        // on MySQL either way), the PluginRecord would otherwise survive
-        // pointing at tables that no longer exist.
+        //
+        // Stage 11 (S11-03) wrapped the row work and the final record delete
+        // together, so a failed delete could not leave a PluginRecord pointing
+        // at tables that had already been dropped. That intent stands; what
+        // changed is that the drops no longer happen inside the transaction.
+        // MySQL commits an open transaction the instant it sees DDL, so the
+        // drops ended it under everything that followed and the commit then
+        // failed with "There is no active transaction" — every --purge on
+        // MySQL did its work and reported a failure.
+        //
+        // Every row write goes first, in one transaction. The drops follow it,
+        // and the asymmetry is deliberate: a drop that fails after the commit
+        // leaves an orphaned table, which is inert and can be dropped by hand,
+        // while the reverse — records gone, tables still referenced — is the
+        // state S11-03 was written to prevent, and this ordering makes it
+        // unreachable rather than merely unlikely.
         DB::transaction(function () use ($record, $purge): void {
-            $this->contentTypes->deregister($record, dropTables: $purge);
+            $this->contentTypes->deregister($record);
 
             if ($purge) {
-                $this->contentTypes->purge($record);
-                // The plugin's own tables are gone; its settings live in core's
-                // shared `settings` table keyed by group and would otherwise be
-                // orphaned — including any encrypted secrets. Remove the groups
-                // the manifest declares under uninstall.settingsGroups (core
-                // groups are refused defensively).
+                // The plugin's own tables are about to go; its settings live in
+                // core's shared `settings` table keyed by group and would
+                // otherwise be orphaned — including any encrypted secrets.
+                // Remove the groups the manifest declares under
+                // uninstall.settingsGroups (core groups are refused
+                // defensively).
                 $this->settingsPurger->purge($record);
                 // Dropping a plugin's tables while leaving its rows in the
                 // migrations ledger makes the purge irreversible in the worst
@@ -315,6 +336,14 @@ class PluginManager
 
             $record->delete();
         });
+
+        // DDL, and therefore outside the transaction — see above. $record is
+        // deleted but still in memory, which is all these need: both read the
+        // manifest and base path off the object to work out what they own.
+        if ($purge) {
+            $this->contentTypes->dropEntryTables($record);
+            $this->contentTypes->purge($record);
+        }
 
         // The update-check row must not outlive the plugin: the dashboard badge
         // and the Account Centre licences card both read it, so an uninstalled

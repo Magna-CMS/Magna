@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Magna\Plugins;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Magna\Content\Models\ContentTypeRecord;
 use Magna\Content\SchemaRegistry;
@@ -88,10 +90,12 @@ final class PluginContentTypeSyncer
     /**
      * Remove the content types a plugin owns from the registry and the
      * content_types table so their navigation and resources disappear.
-     * When $dropTables is true, the physical magna_entries_* tables are
-     * dropped too (destructive — purge only).
+     *
+     * Rows only. Dropping the physical magna_entries_* tables is a separate
+     * call (dropEntryTables) because the two cannot share a transaction: see
+     * that method, and PluginManager::uninstall() for the ordering.
      */
-    public function deregister(PluginRecord $record, bool $dropTables): void
+    public function deregister(PluginRecord $record): void
     {
         if (! Schema::hasTable('content_types')) {
             return;
@@ -104,10 +108,6 @@ final class PluginContentTypeSyncer
         foreach ($this->ownedContentTypeHandles($record) as $handle) {
             ContentTypeRecord::query()->where('handle', $handle)->delete();
             $registry?->forget($handle);
-
-            if ($dropTables) {
-                Schema::dropIfExists('magna_entries_'.$handle);
-            }
         }
 
         // The mass delete above bypasses Eloquent model events, so the cached
@@ -120,8 +120,28 @@ final class PluginContentTypeSyncer
     }
 
     /**
+     * Drop the magna_entries_* tables belonging to a plugin's content types.
+     * Destructive — purge only, and never inside a transaction.
+     *
+     * Split out of deregister() because MySQL commits the open transaction the
+     * moment it sees DDL. A drop that ran alongside the row deletes therefore
+     * ended the transaction under everything that followed, and the eventual
+     * commit failed with "There is no active transaction" — an uninstall that
+     * had in fact done its work reported itself as a failure. Called after the
+     * transaction has committed, so the rows are already gone and this drops
+     * tables nothing refers to any more.
+     */
+    public function dropEntryTables(PluginRecord $record): void
+    {
+        foreach ($this->ownedContentTypeHandles($record) as $handle) {
+            Schema::dropIfExists('magna_entries_'.$handle);
+        }
+    }
+
+    /**
      * Drop the tables a plugin's manifest declares under uninstall.tables,
-     * skipping any core Magna table.
+     * skipping any core Magna table. DDL — same transaction rule as
+     * dropEntryTables().
      */
     public function purge(PluginRecord $record): void
     {
@@ -133,13 +153,116 @@ final class PluginContentTypeSyncer
         }
 
         $tables = $uninstall['tables'] ?? [];
-        if (is_array($tables)) {
-            foreach ($tables as $table) {
-                if (is_string($table) && ! $this->isCoreTable($table)) {
-                    Schema::dropIfExists($table);
+        if (! is_array($tables)) {
+            return;
+        }
+
+        // A manifest names tables, but it only gets to drop the ones nothing
+        // else owns: never a core table, and never a table another installed
+        // plugin claims — a tampered (or merely careless) manifest could
+        // otherwise take a different plugin's data with it on the way out.
+        $claimed = $this->tablesClaimedByOtherPlugins($record);
+
+        $droppable = [];
+        foreach ($tables as $table) {
+            if (! is_string($table) || $this->isCoreTable($table)) {
+                continue;
+            }
+
+            if (isset($claimed[$table])) {
+                Log::warning("Plugin [{$record->name}] purge refused to drop [{$table}]: another installed plugin claims it.");
+
+                continue;
+            }
+
+            $droppable[] = $table;
+        }
+
+        // The manifest lists its tables in whatever order the author wrote
+        // them, so a parent almost always precedes the child pointing at it,
+        // and MySQL/Postgres refuse to drop a table another table still
+        // references. SQLite does not enforce this during a drop, which is why
+        // a purge that works in development fails on a real deployment with
+        // "Cannot drop table ... referenced by a foreign key constraint".
+        // Ordering the list is not a fix (a cycle has no valid order), and
+        // SET FOREIGN_KEY_CHECKS=0 is worse: it is connection-scoped state
+        // that outlives the request on Octane's persistent connections if a
+        // fatal error skips the re-enable, and it silently strips protection
+        // from every other table while it is off. Dropping the constraints on
+        // the doomed tables themselves is exactly as much as the job needs —
+        // and a table OUTSIDE the purge list that still references one of
+        // these keeps its constraint, so that drop fails loudly instead of
+        // leaving a dangling reference behind.
+        $this->dropForeignKeysOn($droppable);
+
+        foreach ($droppable as $table) {
+            Schema::dropIfExists($table);
+        }
+    }
+
+    /**
+     * Drop every foreign key defined on the given tables so they can be
+     * dropped in any order. SQLite is skipped on both counts: it neither
+     * blocks a DROP TABLE on inbound references nor supports dropping a
+     * foreign key in place.
+     *
+     * @param  list<string>  $tables
+     */
+    private function dropForeignKeysOn(array $tables): void
+    {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
+        foreach ($tables as $table) {
+            if (! Schema::hasTable($table)) {
+                continue;
+            }
+
+            foreach (Schema::getForeignKeys($table) as $foreignKey) {
+                $name = $foreignKey['name'] ?? null;
+                if (is_string($name) && $name !== '') {
+                    Schema::table($table, static function (Blueprint $blueprint) use ($name): void {
+                        $blueprint->dropForeign($name);
+                    });
                 }
             }
         }
+    }
+
+    /**
+     * Every table some OTHER installed plugin has a claim on: the tables its
+     * manifest declares under uninstall.tables, plus the magna_entries_*
+     * tables of the content types it owns. The record being purged is already
+     * deleted by the time purge() runs, so "every installed plugin" and
+     * "every other plugin" are the same query — the key exclusion is belt and
+     * braces for any future caller that purges a live record.
+     *
+     * @return array<string, true>
+     */
+    private function tablesClaimedByOtherPlugins(PluginRecord $record): array
+    {
+        $claimed = [];
+
+        foreach (PluginRecord::query()->whereKeyNot($record->getKey())->get() as $other) {
+            /** @var array<string, mixed> $manifest */
+            $manifest = $other->manifest;
+
+            $uninstall = $manifest['uninstall'] ?? [];
+            if (is_array($uninstall) && is_array($uninstall['tables'] ?? null)) {
+                foreach ($uninstall['tables'] as $table) {
+                    if (is_string($table)) {
+                        $claimed[$table] = true;
+                    }
+                }
+            }
+
+            foreach ($this->ownedContentTypeHandles($other) as $handle) {
+                $claimed['magna_entries_'.$handle] = true;
+            }
+        }
+
+        return $claimed;
     }
 
     /**
