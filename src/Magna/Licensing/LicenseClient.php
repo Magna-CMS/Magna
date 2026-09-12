@@ -313,10 +313,7 @@ class LicenseClient
      */
     public function confirmCheckout(int $orderId, string $paymentId, string $signature): array
     {
-        return $this->postAccountPassthrough('/checkout/'.$orderId.'/confirm', [
-            'razorpay_payment_id' => $paymentId,
-            'razorpay_signature' => $signature,
-        ]);
+        return $this->confirmAt('/checkout/'.$orderId.'/confirm', $paymentId, $signature);
     }
 
     /**
@@ -326,16 +323,7 @@ class LicenseClient
      */
     public function orderStatus(int $orderId): ?array
     {
-        $json = $this->json($this->accountRequest()?->get(Marketplace::API_BASE.'/checkout/'.$orderId));
-
-        if (! is_string($json['status'] ?? null)) {
-            return null;
-        }
-
-        return [
-            'status' => $json['status'],
-            'license_id' => is_numeric($json['license_id'] ?? null) ? (int) $json['license_id'] : null,
-        ];
+        return $this->settlementStatusAt('/checkout/'.$orderId);
     }
 
     /**
@@ -347,10 +335,7 @@ class LicenseClient
      */
     public function confirmSubscriptionCheckout(int $subscriptionId, string $paymentId, string $signature): array
     {
-        return $this->postAccountPassthrough('/checkout/subscription/'.$subscriptionId.'/confirm', [
-            'razorpay_payment_id' => $paymentId,
-            'razorpay_signature' => $signature,
-        ]);
+        return $this->confirmAt('/checkout/subscription/'.$subscriptionId.'/confirm', $paymentId, $signature);
     }
 
     /**
@@ -360,7 +345,18 @@ class LicenseClient
      */
     public function subscriptionStatus(int $subscriptionId): ?array
     {
-        $json = $this->json($this->accountRequest()?->get(Marketplace::API_BASE.'/checkout/subscription/'.$subscriptionId));
+        return $this->settlementStatusAt('/checkout/subscription/'.$subscriptionId);
+    }
+
+    /**
+     * The one shape both settlement polls share — order and subscription
+     * were byte-identical apart from the path segment.
+     *
+     * @return array{status: string, license_id: ?int}|null null when unreachable
+     */
+    private function settlementStatusAt(string $path): ?array
+    {
+        $json = $this->json($this->accountRequest()?->get(Marketplace::API_BASE.$path));
 
         if (! is_string($json['status'] ?? null)) {
             return null;
@@ -370,6 +366,20 @@ class LicenseClient
             'status' => $json['status'],
             'license_id' => is_numeric($json['license_id'] ?? null) ? (int) $json['license_id'] : null,
         ];
+    }
+
+    /**
+     * The one shape both widget-report confirms share; courtesy-only
+     * semantics per the public methods above.
+     *
+     * @return array<string, mixed> the marketplace's reply plus `ok`, `error` and `message`
+     */
+    private function confirmAt(string $path, string $paymentId, string $signature): array
+    {
+        return $this->postAccountPassthrough($path, [
+            'razorpay_payment_id' => $paymentId,
+            'razorpay_signature' => $signature,
+        ]);
     }
 
     /**
