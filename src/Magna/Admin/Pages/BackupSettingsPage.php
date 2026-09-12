@@ -392,7 +392,7 @@ class BackupSettingsPage extends Page implements HasForms
         $settings->save();
 
         // Refresh secret fields so they show blank again, same convention as
-        // StorageSettingsPage::save().
+        // SettingsPage::save().
         $this->form->fill(array_merge($data, [
             's3_secret' => null,
             'secondary_s3_secret' => null,

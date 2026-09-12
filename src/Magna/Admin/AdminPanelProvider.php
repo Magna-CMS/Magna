@@ -16,24 +16,16 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\HtmlString;
 use Magna\Admin\Pages\AccountCentrePage;
-use Magna\Admin\Pages\ApiSettingsPage;
 use Magna\Admin\Pages\BackupSettingsPage;
-use Magna\Admin\Pages\ContentSettingsPage;
 use Magna\Admin\Pages\ContentTypeBuilder;
 use Magna\Admin\Pages\Dashboard;
-use Magna\Admin\Pages\GeneralSettingsPage;
-use Magna\Admin\Pages\LocalizationSettingsPage;
 use Magna\Admin\Pages\MailSettingsPage;
-use Magna\Admin\Pages\MediaSettingsPage;
 use Magna\Admin\Pages\PerformanceSettingsPage;
 use Magna\Admin\Pages\PluginsPage;
 use Magna\Admin\Pages\ProfilePage;
-use Magna\Admin\Pages\SecuritySettingsPage;
 use Magna\Admin\Pages\SettingsPage;
-use Magna\Admin\Pages\StorageSettingsPage;
 use Magna\Admin\Pages\SystemInfoPage;
 use Magna\Admin\Pages\ThemesPage;
-use Magna\Admin\Pages\UrlSettingsPage;
 use Magna\Admin\Resources\ApiKeyResource;
 use Magna\Admin\Resources\AuditLogResource;
 use Magna\Admin\Resources\BackupResource;
@@ -205,19 +197,16 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
                 ContentTypeBuilder::class,
                 // Unified settings page (one scrollable page with a section
-                // sub-nav). The individual *SettingsPage classes below stay
-                // registered for their routes but are hidden from the sidebar.
+                // sub-nav). It absorbed the eight per-domain settings pages
+                // that used to be registered here hidden-from-navigation —
+                // each of which kept a second, drifting copy of the same
+                // save() hydration. Mail and Performance remain as real
+                // pages: Mail because MailSettingsPage::persist() is the
+                // single writer the unified page delegates to, Performance
+                // for its Octane-specific tooling.
                 SettingsPage::class,
-                GeneralSettingsPage::class,
-                UrlSettingsPage::class,
-                LocalizationSettingsPage::class,
-                ContentSettingsPage::class,
                 MailSettingsPage::class,
-                StorageSettingsPage::class,
-                MediaSettingsPage::class,
                 PerformanceSettingsPage::class,
-                ApiSettingsPage::class,
-                SecuritySettingsPage::class,
                 SystemInfoPage::class,
                 // Not folded into the unified SettingsPage — keeps its own
                 // sidebar entry (last in System, below System Info). See
