@@ -7,6 +7,8 @@ namespace Magna\Management\Controllers;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Controller;
+use Magna\Content\ContentType;
+use Magna\Content\SchemaRegistry;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -56,5 +58,24 @@ abstract class ManagementController extends Controller
         }
 
         return $record;
+    }
+
+    /**
+     * Resolve a content type handle from the registry, or throw the 404 the
+     * API exception renderer turns into `{"message": "Content type '{$type}'
+     * not found."}` — the same throwing shape as findOrFail(), for the same
+     * reason. This used to be a four-line preamble repeated at the top of
+     * every EntryController action (with the resolved value assigned to a
+     * variable no action ever read again).
+     */
+    protected function resolveTypeOrFail(SchemaRegistry $schema, string $type): ContentType
+    {
+        $contentType = $schema->get($type);
+
+        if ($contentType === null) {
+            throw new NotFoundHttpException("Content type '{$type}' not found.");
+        }
+
+        return $contentType;
     }
 }

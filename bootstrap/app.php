@@ -17,6 +17,7 @@ use Magna\Auth\Http\Middleware\ForceHttpsMiddleware;
 use Magna\Auth\Http\Middleware\MagnaApiMiddleware;
 use Magna\Auth\Http\Middleware\SecureSessionCookieMiddleware;
 use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
+use Magna\Content\Exceptions\SchemaException;
 use Magna\Content\Http\Middleware\RefreshDatabaseContentTypes;
 use Magna\Install\Http\Middleware\RedirectIfNotInstalled;
 
@@ -179,6 +180,19 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // A schema rule violation on an API route is a 400 with the rule's
+        // own message — rendered here once (Laravel-first: the framework's
+        // renderable seam), instead of the byte-identical catch block that
+        // used to sit in six EntryController actions. Non-API surfaces keep
+        // their own handling (returning null falls through to the default).
+        $exceptions->render(function (SchemaException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => $e->getMessage()], 400);
+            }
+
+            return null;
+        });
 
         // Reporting must never be the thing that kills the request.
         //

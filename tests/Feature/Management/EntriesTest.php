@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Magna\Auth\Role;
 use Magna\Content\ContentType;
 use Magna\Content\Entry;
 use Magna\Content\EntryStatus;
+use Magna\Content\Exceptions\SchemaException;
 use Magna\Content\FieldTypeRegistry;
 use Magna\Content\SchemaRegistry;
 use Magna\Content\SchemaSyncer;
@@ -300,4 +302,61 @@ it('viewer can list entries but not modify them', function (): void {
     $this->withToken(mgmtToken($user))
         ->deleteJson('/api/v1/manage/entries/blog/'.str_repeat('0', 26))
         ->assertForbidden();
+});
+
+// ── Error-shape pins ──────────────────────────────────────────────────────────
+// These three shapes are public API for management clients. They are pinned
+// here BEFORE the error paths were consolidated (throwing type resolution,
+// SchemaException rendered centrally) so the consolidation provably changed
+// nothing a client can see.
+
+it('answers an unknown content type with the exact 404 shape', function (): void {
+    // The pin is the PRODUCTION shape: with debug on, the exception
+    // renderer appends trace fields to every thrown 404.
+    config(['app.debug' => false]);
+
+    // Super admin: bypasses S1-17's fail-closed permission check (which
+    // answers 403 to everyone else, so type handles cannot be enumerated)
+    // and reaches the type resolution itself.
+    $role = Role::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+    $user->assignRole($role);
+
+    $this->withToken(mgmtToken($user))
+        ->getJson('/api/v1/manage/entries/nonsense_type')
+        ->assertStatus(404)
+        ->assertExactJson(['message' => "Content type 'nonsense_type' not found."]);
+
+    $this->withToken(mgmtToken($user))
+        ->postJson('/api/v1/manage/entries/nonsense_type', ['title' => 'x'])
+        ->assertStatus(404)
+        ->assertExactJson(['message' => "Content type 'nonsense_type' not found."]);
+});
+
+it('answers a validation failure with the errors-only 422 shape', function (): void {
+    setupBlogType();
+    $user = editorUser();
+
+    // No 'message' key: this controller has always answered ['errors' => …]
+    // alone, unlike the framework default — clients parse it that way.
+    $response = $this->withToken(mgmtToken($user))
+        ->postJson('/api/v1/manage/entries/blog', ['slug' => 'no-title'])
+        ->assertStatus(422);
+
+    expect($response->json())->toHaveKey('errors')
+        ->and($response->json())->not->toHaveKey('message');
+});
+
+it('renders a SchemaException from a management route as the message 400 shape', function (): void {
+    // No natural request reaches the manager with a schema violation the
+    // controller has not already pre-checked, so the rendering contract is
+    // pinned directly: any SchemaException escaping an api route must
+    // become {"message": …} with status 400.
+    Route::middleware('api')->get('/api/v1/manage/_schema-exception-probe', function (): never {
+        throw new SchemaException('The schema said no.');
+    });
+
+    $this->getJson('/api/v1/manage/_schema-exception-probe')
+        ->assertStatus(400)
+        ->assertExactJson(['message' => 'The schema said no.']);
 });

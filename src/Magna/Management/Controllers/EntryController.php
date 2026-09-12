@@ -9,23 +9,33 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
-use Magna\Audit\AuditLog;
-use Magna\Content\ContentType;
 use Magna\Content\Entry;
+use Magna\Content\EntryAuditRecorder;
 use Magna\Content\EntryManager;
 use Magna\Content\EntryStatus;
-use Magna\Content\Exceptions\SchemaException;
 use Magna\Content\Http\Resources\EntryResource;
 use Magna\Content\Models\Revision;
 use Magna\Content\SchemaRegistry;
 use Magna\Settings\ApiSettings;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Error handling is by contract, not by catch block:
+ * - an unknown type handle throws from resolveTypeOrFail() (404, rendered
+ *   by the API exception renderer — S1-17: only reachable by callers whose
+ *   permission check already passed, so handles cannot be enumerated);
+ * - a SchemaException from the manager renders as a 400 via the renderable
+ *   registered in bootstrap/app.php;
+ * - only ValidationException is caught here, because this controller's 422
+ *   shape is ['errors' => …] alone — a documented divergence from the
+ *   framework default that clients already parse.
+ */
 class EntryController extends ManagementController
 {
     public function __construct(
         private readonly EntryManager $manager,
         private readonly SchemaRegistry $schema,
+        private readonly EntryAuditRecorder $audit,
     ) {}
 
     public function index(Request $request, string $type): JsonResponse
@@ -37,11 +47,7 @@ class EntryController extends ManagementController
         // them enumerate configured content-type handles without holding
         // any content permission at all.
         Gate::authorize("content.{$type}.view");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $apiSettings = ApiSettings::get();
         $perPage = min(max($request->integer('per_page', $apiSettings->default_per_page), 1), $apiSettings->max_per_page);
@@ -62,13 +68,8 @@ class EntryController extends ManagementController
 
     public function store(Request $request, string $type): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.create");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         try {
             /** @var array<string, mixed> $data */
@@ -76,30 +77,17 @@ class EntryController extends ManagementController
             $entry = $this->manager->create($type, $data, $this->actorId());
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
-        } catch (SchemaException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
         }
 
-        AuditLog::record(
-            action: 'entry.created',
-            actorId: $this->actorId(),
-            ip: $request->ip(),
-            subject: $entry,
-            after: EntryResource::make($entry)->resolve(),
-        );
+        $this->audit->created($entry, $this->actorId(), $request->ip());
 
         return response()->json(['data' => EntryResource::make($entry)], 201);
     }
 
     public function show(Request $request, string $type, string $id): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.view");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
@@ -108,17 +96,12 @@ class EntryController extends ManagementController
 
     public function update(Request $request, string $type, string $id): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.update");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
-        $before = EntryResource::make($entry)->resolve();
+        $before = $this->audit->snapshot($entry);
 
         try {
             /** @var array<string, mixed> $data */
@@ -126,89 +109,50 @@ class EntryController extends ManagementController
             $entry = $this->manager->update($entry, $data, $this->actorId());
         } catch (ValidationException $e) {
             return response()->json(['errors' => $e->errors()], 422);
-        } catch (SchemaException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
         }
 
-        AuditLog::record(
-            action: 'entry.updated',
-            actorId: $this->actorId(),
-            ip: $request->ip(),
-            subject: $entry,
-            before: $before,
-            after: EntryResource::make($entry)->resolve(),
-        );
+        $this->audit->updated($entry, $before, $this->actorId(), $request->ip());
 
         return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     public function destroy(Request $request, string $type, string $id): Response
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.delete");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
-        $before = EntryResource::make($entry)->resolve();
+        $before = $this->audit->snapshot($entry);
 
         $this->manager->delete($entry, $this->actorId());
 
-        AuditLog::record(
-            action: 'entry.deleted',
-            actorId: $this->actorId(),
-            ip: $request->ip(),
-            before: $before,
-        );
+        $this->audit->deleted($before, $this->actorId(), $request->ip());
 
         return response()->noContent();
     }
 
     public function publish(Request $request, string $type, string $id): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.publish");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
         $atRaw = $request->input('publish_at');
         $at = is_string($atRaw) ? Carbon::parse($atRaw) : null;
 
-        try {
-            $entry = $this->manager->publish($entry, $at, $this->actorId());
-        } catch (SchemaException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
+        $entry = $this->manager->publish($entry, $at, $this->actorId());
 
-        AuditLog::record(
-            action: 'entry.published',
-            actorId: $this->actorId(),
-            ip: $request->ip(),
-            subject: $entry,
-            after: ['status' => $entry->status->value, 'published_at' => $entry->published_at?->toIso8601String()],
-        );
+        $this->audit->published($entry, $this->actorId(), $request->ip());
 
         return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     public function unpublish(Request $request, string $type, string $id): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.publish");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
@@ -216,31 +160,17 @@ class EntryController extends ManagementController
             return response()->json(['message' => 'Entry is not published.'], 422);
         }
 
-        try {
-            $entry = $this->manager->unpublish($entry, $this->actorId());
-        } catch (SchemaException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
+        $entry = $this->manager->unpublish($entry, $this->actorId());
 
-        AuditLog::record(
-            action: 'entry.unpublished',
-            actorId: $this->actorId(),
-            ip: $request->ip(),
-            subject: $entry,
-        );
+        $this->audit->unpublished($entry, $this->actorId(), $request->ip());
 
         return response()->json(['data' => EntryResource::make($entry)]);
     }
 
     public function draft(Request $request, string $type, string $id): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.update");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
@@ -248,24 +178,15 @@ class EntryController extends ManagementController
             return response()->json(['message' => 'Can only create a draft of a published entry.'], 422);
         }
 
-        try {
-            $draft = $this->manager->createDraftOf($entry);
-        } catch (SchemaException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
+        $draft = $this->manager->createDraftOf($entry);
 
         return response()->json(['data' => EntryResource::make($draft)], 201);
     }
 
     public function revisions(Request $request, string $type, string $id): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.view");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
@@ -298,13 +219,8 @@ class EntryController extends ManagementController
 
     public function restore(Request $request, string $type, string $id, string $revision): JsonResponse
     {
-        // S1-17: see index() — authorize before resolving.
         Gate::authorize("content.{$type}.update");
-
-        $contentType = $this->resolveType($type);
-        if ($contentType === null) {
-            return $this->typeNotFound($type);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
 
         $revisionQuery = Revision::query()
             ->where('entry_type', $type)
@@ -312,30 +228,10 @@ class EntryController extends ManagementController
 
         $rev = $this->findOrFail($revisionQuery, $revision, 'Revision');
 
-        try {
-            $entry = $this->manager->restore($rev->id, $this->actorId());
-        } catch (SchemaException $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
+        $entry = $this->manager->restore($rev->id, $this->actorId());
 
-        AuditLog::record(
-            action: 'entry.restored',
-            actorId: $this->actorId(),
-            ip: $request->ip(),
-            subject: $entry,
-            after: ['restored_from_revision' => $rev->id],
-        );
+        $this->audit->restored($entry, $rev->id, $this->actorId(), $request->ip());
 
         return response()->json(['data' => EntryResource::make($entry)]);
-    }
-
-    private function resolveType(string $handle): ?ContentType
-    {
-        return $this->schema->get($handle);
-    }
-
-    private function typeNotFound(string $type): JsonResponse
-    {
-        return response()->json(['message' => "Content type '{$type}' not found."], 404);
     }
 }
