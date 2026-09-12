@@ -51,19 +51,29 @@ final class BlockPreviewController
             $json = '[]';
         }
 
+        // Refuse anything that is not a decodable JSON array outright. The
+        // old shape validated only `if (is_array($decoded))` and then
+        // rendered PageTree::fromJson($json) UNCONDITIONALLY — so malformed
+        // JSON, or a JSON scalar, sailed past both the structural validation
+        // and the raw-HTML authorization and straight into the renderer.
+        // Nothing may reach the render below without passing both.
         $decoded = json_decode($json, true);
-        if (is_array($decoded)) {
-            // Structural validation + actor authorization (raw-HTML gate) —
-            // the split keeps the validator auth-free for system contexts.
-            $errors = [
-                ...$this->validator->validate($decoded),
-                ...$this->authorizer->authorize($decoded, $request->user()),
-            ];
-            if ($errors !== []) {
-                return response(e(implode("\n", $errors)), 422, [
-                    'Content-Type' => 'text/plain; charset=utf-8',
-                ]);
-            }
+        if (! is_array($decoded)) {
+            return response('blocks_data must be a JSON document (array of sections or wrapped form).', 422, [
+                'Content-Type' => 'text/plain; charset=utf-8',
+            ]);
+        }
+
+        // Structural validation + actor authorization (raw-HTML gate) —
+        // the split keeps the validator auth-free for system contexts.
+        $errors = [
+            ...$this->validator->validate($decoded),
+            ...$this->authorizer->authorize($decoded, $request->user()),
+        ];
+        if ($errors !== []) {
+            return response(e(implode("\n", $errors)), 422, [
+                'Content-Type' => 'text/plain; charset=utf-8',
+            ]);
         }
 
         $tree = PageTree::fromJson($json);

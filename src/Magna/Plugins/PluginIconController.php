@@ -33,7 +33,10 @@ class PluginIconController
         $basePath = realpath(rtrim((string) $record->base_path, '/\\'));
         $resolved = $basePath !== false ? realpath($basePath.DIRECTORY_SEPARATOR.$iconRelative) : false;
 
-        if ($basePath === false || $resolved === false || ! str_starts_with($resolved, $basePath)) {
+        // Containment needs the separator: a bare prefix check lets
+        // /plugins/acme sanction /plugins/acme-evil/anything, because the
+        // latter also starts with the former as a string.
+        if ($basePath === false || $resolved === false || ! str_starts_with($resolved, $basePath.DIRECTORY_SEPARATOR)) {
             abort(404);
         }
 
@@ -49,9 +52,21 @@ class PluginIconController
             abort(404);
         }
 
-        return response()->file($resolved, [
+        $headers = [
             'Content-Type' => $mime,
             'Cache-Control' => 'public, max-age=86400',
-        ]);
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
+        // An SVG is a document, not just an image: opened by navigation it
+        // executes scripts on this origin. The icon still has to render in
+        // <img> tags (so no attachment disposition, unlike user-uploaded
+        // media), but a CSP that allows nothing active makes the navigated
+        // document inert.
+        if ($mime === 'image/svg+xml') {
+            $headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'";
+        }
+
+        return response()->file($resolved, $headers);
     }
 }

@@ -23,7 +23,6 @@ return [
         'api/v1/content/*',
         'api/v1/health',
         'api/v1/openapi.json',
-        'api/v1/preview/tokens',
     ],
 
     'allowed_methods' => ['GET', 'HEAD', 'OPTIONS'],

@@ -74,7 +74,12 @@ class ContentTypeController extends ManagementController
             $record->delete();
             $this->schema->forget($type->handle);
 
-            return response()->json(['message' => 'Failed to create the content type table: '.$e->getMessage()], 500);
+            // The exception text is raw driver/DDL output — schema names,
+            // SQL fragments, paths. That belongs in the log, not in an API
+            // body any management-scope caller can read.
+            report($e);
+
+            return response()->json(['message' => 'Failed to create the content type table. The change was rolled back; see the server log for details.'], 500);
         }
 
         AuditLog::record(
@@ -142,7 +147,10 @@ class ContentTypeController extends ManagementController
             }
             $this->schema->register($previousType);
 
-            return response()->json(['message' => 'Failed to apply the content type change: '.$e->getMessage()], 500);
+            // Same rule as store(): driver text goes to the log, not the body.
+            report($e);
+
+            return response()->json(['message' => 'Failed to apply the content type change. The previous schema was restored; see the server log for details.'], 500);
         }
 
         AuditLog::record(
