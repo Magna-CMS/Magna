@@ -66,31 +66,13 @@ class AuthServiceProvider extends ServiceProvider
      */
     private function applySecurityConfig(): void
     {
-        // S1-10: force the session cookie's Secure flag in production
-        // regardless of what SESSION_SECURE_COOKIE is set to in .env — a
-        // deployment that copies .env.example verbatim and forgets to set
-        // it explicitly would otherwise ship a session cookie that can
-        // legally be sent over a plaintext HTTP connection. Not gated on
-        // runningInConsole() since it doesn't touch the DB.
-        //
-        // Gated on the request actually being over TLS, not on install state.
-        // The old condition also forced Secure once Installer::isInstalled()
-        // returned true, which meant a production install served over plain
-        // HTTP finished installing and then became impossible to sign in to:
-        // the browser silently discards a Secure cookie from an http:// origin,
-        // so every login wrote an authenticated session row, lost the cookie,
-        // and bounced back to the form with nothing in the log. Only the
-        // pre-install window was ever exempt, so the failure appeared the
-        // moment installation succeeded.
-        //
-        // A TLS deployment is unaffected — every request is secure, so the flag
-        // is still always set. An operator who terminates TLS upstream can
-        // force it regardless with SESSION_SECURE_COOKIE=true, which
-        // config/session.php already honours, and force_https keeps plaintext
-        // requests from reaching session issuance at all.
-        if ($this->app->environment('production') && request()->isSecure()) {
-            config(['session.secure' => true]);
-        }
+        // S1-10 (the session cookie's Secure flag) used to be decided here.
+        // It now lives in SecureSessionCookieMiddleware, because the decision
+        // depends on the individual request — whether it arrived over TLS,
+        // which behind a proxy is only knowable after TrustProxies has run.
+        // A provider boots before any middleware and, under `config:cache` and
+        // Octane, only once per process; see that class for what the frozen
+        // answer did to plain-HTTP installs.
 
         if ($this->app->runningInConsole()) {
             return;

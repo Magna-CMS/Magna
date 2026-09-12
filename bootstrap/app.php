@@ -15,6 +15,7 @@ use Magna\Auth\Http\Middleware\ApiKeyMiddleware;
 use Magna\Auth\Http\Middleware\DenyManagementCrossOriginMiddleware;
 use Magna\Auth\Http\Middleware\ForceHttpsMiddleware;
 use Magna\Auth\Http\Middleware\MagnaApiMiddleware;
+use Magna\Auth\Http\Middleware\SecureSessionCookieMiddleware;
 use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
 use Magna\Content\Http\Middleware\RefreshDatabaseContentTypes;
 use Magna\Install\Http\Middleware\RedirectIfNotInstalled;
@@ -39,29 +40,37 @@ return Application::configure(basePath: dirname(__DIR__))
         // lock file, so it needs no session.
         $middleware->prepend(RedirectIfNotInstalled::class);
 
-        // Behind a reverse proxy / load balancer / CDN the real client IP
-        // arrives in X-Forwarded-*; without this, request()->ip() is the proxy
-        // and login throttling + audit IPs are wrong. Off by default (trust
-        // nothing — X-Forwarded-* is spoofable) and enabled per-deployment via
-        // TRUSTED_PROXIES ('*' for a trusted single-hop proxy, or a CIDR list).
-        // This closure can run before the config service is bound (e.g. during
-        // `config:cache`), so guard the lookup; trusted proxies only matter for
-        // real request handling, by which point config is available and cached.
-        $trustedProxies = app()->bound('config') ? config('app.trusted_proxies') : null;
-        if ($trustedProxies === '*') {
-            $middleware->trustProxies(at: '*');
-        } elseif (is_string($trustedProxies) && $trustedProxies !== '') {
-            $middleware->trustProxies(at: array_map('trim', explode(',', $trustedProxies)));
-        }
+        // Trusted proxies are configured in config/trustedproxy.php, not here.
+        //
+        // This callback runs when the HTTP kernel is resolved, which happens
+        // before the config repository is bound — so the config() lookup that
+        // used to stand here always returned null and trustProxies() was never
+        // called. TRUSTED_PROXIES had no effect at all: behind the tunnel every
+        // request's IP was the proxy's, which is the address the audit log
+        // recorded and login throttling counted, and X-Forwarded-Proto was
+        // ignored, so an https site looked plaintext to the application.
+        // TrustProxies reads trustedproxy.proxies while handling a request,
+        // when config is loaded, which is why the list lives in a config file.
+
+        // Appended to the GLOBAL stack, and both halves of that placement
+        // matter: appending lands it after TrustProxies (also global), so
+        // request()->isSecure() sees X-Forwarded-Proto behind a proxy, and the
+        // global stack runs before any route group's EncryptCookies /
+        // StartSession, so session.secure is decided before the cookie is
+        // built. Global rather than in the web group so it covers every
+        // session-starting route no matter which groups a panel or plugin
+        // chooses to include — the admin panel happens to include 'web'
+        // today (see AdminPanelProvider), but nothing here depends on that.
+        $middleware->append(SecureSessionCookieMiddleware::class);
 
         // S1-11: ForceHttpsMiddleware was registered as a middleware alias
         // but never actually attached to any route or group — toggling
         // "Force HTTPS" in Security Settings had zero runtime effect. Wired
-        // in here, ahead of everything else in the web group, so a plain
-        // HTTP request is redirected before CORS/security-header processing
-        // even runs. DB-backed (reads SecuritySettings), safe to run this
-        // late in the global stack since RedirectIfNotInstalled (prepended
-        // above) has already handled the pre-install, DB-unavailable case.
+        // in ahead of everything else in the web group, so a plain HTTP
+        // request is redirected before CORS/security-header processing even
+        // runs. DB-backed (reads SecuritySettings), which is safe here since
+        // RedirectIfNotInstalled (prepended above) has already handled the
+        // pre-install, DB-unavailable case.
         $middleware->web(prepend: [ForceHttpsMiddleware::class, HandleCors::class]);
         $middleware->web(append: [SecurityHeadersMiddleware::class]);
 
