@@ -101,6 +101,43 @@ it('refuses an archive containing a path-traversal entry (zip-slip)', function (
         ->toThrow(RestoreFailedException::class, 'unsafe path');
 });
 
+it('refuses an archive entry with a Windows drive-letter path', function (): void {
+    // `C:evil.txt` never contains `..` and never starts with a slash, so it
+    // sailed past the old checks — on a Windows host it names another drive.
+    $path = makeImportArchive(['C:evil.txt' => 'pwned']);
+
+    $service = new RestoreService;
+
+    expect(fn () => $service->prepareFromDiskPath('local', $path))
+        ->toThrow(RestoreFailedException::class, 'unsafe path');
+});
+
+it('refuses an archive containing a symlink entry', function (): void {
+    // A symlink's NAME can be perfectly clean while its TARGET points outside
+    // the extraction directory — the escape vector the plugin installer and
+    // PackageExtractor already rejected and this importer did not, despite
+    // being the one extractor that takes archives from other environments.
+    $zipPath = tempnam(sys_get_temp_dir(), 'magna-import-fixture-').'.zip';
+    $zip = new ZipArchive;
+    $zip->open($zipPath, ZipArchive::CREATE);
+    $zip->addFromString('storage/app/link-to-env', '../../.env');
+    $zip->setExternalAttributesName(
+        'storage/app/link-to-env',
+        ZipArchive::OPSYS_UNIX,
+        (0xA000 | 0o777) << 16, // S_IFLNK
+    );
+    $zip->close();
+
+    $storedPath = 'import-test/'.uniqid().'.zip';
+    Storage::disk('local')->put($storedPath, (string) file_get_contents($zipPath));
+    @unlink($zipPath);
+
+    $service = new RestoreService;
+
+    expect(fn () => $service->prepareFromDiskPath('local', $storedPath))
+        ->toThrow(RestoreFailedException::class, 'unsafe path');
+});
+
 it('refuses to extract an archive whose uncompressed size exceeds the configured limit', function (): void {
     $path = makeImportArchive(['storage/app/magna-import-test-marker.txt' => str_repeat('x', 1000)]);
 

@@ -132,10 +132,43 @@ class RestoreService
                 str_contains($name, '..')
                 || str_starts_with($name, '/')
                 || str_starts_with($name, '\\')
+                || preg_match('/^[a-zA-Z]:/', $name) === 1
                 || str_contains($name, "\0")
             ) {
                 throw RestoreFailedException::unsafeArchivePath($name);
             }
+
+            $this->guardAgainstSymlinkEntry($zip, $i, $name);
+        }
+    }
+
+    /**
+     * A symlink entry's NAME can look perfectly safe while its TARGET points
+     * outside the extraction directory — a separate escape vector from path
+     * traversal in the name, and the one check this extractor was missing
+     * relative to PackageExtractor and the plugin installer despite being the
+     * only one of the three that takes archives from other environments.
+     */
+    private function guardAgainstSymlinkEntry(ZipArchive $zip, int $index, string $name): void
+    {
+        $opsys = 0;
+        $attr = 0;
+
+        if (! $zip->getExternalAttributesIndex($index, $opsys, $attr)) {
+            return;
+        }
+
+        // External attributes only encode a Unix mode when the archive was
+        // written on a Unix opsys — Windows-authored zips pack something else
+        // in these bits entirely.
+        if ($opsys !== ZipArchive::OPSYS_UNIX) {
+            return;
+        }
+
+        $mode = ($attr >> 16) & 0xFFFF;
+
+        if (($mode & 0xF000) === 0xA000) {
+            throw RestoreFailedException::unsafeArchivePath($name);
         }
     }
 
