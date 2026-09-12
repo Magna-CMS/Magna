@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Magna\Delivery;
 
 use Illuminate\Support\Collection;
+use Magna\Blocks\ReservedKeys;
 use Magna\Content\ContentType;
 use Magna\Content\Entry;
+use Magna\Content\FieldTypes\BlocksField;
 use Magna\Content\FieldTypes\MediaField;
 use Magna\Content\FieldTypes\RelationField;
 use Magna\Contracts\DecoratesDeliveryResponse;
@@ -103,6 +105,12 @@ final class EntryTransformer
                         ? $this->resolveMedia($value, $mediaCache, $keys)
                         : null;
                 }
+            } elseif ($field->type instanceof BlocksField) {
+                // Egress guard for documents stored before the reserved-key
+                // rules: '_'-prefixed keys are renderer-owned (`_resolved`)
+                // and must never leave as if a sanitizing resolver wrote
+                // them. ?resolve=1 re-attaches the real thing afterwards.
+                $result[$field->handle] = is_array($value) ? ReservedKeys::strip($value) : $value;
             } else {
                 $result[$field->handle] = $value;
             }

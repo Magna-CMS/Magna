@@ -61,6 +61,8 @@ final class PageTreeValidator
                 $errors[] = "Section #{$sectionIndex} is missing an 'id'.";
             }
 
+            $this->rejectReservedKeys($sectionRaw, "Section '{$sectionId}'", $errors);
+
             $type = isset($sectionRaw['type']) && is_string($sectionRaw['type']) && $sectionRaw['type'] !== ''
                 ? $sectionRaw['type']
                 : SectionNode::TYPE_SECTION;
@@ -106,6 +108,7 @@ final class PageTreeValidator
                 }
 
                 $this->collectId($colRaw, $seenIds, $errors);
+                $this->rejectReservedKeys($colRaw, "Column #{$colIndex} in section '{$sectionId}'", $errors);
 
                 $blocks = $colRaw['blocks'] ?? [];
                 if (! is_array($blocks)) {
@@ -168,6 +171,33 @@ final class PageTreeValidator
     }
 
     /**
+     * Refuse keys beginning with '_' on any stored node.
+     *
+     * Underscore keys are the renderer's namespace: `_resolved` is attached
+     * to the transient view payload by {@see Resolution\BlockDataResolver}
+     * and rendered RAW by views like blocks/text.blade.php on the strength
+     * of having been produced by a sanitizing resolver. A stored document
+     * must never be able to impersonate that — a writer without the
+     * blocks.raw_html permission could otherwise plant `_resolved` HTML that
+     * every render path without a registered resolver, and the delivery API
+     * without ?resolve=1, would pass through verbatim. Rejected loudly here
+     * (nothing legitimate ever saves one), stripped defensively at
+     * hydration ({@see BlockNode::fromArray}) and at delivery egress
+     * ({@see ReservedKeys}) for documents stored before this rule.
+     *
+     * @param  array<mixed, mixed>  $raw
+     * @param  list<string>  $errors
+     */
+    private function rejectReservedKeys(array $raw, string $label, array &$errors): void
+    {
+        foreach (array_keys($raw) as $key) {
+            if (is_string($key) && str_starts_with($key, '_')) {
+                $errors[] = "{$label}: key '{$key}' is reserved for the renderer and cannot be stored.";
+            }
+        }
+    }
+
+    /**
      * Validate one block node and recurse into its children.
      *
      * @param  array<mixed, mixed>  $blockRaw
@@ -183,6 +213,8 @@ final class PageTreeValidator
 
             return;
         }
+
+        $this->rejectReservedKeys($blockRaw, "Block '{$blockId}'", $errors);
 
         $handle = isset($blockRaw['block']) && is_string($blockRaw['block']) ? $blockRaw['block'] : '';
         if (! $this->registry->has($handle)) {

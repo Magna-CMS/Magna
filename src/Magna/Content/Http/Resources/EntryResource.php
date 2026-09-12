@@ -6,7 +6,9 @@ namespace Magna\Content\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Magna\Blocks\ReservedKeys;
 use Magna\Content\Entry;
+use Magna\Content\FieldTypes\BlocksField;
 use Magna\Content\SchemaRegistry;
 
 /**
@@ -44,7 +46,17 @@ class EntryResource extends JsonResource
 
         if ($type !== null) {
             foreach ($type->columnFields() as $field) {
-                $data[$field->handle] = $this->resource->getAttribute($field->handle);
+                $value = $this->resource->getAttribute($field->handle);
+
+                // Blocks documents shed renderer-reserved '_' keys on the way
+                // out — a document stored before the reserved-key rules must
+                // not hand a planted `_resolved` to any client. See
+                // Magna\Blocks\ReservedKeys.
+                if ($field->type instanceof BlocksField && is_array($value)) {
+                    $value = ReservedKeys::strip($value);
+                }
+
+                $data[$field->handle] = $value;
             }
         }
 

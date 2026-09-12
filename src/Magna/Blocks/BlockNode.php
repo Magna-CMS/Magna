@@ -46,8 +46,19 @@ final class BlockNode
             }
         }
 
+        // Underscore keys are the renderer's namespace (`_resolved` on the
+        // transient view payload) and are shed at hydration: the tolerant
+        // reader keeps every construct it does not understand EXCEPT one
+        // that would let a stored document impersonate resolver output —
+        // views render `_resolved` raw precisely because only a sanitizing
+        // resolver writes it (BlockDataResolver attaches it after
+        // serialisation, so the legitimate path is unaffected).
         /** @var array<string, mixed> $stringKeyed */
-        $stringKeyed = array_filter($raw, static fn (mixed $k): bool => is_string($k), ARRAY_FILTER_USE_KEY);
+        $stringKeyed = array_filter(
+            $raw,
+            static fn (mixed $k): bool => is_string($k) && ! str_starts_with($k, '_'),
+            ARRAY_FILTER_USE_KEY,
+        );
 
         return new self(
             id: isset($raw['id']) && is_string($raw['id']) ? $raw['id'] : (string) Str::ulid(),
