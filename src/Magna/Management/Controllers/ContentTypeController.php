@@ -96,10 +96,7 @@ class ContentTypeController extends ManagementController
     {
         Gate::authorize('settings.view');
 
-        $type = $this->schema->get($handle);
-        if ($type === null) {
-            return response()->json(['message' => "Content type '{$handle}' not found."], 404);
-        }
+        $type = $this->resolveTypeOrFail($this->schema, $handle);
 
         return response()->json(['data' => $this->typeToArray($type)]);
     }
@@ -108,9 +105,9 @@ class ContentTypeController extends ManagementController
     {
         Gate::authorize('settings.manage');
 
-        if ($this->schema->get($handle) === null) {
-            return response()->json(['message' => "Content type '{$handle}' not found."], 404);
-        }
+        // The resolved value doubles as the rollback target below — the
+        // schema that is actually reflected in the table right now.
+        $previousType = $this->resolveTypeOrFail($this->schema, $handle);
 
         /** @var array<string, mixed> $body */
         $body = $request->all();
@@ -124,7 +121,6 @@ class ContentTypeController extends ManagementController
 
         $record = ContentTypeRecord::query()->where('handle', $handle)->first();
         $previousSchema = $record instanceof ContentTypeRecord ? $record->schema : null;
-        $previousType = $this->schema->get($handle);
 
         if ($record instanceof ContentTypeRecord) {
             $record->schema = $body;

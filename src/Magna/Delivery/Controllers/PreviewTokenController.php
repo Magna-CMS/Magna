@@ -6,13 +6,18 @@ namespace Magna\Delivery\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
 use Magna\Content\Entry;
 use Magna\Content\SchemaRegistry;
 use Magna\Delivery\PreviewTokenService;
+use Magna\Management\Controllers\ManagementController;
 
-final class PreviewTokenController extends Controller
+/**
+ * Management-scoped despite living beside the delivery controllers (its
+ * route sits behind magna.api:management), so it extends the management
+ * base and uses its throwing lookups instead of hand-rolled 404s.
+ */
+final class PreviewTokenController extends ManagementController
 {
     /**
      * S1-18: preview tokens are stateless HMACs — once minted, they cannot
@@ -38,15 +43,8 @@ final class PreviewTokenController extends Controller
         // to see — mint week-long, non-revocable draft access.
         Gate::authorize("content.{$type}.view");
 
-        $contentType = $this->schema->get($type);
-        if ($contentType === null) {
-            return response()->json(['message' => "Content type '{$type}' not found."], 404);
-        }
-
-        $entry = Entry::type($type)->where('id', $id)->first();
-        if ($entry === null) {
-            return response()->json(['message' => 'Entry not found.'], 404);
-        }
+        $this->resolveTypeOrFail($this->schema, $type);
+        $entry = $this->findOrFail(Entry::type($type), $id, 'Entry');
 
         $ttlRaw = $request->input('ttl_seconds', 3600);
         $ttl = min(self::MAX_TTL_SECONDS, max(1, is_numeric($ttlRaw) ? (int) $ttlRaw : 3600));

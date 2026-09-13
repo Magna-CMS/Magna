@@ -24,10 +24,8 @@ class UserRoleController extends ManagementController
         ]);
 
         $roleName = $validated['role'];
-        $role = Role::query()->where('name', $roleName)->first();
-        if (! $role instanceof Role) {
-            return response()->json(['message' => "Role '{$roleName}' not found."], 404);
-        }
+        /** @var Role $role */
+        $role = $this->findByOrFail(Role::query(), 'name', $roleName, "Role '{$roleName}'");
 
         // S1-02: 'roles.manage' alone must never be enough to grant super-admin —
         // that requires the acting user to already be a super admin.

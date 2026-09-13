@@ -42,8 +42,9 @@ arch('management controllers do not use the DB facade')
 //    ManagementController::findOrFail() rather than Form Requests + implicit
 //    binding. This is deliberate — see docs/architecture.md.
 // 2. ContentType is a value object from SchemaRegistry, not an Eloquent model,
-//    so ContentTypeController returns hand-rolled 404s for unknown handles
-//    instead of findOrFail() (which needs an Eloquent Builder). Also deliberate.
+//    so unknown handles resolve through ManagementController::resolveTypeOrFail()
+//    (throwing, same JSON as findOrFail()) rather than route-model binding.
+//    Also deliberate.
 // 3. Delivery (public read) API uses EntryTransformer + response cache/ETag, not
 //    JsonResource — the transformer is the cache/decoration seam. Management
 //    (write) API uses JsonResource. Both are intentional per their layer.
@@ -434,6 +435,42 @@ it('never declares a Response union on a controller helper', function (): void {
                     $offenders[] = $cls[1].'::'.$method->getName().'(): '.$return;
                     break;
                 }
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
+ * Not-found handling in the management layer is a throw, not a literal.
+ *
+ * The single biggest complaint from the community review was 20+ copies of
+ * find-then-404 across the management controllers. The base class now owns
+ * every variant — findOrFail() by key, findByOrFail() by column,
+ * resolveTypeOrFail() for schema handles — each throwing the exception the
+ * API renderer turns into the canonical {"message": "... not found."} body.
+ * A hand-rolled not-found JSON in a management controller means someone is
+ * rebuilding the pattern; add a helper to the base instead.
+ */
+it('hand-rolls no not-found responses in management controllers', function (): void {
+    $root = dirname(__DIR__, 3);
+    $files = glob($root.'/src/Magna/Management/Controllers/*.php') ?: [];
+    $files[] = $root.'/src/Magna/Delivery/Controllers/PreviewTokenController.php';
+
+    expect($files)->not->toBe([]);
+
+    $offenders = [];
+
+    foreach ($files as $file) {
+        $basename = basename($file);
+        if ($basename === 'ManagementController.php') {
+            continue; // the base holds the one legitimate copy of the literal
+        }
+
+        foreach (file($file) ?: [] as $number => $line) {
+            if (preg_match('/[\x27"]message[\x27"]\s*=>\s*.*not found/i', $line) === 1) {
+                $offenders[] = $basename.':'.($number + 1);
             }
         }
     }

@@ -11,11 +11,14 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
 use Magna\Audit\AuditLog;
+use Magna\Auth\Concerns\ResolvesActorId;
 use Magna\Auth\MagnaToken;
 use Magna\Users\User;
 
 class ApiTokenController extends Controller
 {
+    use ResolvesActorId;
+
     /**
      * Create a new API token. Tokens are shown in plaintext once here
      * and stored hashed — the plaintext is never retrievable after this.
@@ -50,14 +53,9 @@ class ApiTokenController extends Controller
             'rate_limit_per_minute' => $request->integer('rate_limit_per_minute') ?: null,
         ])->save();
 
-        $userKey = $user->getKey();
         AuditLog::record(
             action: 'tokens.created',
-            actorId: match (true) {
-                is_string($userKey) => $userKey,
-                is_int($userKey) => (string) $userKey,
-                default => null,
-            },
+            actorId: $this->actorId(),
             actorType: 'user',
             ip: $request->ip(),
             after: ['name' => $request->string('name')->toString(), 'scope' => $scope],
@@ -105,14 +103,9 @@ class ApiTokenController extends Controller
             return response()->json(['message' => 'Token not found.'], 404);
         }
 
-        $userKey2 = $user->getKey();
         AuditLog::record(
             action: 'tokens.revoked',
-            actorId: match (true) {
-                is_string($userKey2) => $userKey2,
-                is_int($userKey2) => (string) $userKey2,
-                default => null,
-            },
+            actorId: $this->actorId(),
             actorType: 'user',
             ip: $request->ip(),
             before: ['token_id' => $id],

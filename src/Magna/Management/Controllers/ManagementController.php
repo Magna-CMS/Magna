@@ -7,6 +7,7 @@ namespace Magna\Management\Controllers;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Controller;
+use Magna\Auth\Concerns\ResolvesActorId;
 use Magna\Content\ContentType;
 use Magna\Content\SchemaRegistry;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -17,19 +18,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 abstract class ManagementController extends Controller
 {
-    /** Return the authenticated actor's ULID as a string, or null if unavailable. */
-    protected function actorId(): ?string
-    {
-        $id = auth()->id();
-        if (is_string($id)) {
-            return $id;
-        }
-        if (is_int($id)) {
-            return (string) $id;
-        }
-
-        return null;
-    }
+    use ResolvesActorId;
 
     /**
      * Resolve a single record by (case-insensitive) id from an already-scoped
@@ -77,5 +66,27 @@ abstract class ManagementController extends Controller
         }
 
         return $contentType;
+    }
+
+    /**
+     * findOrFail()'s sibling for lookups by a column other than the key —
+     * the case that used to force a hand-rolled 404 (Role by name). The
+     * label carries whatever identifies the record to the caller, e.g.
+     * "Role 'editor'".
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return TModel
+     */
+    protected function findByOrFail(Builder $query, string $column, mixed $value, string $label): Model
+    {
+        $record = (clone $query)->where($column, $value)->first();
+
+        if ($record === null) {
+            throw new NotFoundHttpException("{$label} not found.");
+        }
+
+        return $record;
     }
 }
