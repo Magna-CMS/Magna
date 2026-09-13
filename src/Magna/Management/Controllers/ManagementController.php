@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Magna\Management\Controllers;
 
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Magna\Auth\Concerns\ResolvesActorId;
 use Magna\Content\ContentType;
 use Magna\Content\SchemaRegistry;
+use Magna\Settings\ApiSettings;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -88,5 +91,33 @@ abstract class ManagementController extends Controller
         }
 
         return $record;
+    }
+
+    /**
+     * ?per_page=, clamped between 1 and the admin-configured API maximum —
+     * the same clamp every paginated management index used to write out
+     * itself.
+     */
+    protected function perPage(Request $request): int
+    {
+        $api = ApiSettings::get();
+
+        return min(max($request->integer('per_page', $api->default_per_page), 1), $api->max_per_page);
+    }
+
+    /**
+     * The management API's one pagination meta shape.
+     *
+     * @param  LengthAwarePaginator<int, covariant Model>  $paginator
+     * @return array{current_page: int, per_page: int, total: int, last_page: int}
+     */
+    protected function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'last_page' => $paginator->lastPage(),
+        ];
     }
 }

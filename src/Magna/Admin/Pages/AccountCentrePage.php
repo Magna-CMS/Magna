@@ -212,7 +212,7 @@ class AccountCentrePage extends Page
             ->send();
 
         $url = static::getUrl();
-        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 800)');
+        $this->replaceUrl($url, 800);
     }
 
     /**

@@ -7,7 +7,6 @@ namespace Magna\Management\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Magna\Settings\ApiSettings;
 use Magna\Webhooks\Http\Resources\WebhookDeliveryResource;
 use Magna\Webhooks\Jobs\DispatchWebhookJob;
 use Magna\Webhooks\WebhookDelivery;
@@ -21,21 +20,14 @@ class WebhookDeliveryController extends ManagementController
 
         $sub = $this->findOrFail(WebhookSubscription::query(), $webhook, 'Webhook');
 
-        $apiSettings = ApiSettings::get();
-        $perPage = min(max($request->integer('per_page', $apiSettings->default_per_page), 1), $apiSettings->max_per_page);
         $paginator = WebhookDelivery::query()
             ->where('subscription_id', $sub->id)
             ->orderByDesc('created_at')
-            ->paginate($perPage);
+            ->paginate($this->perPage($request));
 
         return response()->json([
             'data' => WebhookDeliveryResource::collection($paginator->items()),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-            ],
+            'meta' => $this->paginationMeta($paginator),
         ]);
     }
 

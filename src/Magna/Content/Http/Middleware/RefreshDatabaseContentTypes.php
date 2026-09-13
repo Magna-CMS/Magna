@@ -7,6 +7,7 @@ namespace Magna\Content\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Magna\Content\SchemaRegistry;
+use Magna\Support\Runtime;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -35,7 +36,7 @@ final class RefreshDatabaseContentTypes
     {
         // LARAVEL_OCTANE is set on the worker by every octane:start command.
         // Only pay the refresh when a worker is actually being reused.
-        if (filter_var(getenv('LARAVEL_OCTANE'), FILTER_VALIDATE_BOOLEAN)) {
+        if (Runtime::isOctane()) {
             $this->schema->refreshDatabaseTypes();
         }
 

@@ -14,6 +14,7 @@ use Livewire\Attributes\Locked;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
+use Magna\Support\Runtime;
 use Magna\System\SystemHealthCollector;
 use Magna\Updater\CoreUpdateProgress;
 use Magna\Updater\CoreUpdater;
@@ -497,7 +498,7 @@ class SystemInfoPage extends Page
             'app_url' => parse_url((string) config('app.url', 'http://localhost'), PHP_URL_HOST) ?? config('app.url', 'localhost'),
             'session_lifetime' => (int) config('session.lifetime', 120),
             'octane_installed' => class_exists(OctaneServiceProvider::class),
-            'octane_running' => filter_var(getenv('LARAVEL_OCTANE'), FILTER_VALIDATE_BOOLEAN),
+            'octane_running' => Runtime::isOctane(),
             'octane_server' => (string) config('octane.server', 'frankenphp'),
             'performance_warnings' => $health->performanceWarnings(),
             'security_warnings' => $health->securityWarnings(),

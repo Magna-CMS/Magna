@@ -477,3 +477,52 @@ it('hand-rolls no not-found responses in management controllers', function (): v
 
     expect($offenders)->toBe([]);
 });
+
+/**
+ * Raw process environment reads live in one class.
+ *
+ * getenv() bypasses Laravel's config layer entirely — no caching, no
+ * defaults, no test override — so scattered calls are exactly the kind of
+ * duplication that drifts (the LARAVEL_OCTANE check was pasted across five
+ * files). Everything that merely wants a VALUE goes through config(); the
+ * allowlist below is for code whose subject genuinely is this process's
+ * environment. Add a method to Runtime for a new process-level fact rather
+ * than a new getenv() call site.
+ */
+it('reads the raw process environment only where the process is the subject', function (): void {
+    $allowed = [
+        // The one place a process-level fact ("is this an Octane worker?")
+        // is answered for everyone else.
+        'Runtime.php',
+        // Spawns composer as a child process: passes the whole environment
+        // through and probes COMPOSER_BINARY/HOME — the environment IS the
+        // domain here, not a value config could carry.
+        'ProcessComposerRunner.php',
+    ];
+
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        if (in_array($file->getFilename(), $allowed, true)) {
+            continue;
+        }
+
+        foreach (file($file->getPathname()) ?: [] as $number => $line) {
+            if (str_contains($line, 'getenv(')) {
+                $offenders[] = $file->getFilename().':'.($number + 1);
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});

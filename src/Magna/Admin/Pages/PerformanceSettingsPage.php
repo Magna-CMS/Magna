@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\HtmlString;
 use Laravel\Octane\OctaneServiceProvider;
 use Magna\Settings\PerformanceSettings;
+use Magna\Support\Runtime;
 
 /**
  * @property ComponentContainer $form
@@ -155,7 +156,7 @@ class PerformanceSettingsPage extends Page implements HasForms
             ->label('Octane status')
             ->content(function (): HtmlString {
                 $installed = class_exists(OctaneServiceProvider::class);
-                $running = filter_var(getenv('LARAVEL_OCTANE'), FILTER_VALIDATE_BOOLEAN);
+                $running = Runtime::isOctane();
                 $server = (string) config('octane.server', 'frankenphp');
 
                 $badge = function (string $label, string $color): string {

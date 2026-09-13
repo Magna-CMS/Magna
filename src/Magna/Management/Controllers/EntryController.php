@@ -16,7 +16,6 @@ use Magna\Content\EntryStatus;
 use Magna\Content\Http\Resources\EntryResource;
 use Magna\Content\Models\Revision;
 use Magna\Content\SchemaRegistry;
-use Magna\Settings\ApiSettings;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -49,20 +48,13 @@ class EntryController extends ManagementController
         Gate::authorize("content.{$type}.view");
         $this->resolveTypeOrFail($this->schema, $type);
 
-        $apiSettings = ApiSettings::get();
-        $perPage = min(max($request->integer('per_page', $apiSettings->default_per_page), 1), $apiSettings->max_per_page);
         $paginator = Entry::type($type)
             ->orderByDesc('updated_at')
-            ->paginate($perPage);
+            ->paginate($this->perPage($request));
 
         return response()->json([
             'data' => EntryResource::collection($paginator->items()),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-            ],
+            'meta' => $this->paginationMeta($paginator),
         ]);
     }
 
@@ -208,12 +200,7 @@ class EntryController extends ManagementController
 
         return response()->json([
             'data' => $items,
-            'meta' => [
-                'current_page' => $revisions->currentPage(),
-                'per_page' => $revisions->perPage(),
-                'total' => $revisions->total(),
-                'last_page' => $revisions->lastPage(),
-            ],
+            'meta' => $this->paginationMeta($revisions),
         ]);
     }
 

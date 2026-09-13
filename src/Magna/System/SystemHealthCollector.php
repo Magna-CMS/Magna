@@ -11,6 +11,7 @@ use Laravel\Octane\OctaneServiceProvider;
 use Magna\Backup\BackupRun;
 use Magna\Marketplace\Marketplace;
 use Magna\Settings\BackupSettings;
+use Magna\Support\Runtime;
 use Magna\Updater\CoreWritability;
 use Throwable;
 
@@ -260,7 +261,7 @@ final class SystemHealthCollector
         $warnings = [];
 
         $octaneInstalled = class_exists(OctaneServiceProvider::class);
-        $octaneRunning = filter_var(getenv('LARAVEL_OCTANE'), FILTER_VALIDATE_BOOLEAN);
+        $octaneRunning = Runtime::isOctane();
 
         if (! $octaneRunning) {
             $warnings[] = [

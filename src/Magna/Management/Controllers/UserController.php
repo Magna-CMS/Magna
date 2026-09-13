@@ -7,7 +7,6 @@ namespace Magna\Management\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Magna\Settings\ApiSettings;
 use Magna\Users\Http\Resources\UserResource;
 use Magna\Users\User;
 
@@ -17,20 +16,13 @@ class UserController extends ManagementController
     {
         Gate::authorize('users.view');
 
-        $apiSettings = ApiSettings::get();
-        $perPage = min(max($request->integer('per_page', $apiSettings->default_per_page), 1), $apiSettings->max_per_page);
         // Eager-load roles: UserResource reads the loaded relation, so without
         // this each row would fire its own roles query (N+1).
-        $paginator = User::query()->with('roles')->orderByDesc('created_at')->paginate($perPage);
+        $paginator = User::query()->with('roles')->orderByDesc('created_at')->paginate($this->perPage($request));
 
         return response()->json([
             'data' => UserResource::collection($paginator->items()),
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-            ],
+            'meta' => $this->paginationMeta($paginator),
         ]);
     }
 
