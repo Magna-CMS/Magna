@@ -227,6 +227,7 @@ class PluginManager
      * Disable a plugin (data is preserved; no DB drops).
      *
      * @throws PluginNotFoundException
+     * @throws DependencyException when another enabled plugin still requires this one
      */
     public function disable(string $name): void
     {
