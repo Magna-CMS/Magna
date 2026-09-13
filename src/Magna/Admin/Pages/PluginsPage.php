@@ -13,21 +13,17 @@ use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
-use Magna\Contracts\RegistersSettingsPages;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseInstaller;
 use Magna\Licensing\LicenseStore;
 use Magna\Marketplace\InstallState;
 use Magna\Marketplace\MarketplaceClient;
+use Magna\Marketplace\PluginCatalogView;
 use Magna\Marketplace\PluginInstaller;
 use Magna\Marketplace\PluginInstallStarter;
-use Magna\Marketplace\PluginListing;
 use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\Exceptions\PluginNotFoundException;
-use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
-use Magna\Plugins\PluginRecord;
-use Magna\Updater\UpdateCheck;
 use Throwable;
 
 class PluginsPage extends Page
@@ -213,7 +209,7 @@ class PluginsPage extends Page
 
         Notification::make()->title("{$count} plugin(s) {$label}.")->success()->send();
         $url = static::getUrl();
-        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+        $this->replaceUrl($url, 400);
     }
 
     // ── Direct (non-confirmatory) plugin actions ───────────────────────────────
@@ -224,7 +220,7 @@ class PluginsPage extends Page
             app(PluginManager::class)->enable($name);
             Notification::make()->title('Plugin enabled.')->success()->send();
             $url = static::getUrl();
-            $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+            $this->replaceUrl($url, 400);
         } catch (PluginCompatibilityException $e) {
             Notification::make()->title('Incompatible plugin')->body($e->getMessage())->danger()->send();
         } catch (Throwable $e) {
@@ -244,7 +240,7 @@ class PluginsPage extends Page
             app(PluginManager::class)->disable($name);
             Notification::make()->title('Plugin disabled.')->success()->send();
             $url = static::getUrl();
-            $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+            $this->replaceUrl($url, 400);
         } catch (Throwable $e) {
             Notification::make()->title('Failed to disable plugin')->body($e->getMessage())->danger()->send();
         }
@@ -263,7 +259,7 @@ class PluginsPage extends Page
                 $message = app(LicenseInstaller::class)->update($name);
                 Notification::make()->title($message)->success()->send();
                 $url = static::getUrl();
-                $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+                $this->replaceUrl($url, 400);
 
                 return;
             }
@@ -272,7 +268,7 @@ class PluginsPage extends Page
             app(PluginManager::class)->enable($name);
             Notification::make()->title('Plugin updated.')->success()->send();
             $url = static::getUrl();
-            $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+            $this->replaceUrl($url, 400);
         } catch (Throwable $e) {
             // Logged as well as shown. A toast is gone in six seconds and lives
             // only in the browser that saw it, so a failed update used to leave
@@ -513,26 +509,8 @@ class PluginsPage extends Page
         // When everything finishes, reload so the installed list reflects reality.
         if ($anyFinished && $this->installQueue === []) {
             $url = static::getUrl();
-            $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 600)');
+            $this->replaceUrl($url);
         }
-    }
-
-    /**
-     * Strips the leading "v" a version may carry, because the view adds its own.
-     *
-     * The two sources disagree: a manifest records `1.1.0` while the
-     * marketplace records the Composer tag it was published under, `v1.1.0`.
-     * The view renders "v{version}" either way, so a marketplace version came
-     * out as "vv1.1.0". Normalising here rather than in the view keeps every
-     * version this page hands out in one shape.
-     */
-    private static function displayVersion(?string $version): ?string
-    {
-        if ($version === null) {
-            return null;
-        }
-
-        return ltrim($version, 'vV');
     }
 
     private function pendingDisplayName(): string
@@ -619,7 +597,7 @@ class PluginsPage extends Page
                     app(PluginManager::class)->uninstall($this->pendingPluginName ?? '', removeFiles: true);
                     Notification::make()->title('Plugin uninstalled.')->success()->send();
                     $url = static::getUrl();
-                    $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+                    $this->replaceUrl($url, 400);
                 } catch (PluginNotFoundException) {
                     // The record is already gone — typically a failed install
                     // that rolled itself back while this page still showed the
@@ -648,7 +626,7 @@ class PluginsPage extends Page
                     app(PluginManager::class)->uninstall($this->pendingPluginName ?? '', purge: true, removeFiles: true);
                     Notification::make()->title('Plugin purged.')->success()->send();
                     $url = static::getUrl();
-                    $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 400)');
+                    $this->replaceUrl($url, 400);
                 } catch (PluginNotFoundException) {
                     // See uninstallAction(): the row was stale, nothing to purge.
                     Notification::make()->title('Plugin already removed — refreshing the list.')->success()->send();
@@ -665,133 +643,16 @@ class PluginsPage extends Page
 
     public function refreshPlugins(): void
     {
-        // Surface any pre-bundled (vendor/) plugins that were never installed
-        // through the marketplace/zip flow, so they appear here and can be
-        // enabled. Idempotent; only creates missing rows, always disabled.
-        app(PluginManager::class)->syncDiscovered();
+        // All the merge rules (records × discovery × update checks × the
+        // marketplace catalog) live in PluginCatalogView; the page only
+        // holds the snapshot. The old inline version resolved PluginManager
+        // three times and — via a closure that forgot to import
+        // $licenseBlocked — silently never rendered the renew prompt.
+        $snapshot = app(PluginCatalogView::class)->build();
 
-        $records = PluginRecord::query()->orderBy('display_name')->get();
-        $installedNames = $records->pluck('name')->all();
-
-        // Map discovered plugin versions for update detection
-        $discoveredVersions = collect(app(PluginManager::class)->discover())
-            ->keyBy(fn (PluginInfo $info): string => $info->manifest->name)
-            ->map(fn (PluginInfo $info): string => $info->manifest->version)
-            ->all();
-
-        $bootedPlugins = app(PluginManager::class)->getEnabled();
-
-        // Updates a licence no longer covers. The marketplace deliberately
-        // reports these as NOT available (the download would be refused), so
-        // without this the admin would simply never hear that a newer version
-        // exists — the worst way to learn a licence lapsed.
-        $licenseBlocked = UpdateCheck::query()
-            ->where('type', 'plugin')
-            ->where('license_required', true)
-            ->pluck('latest_version', 'slug')
-            ->all();
-
-        // Versions published to the marketplace since this site installed.
-        // Update detection used to compare the on-disk manifest against the
-        // plugins row, which only ever notices files someone had ALREADY put
-        // there — so publishing a new version of a paid plugin left this page
-        // reading "Update Available (0)" while `magna:updater:check` was
-        // reporting the very same update.
-        $marketplaceUpdates = UpdateCheck::query()
-            ->where('type', 'plugin')
-            ->where('update_available', true)
-            ->whereNotNull('latest_version')
-            ->pluck('latest_version', 'slug')
-            ->all();
-
-        // The catalog is read before the installed list is built: publisher
-        // trust ("official") is something only the marketplace knows, so an
-        // installed plugin's badge has to come from the same listing the
-        // marketplace serves, keyed by package name.
-        $marketplace = app(MarketplaceClient::class);
-        $catalog = $marketplace->plugins();
-        $this->marketplaceUnreachable = $catalog === [] && $marketplace->wasUnreachable();
-
-        /** @var array<string, PluginListing> $listingsByPackage */
-        $listingsByPackage = collect($catalog)->keyBy(fn (PluginListing $l): string => $l->package)->all();
-
-        $this->installed = $records->map(function (PluginRecord $r) use ($discoveredVersions, $marketplaceUpdates, $bootedPlugins, $listingsByPackage): array {
-            $settingsUrl = null;
-            $booted = $bootedPlugins[$r->name] ?? null;
-            if ($booted instanceof RegistersSettingsPages) {
-                $pages = $booted->settingsPages();
-                if ($pages !== []) {
-                    try {
-                        $settingsUrl = $pages[0]::getUrl();
-                    } catch (Throwable) {
-                    }
-                }
-            }
-
-            $icon = is_array($r->manifest) ? ($r->manifest['icon'] ?? null) : null;
-
-            return [
-                'name' => $r->name,
-                'display_name' => $r->display_name,
-                'version' => self::displayVersion($r->version),
-                'enabled' => $r->enabled,
-                'description' => is_array($r->manifest) ? (string) ($r->manifest['description'] ?? '') : '',
-                'author' => is_array($r->manifest) ? (string) ($r->manifest['author'] ?? '') : '',
-                'source' => str_contains(str_replace('\\', '/', (string) $r->base_path), '/plugins-dev/')
-                    ? 'plugins-dev/'
-                    : 'Composer',
-                // Two ways a newer version shows up: someone put files on disk
-                // (zip upload, manual copy), or the marketplace published one.
-                // The marketplace answer wins when both are present — it is
-                // the version the update button would actually fetch.
-                'update_version' => self::displayVersion($marketplaceUpdates[$r->name]
-                    ?? (isset($discoveredVersions[$r->name]) && $discoveredVersions[$r->name] !== $r->version
-                        ? $discoveredVersions[$r->name]
-                        : null)),
-                'settings_url' => $settingsUrl,
-                // magna.json's optional "icon" field, served through PluginIconController;
-                // null when the plugin declared none — the view falls back to a letter avatar.
-                'icon_url' => is_string($icon) && $icon !== '' ? route('plugins.icon', explode('/', $r->name, 2)) : null,
-                // Set when a newer version exists that this site's licence
-                // does not entitle it to — rendered as a renew prompt rather
-                // than an Update button that cannot work.
-                'license_blocked_version' => self::displayVersion($licenseBlocked[$r->name] ?? null),
-                // Publisher trust from the marketplace listing, when this
-                // plugin is one the marketplace knows about. A plugin sitting
-                // in plugins-dev/ or installed by hand has no listing and
-                // therefore claims nothing.
-                'official' => $listingsByPackage[$r->name]->official ?? false,
-                'verified' => $listingsByPackage[$r->name]->verified ?? false,
-            ];
-        })->values()->all();
-
-        // "Add New" is the marketplace: browse the official catalog (not yet installed).
-        $this->available = collect($catalog)
-            ->reject(fn (PluginListing $l): bool => in_array($l->package, $installedNames, true))
-            ->map(fn (PluginListing $l): array => [
-                'name' => $l->package,
-                'display_name' => $l->name,
-                'version' => self::displayVersion($l->version),
-                'description' => $l->shortDescription,
-                'author' => $l->author ?? '',
-                'source' => 'Marketplace',
-                'icon' => $l->icon,
-                'permissions' => $l->permissions,
-                'rating' => $l->rating,
-                'ratings_count' => $l->ratingsCount,
-                'website' => $l->website,
-                // Commerce. A paid product is not installable by Composer —
-                // it is bought here, and the licence is what fetches the
-                // bytes. `prices` is term => minor units.
-                'is_paid' => $l->isPaid(),
-                'currency' => $l->currency,
-                'prices' => $l->prices,
-                'trial_enabled' => $l->trialEnabled && $l->isPaid(),
-                'trial_days' => $l->trialDays,
-                'seat_limit' => $l->seatLimit,
-                'official' => $l->official,
-                'verified' => $l->verified,
-            ])->values()->all();
+        $this->installed = $snapshot->installed;
+        $this->available = $snapshot->available;
+        $this->marketplaceUnreachable = $snapshot->marketplaceUnreachable;
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────

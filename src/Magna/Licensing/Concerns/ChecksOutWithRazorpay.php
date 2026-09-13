@@ -7,6 +7,7 @@ namespace Magna\Licensing\Concerns;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Magna\AccountCentre\AccountCentreSettings;
+use Magna\Admin\Concerns\ReloadsBrowser;
 use Magna\Admin\Pages\AccountCentrePage;
 use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseInstaller;
@@ -38,6 +39,8 @@ use Throwable;
  */
 trait ChecksOutWithRazorpay
 {
+    use ReloadsBrowser;
+
     /** The order awaiting confirmation, or null when nothing is in flight. */
     public ?int $pendingOrderId = null;
 
@@ -166,7 +169,7 @@ trait ChecksOutWithRazorpay
         Notification::make()->title($message)->success()->send();
 
         $url = static::getUrl();
-        $this->js('setTimeout(function(){ window.location.replace('.json_encode($url).'); }, 800)');
+        $this->replaceUrl($url, 800);
     }
 
     /**
