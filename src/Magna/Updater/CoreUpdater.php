@@ -6,14 +6,12 @@ namespace Magna\Updater;
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Laravel\Octane\OctaneServiceProvider;
-use Magna\Licensing\PackageExtractor;
-use Magna\Licensing\SignedPayload;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
+use Magna\Support\Runtime;
 use Symfony\Component\Filesystem\Filesystem;
 use Throwable;
 
@@ -109,34 +107,6 @@ class CoreUpdater
      */
     public const SDK_SOURCE_PATH = 'bundled/magna-cms/plugin-sdk';
 
-    /**
-     * `$zipUrl` comes straight from Update Manager's `/updates` response
-     * (see UpdateEntry::$downloadUrl / UpdateCheckClient) with no signature
-     * or checksum on the archive itself — this overlay is the single
-     * highest-blast-radius operation in the app (it replaces `app/`,
-     * `bootstrap/`, and `src/Magna` — i.e. the code that runs on every
-     * request — on every connected install that clicks "Update Now"). A
-     * compromised or MITM'd response could otherwise point this at an
-     * arbitrary host. The allowlist alone was a floor, not a full fix — it
-     * stopped an attacker-supplied arbitrary host, but didn't verify archive
-     * integrity. `$expectedSha256` closes that: Update Manager's `/updates`
-     * response now must include `zip_sha256` (see `UpdateEntry::$downloadSha256`
-     * / `UpdateEntry::fromArray()`), and `apply()` refuses to proceed without
-     * a valid-looking one — fail-closed, not "verify if present."
-     *
-     * The checksum and the URL still travel together, so a hostile update
-     * server forges both — which is what `$checksumSignature` and
-     * `checkChecksumSignature()` exist for.
-     *
-     * @var list<string>
-     */
-    private const ALLOWED_DOWNLOAD_HOSTS = [
-        'managemagna.jrstudios.dev',
-        'github.com',
-        'objects.githubusercontent.com',
-        'codeload.github.com',
-    ];
-
     /** Version being applied, so every progress line can name it ("v1.3.4 — Downloading release…"). */
     private ?string $targetVersion = null;
 
@@ -155,7 +125,8 @@ class CoreUpdater
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly Filesystem $files,
-        private readonly PackageExtractor $extractor,
+        private readonly ReleaseArchive $archive,
+        private readonly CoreSnapshot $snapshot,
     ) {}
 
     public function apply(
@@ -168,11 +139,15 @@ class CoreUpdater
         $this->targetVersion = $targetVersion;
         $this->setProgress(CoreUpdateState::Running, 'Starting…', 2);
 
+        // Fail-closed, not "verify if present": this overlay replaces the
+        // code that runs on every request, so a release without a checksum
+        // is refused outright. The full threat model — host allowlist,
+        // checksum, Ed25519-signed checksum — lives on ReleaseArchive.
         if (! is_string($expectedSha256) || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
             return $this->fail('This release has no verified checksum from Update Manager — refusing to apply it. If this persists, the update server may need attention.');
         }
 
-        $signatureError = $this->checkChecksumSignature($expectedSha256, $checksumSignature);
+        $signatureError = $this->archive->checkChecksumSignature($expectedSha256, $checksumSignature);
         if ($signatureError !== null) {
             return $this->fail($signatureError);
         }
@@ -204,16 +179,16 @@ class CoreUpdater
             }
 
             $this->setProgress(CoreUpdateState::Running, 'Backing up current files…', 8);
-            $backupPath = $this->backup();
+            $backupPath = $this->snapshot->create();
 
             $this->setProgress(CoreUpdateState::Running, 'Downloading release…', 20);
-            $zipPath = $this->download($zipUrl);
+            $zipPath = $this->archive->download($zipUrl);
 
             $this->setProgress(CoreUpdateState::Running, 'Verifying archive checksum…', 55);
-            $this->verifyChecksum($zipPath, $expectedSha256);
+            $this->archive->verifyChecksum($zipPath, $expectedSha256);
 
             $this->setProgress(CoreUpdateState::Running, 'Extracting…', 65);
-            $extractPath = $this->extract($zipPath);
+            $extractPath = $this->archive->extract($zipPath);
 
             Artisan::call('down');
 
@@ -246,7 +221,7 @@ class CoreUpdater
                 // readable failure with a raw stack trace, at the one moment the
                 // admin most needs to be told what state their install is in.
                 try {
-                    $this->restore($backupPath);
+                    $this->snapshot->restore($backupPath);
                 } catch (Throwable $restoreError) {
                     Artisan::call('config:clear');
 
@@ -263,7 +238,7 @@ class CoreUpdater
                 Artisan::call('up');
             }
 
-            $this->cleanup($zipPath, $extractPath);
+            $this->archive->cleanup($zipPath, $extractPath);
 
             $message = $this->buildSuccessMessage($targetVersion, $disableResult);
             $this->setProgress(CoreUpdateState::Completed, $message, 100);
@@ -271,7 +246,7 @@ class CoreUpdater
             return CoreUpdateState::Completed;
         } catch (Throwable $e) {
             if ($backupPath !== null) {
-                $this->restore($backupPath);
+                $this->snapshot->restore($backupPath);
             }
 
             return $this->fail('Update failed before any files were changed: '.$e->getMessage());
@@ -351,7 +326,7 @@ class CoreUpdater
         Artisan::call('route:clear');
         Artisan::call('view:clear');
 
-        if (class_exists(OctaneServiceProvider::class) && filter_var(getenv('LARAVEL_OCTANE'), FILTER_VALIDATE_BOOLEAN)) {
+        if (class_exists(OctaneServiceProvider::class) && Runtime::isOctane()) {
             Artisan::call('octane:reload');
         }
     }
@@ -374,138 +349,6 @@ class CoreUpdater
         return $message;
     }
 
-    /** Snapshot the core-owned paths to a timestamped backup directory, for file-level rollback. */
-    private function backup(): string
-    {
-        $backupPath = storage_path('app/magna-updates/backups/'.now()->format('Y_m_d_His'));
-
-        foreach (self::CORE_OWNED_PATHS as $relative) {
-            $source = base_path($relative);
-            if (! is_dir($source) && ! is_file($source)) {
-                continue;
-            }
-            $this->files->mirror($source, $backupPath.'/'.$relative, null, ['override' => true]);
-        }
-
-        return $backupPath;
-    }
-
-    private function restore(string $backupPath): void
-    {
-        foreach (self::CORE_OWNED_PATHS as $relative) {
-            $source = $backupPath.'/'.$relative;
-            if (! is_dir($source) && ! is_file($source)) {
-                continue;
-            }
-            $this->files->mirror($source, base_path($relative), null, ['override' => true, 'delete' => true]);
-        }
-    }
-
-    private function guardDownloadUrl(string $zipUrl): void
-    {
-        $scheme = parse_url($zipUrl, PHP_URL_SCHEME);
-        $host = parse_url($zipUrl, PHP_URL_HOST);
-
-        if ($scheme !== 'https' || ! is_string($host) || ! in_array(strtolower($host), self::ALLOWED_DOWNLOAD_HOSTS, true)) {
-            throw new \RuntimeException("Refusing to download a core update from an untrusted source: {$zipUrl}");
-        }
-    }
-
-    private function download(string $zipUrl): string
-    {
-        $this->guardDownloadUrl($zipUrl);
-
-        $tmpDir = storage_path('app/magna-updates/tmp');
-        $this->files->mkdir($tmpDir);
-        $zipPath = $tmpDir.'/core-'.uniqid().'.zip';
-
-        $response = Http::timeout(300)->sink($zipPath)->get($zipUrl);
-        if (! $response->successful()) {
-            throw new \RuntimeException("Could not download the release archive (HTTP {$response->status()}).");
-        }
-
-        return $zipPath;
-    }
-
-    /**
-     * The checksum defeats an attacker who can swap the archive. It does NOT
-     * defeat one who controls the `/updates` response itself, because the URL
-     * and the checksum arrive together over the same channel — whoever forges
-     * one forges both, and the payload lands on code that runs every request.
-     *
-     * The Ed25519 signature closes that: it is minted by the marketplace's
-     * private key, which never leaves the marketplace, and verified against
-     * the public key baked into this build — the same control licensed plugin
-     * downloads already use (Magna\Licensing\LicenseInstaller).
-     *
-     * A present-but-invalid signature is always fatal. A *missing* one is
-     * fatal only when `magna.updater.require_signed_checksum` is on, because
-     * Update Manager has to publish `zip_sha256_signature` for every release
-     * before that can be enforced without bricking updates. Flip the flag as
-     * soon as it does — until then this is checksum-only against a hostile
-     * update server.
-     */
-    private function checkChecksumSignature(string $expectedSha256, ?string $signature): ?string
-    {
-        $required = (bool) config('magna.updater.require_signed_checksum', false);
-
-        if ($signature === null || $signature === '') {
-            if ($required) {
-                return 'This release was published without a signed checksum — refusing to apply it.';
-            }
-
-            Log::warning('Core update applied with an unsigned checksum; the update server has not published zip_sha256_signature.', [
-                'sha256' => $expectedSha256,
-            ]);
-
-            return null;
-        }
-
-        if (! SignedPayload::verify($signature, SignedPayload::canonicalize(['sha256' => $expectedSha256]))) {
-            Log::critical('Core update refused: the release checksum failed Ed25519 signature verification.', [
-                'sha256' => $expectedSha256,
-            ]);
-
-            return 'The release checksum failed signature verification — refusing to apply it. This can mean the update response was tampered with.';
-        }
-
-        return null;
-    }
-
-    /** @throws \RuntimeException if the downloaded archive doesn't match the checksum Update Manager published for it. */
-    private function verifyChecksum(string $zipPath, string $expectedSha256): void
-    {
-        $actual = hash_file('sha256', $zipPath);
-
-        if (! is_string($actual) || ! hash_equals($expectedSha256, $actual)) {
-            throw new \RuntimeException(
-                "Downloaded archive checksum does not match — expected {$expectedSha256}, got ".($actual ?: 'unreadable').
-                '. The archive will not be applied.'
-            );
-        }
-    }
-
-    /**
-     * Extraction goes through the same PackageExtractor licensed plugin
-     * installs use — entry-name validation, symlink rejection, and an
-     * uncompressed-size ceiling, all applied before a byte is written.
-     *
-     * A core archive is a strictly higher-value target than a plugin package
-     * (it lands on `bootstrap/` and `src/Magna`), so it must not have weaker
-     * structural checks than one. It previously called `extractTo()` directly
-     * with none of them.
-     */
-    private function extract(string $zipPath): string
-    {
-        $extractPath = storage_path('app/magna-updates/tmp/extract-'.uniqid());
-
-        $this->extractor->extract($zipPath, $extractPath);
-
-        // GitHub-style archives wrap contents in a single top-level folder
-        // (e.g. "Magna-<version>/") — descend into it if that's what we got.
-        return $this->extractor->resolveContentRoot($extractPath);
-    }
-
     /** Replace only the core-owned paths — never composer.json/composer.lock/vendor/, never .env or storage/. */
     private function overlay(string $extractPath): void
     {
@@ -516,11 +359,6 @@ class CoreUpdater
             }
             $this->files->mirror($source, base_path($relative), null, ['override' => true, 'delete' => true]);
         }
-    }
-
-    private function cleanup(string $zipPath, string $extractPath): void
-    {
-        $this->files->remove([$zipPath, $extractPath]);
     }
 
     private function fail(string $message): CoreUpdateState
