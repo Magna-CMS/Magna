@@ -9,18 +9,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Magna\Audit\AuditLog;
 use Magna\Content\ContentType;
+use Magna\Content\ContentTypeSchemaWriter;
 use Magna\Content\Exceptions\SchemaException;
 use Magna\Content\Field;
 use Magna\Content\FieldTypeRegistry;
-use Magna\Content\Models\ContentTypeRecord;
 use Magna\Content\SchemaRegistry;
-use Magna\Content\SchemaSyncer;
 
 class ContentTypeController extends ManagementController
 {
     public function __construct(
         private readonly SchemaRegistry $schema,
-        private readonly SchemaSyncer $syncer,
+        private readonly ContentTypeSchemaWriter $writer,
         private readonly FieldTypeRegistry $fieldTypes,
     ) {}
 
@@ -53,30 +52,13 @@ class ContentTypeController extends ManagementController
             return response()->json(['message' => "Content type '{$type->handle}' already exists."], 409);
         }
 
-        $this->schema->register($type);
-
-        $record = ContentTypeRecord::create([
-            'handle' => $type->handle,
-            'display_name' => $type->displayName,
-            'is_database_defined' => true,
-            'schema' => $body,
-        ]);
-
-        // Stage 5 (S5-06): the DB record and in-memory registration above
-        // are committed before the physical table exists. If syncAll()
-        // (the actual DDL) fails, both previously stayed committed —
-        // content_types/SchemaRegistry would claim a type with no backing
-        // table, and the next request touching it would hit a raw "table
-        // doesn't exist" SQL error instead of a clean validation message.
+        // Registry + record + DDL and the compensating rollback all live in
+        // the writer. The exception text is raw driver/DDL output — schema
+        // names, SQL fragments, paths — so it goes to the log, never into an
+        // API body any management-scope caller can read.
         try {
-            $this->syncer->syncAll($this->schema, allowDestructive: false);
+            $this->writer->create($type, $body);
         } catch (\Throwable $e) {
-            $record->delete();
-            $this->schema->forget($type->handle);
-
-            // The exception text is raw driver/DDL output — schema names,
-            // SQL fragments, paths. That belongs in the log, not in an API
-            // body any management-scope caller can read.
             report($e);
 
             return response()->json(['message' => 'Failed to create the content type table. The change was rolled back; see the server log for details.'], 500);
@@ -119,31 +101,11 @@ class ContentTypeController extends ManagementController
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $record = ContentTypeRecord::query()->where('handle', $handle)->first();
-        $previousSchema = $record instanceof ContentTypeRecord ? $record->schema : null;
-
-        if ($record instanceof ContentTypeRecord) {
-            $record->schema = $body;
-            $record->save();
-        }
-
-        $this->schema->register($type);
-
-        // Stage 5 (S5-06): same rollback concern as store() — if the DDL
-        // sync fails partway, don't leave the DB record / in-memory
-        // registry pointing at the new (unapplied) schema instead of the
-        // one that's actually reflected in the table.
+        // Same seam as store(): the writer owns the record/registry/DDL
+        // dance and its rollback to $previousType on failure.
         try {
-            $allowDestructive = (bool) $request->input('allow_destructive', false);
-            $this->syncer->syncAll($this->schema, allowDestructive: $allowDestructive);
+            $this->writer->update($type, $previousType, $body, (bool) $request->input('allow_destructive', false));
         } catch (\Throwable $e) {
-            if ($record instanceof ContentTypeRecord && $previousSchema !== null) {
-                $record->schema = $previousSchema;
-                $record->save();
-            }
-            $this->schema->register($previousType);
-
-            // Same rule as store(): driver text goes to the log, not the body.
             report($e);
 
             return response()->json(['message' => 'Failed to apply the content type change. The previous schema was restored; see the server log for details.'], 500);
