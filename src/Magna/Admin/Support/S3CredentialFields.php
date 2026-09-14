@@ -15,6 +15,10 @@ use Filament\Schemas\Components\Component;
  *
  * $visible, if given, gates all five fields the same way both call sites
  * already did: visible only when the paired disk-driver select is s3/s3-like.
+ *
+ * $prefix produces the same group under prefixed state names
+ * (secondary_s3_key, …) for a second destination — BackupSettingsPage's
+ * offsite copy previously re-declared all five fields by hand.
  */
 class S3CredentialFields
 {
@@ -22,33 +26,33 @@ class S3CredentialFields
      * @param  (callable(callable $get): bool)|null  $visible
      * @return list<Component>
      */
-    public static function make(?callable $visible = null): array
+    public static function make(?callable $visible = null, string $prefix = ''): array
     {
         $fields = [
-            TextInput::make('s3_key')
+            TextInput::make($prefix.'s3_key')
                 ->label('S3 access key')
                 ->maxLength(255)
                 ->nullable(),
 
-            TextInput::make('s3_secret')
+            TextInput::make($prefix.'s3_secret')
                 ->label('S3 secret key')
                 ->password()
                 ->nullable()
                 ->placeholder('[secret — leave blank to keep current]')
                 ->helperText('Leave blank to keep the existing secret unchanged.'),
 
-            TextInput::make('s3_bucket')
+            TextInput::make($prefix.'s3_bucket')
                 ->label('S3 bucket')
                 ->maxLength(255)
                 ->nullable(),
 
-            TextInput::make('s3_region')
+            TextInput::make($prefix.'s3_region')
                 ->label('S3 region')
                 ->maxLength(100)
                 ->nullable()
                 ->placeholder('us-east-1'),
 
-            TextInput::make('s3_url')
+            TextInput::make($prefix.'s3_url')
                 ->label('S3 endpoint URL')
                 ->url()
                 ->maxLength(500)

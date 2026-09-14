@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Magna\Admin\Pages;
 
-use Cron\CronExpression;
 use Filament\Actions\Action;
 use Filament\Forms\ComponentContainer;
 use Filament\Forms\Components\FileUpload;
@@ -23,12 +22,11 @@ use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 use Magna\Admin\Resources\BackupResource;
 use Magna\Admin\Support\S3CredentialFields;
+use Magna\Backup\BackupPlanPersister;
 use Magna\Backup\BackupRun;
 use Magna\Backup\Jobs\RestoreBackupJob;
 use Magna\Backup\Jobs\RunBackupJob;
 use Magna\Settings\BackupSettings;
-use Magna\Settings\StorageSettings;
-use Throwable;
 
 /**
  * Backup Manager settings. Unlike the other *SettingsPage classes, this one
@@ -97,167 +95,26 @@ class BackupSettingsPage extends Page implements HasForms
         ]);
     }
 
+    /** The storage drivers both destination selects offer. */
+    private const DRIVER_OPTIONS = [
+        'server' => 'This server (private folder)',
+        'local' => 'Local filesystem (media disk)',
+        'public' => 'Public (local, web-accessible)',
+        's3' => 'Amazon S3',
+        's3-like' => 'S3-compatible (R2, MinIO, etc.)',
+    ];
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->statePath('data')
             ->components([
-                Section::make('Destination')
-                    ->description('Where backups are written. Must be a different disk/bucket than the Storage settings media disk — pointing both at the same place defeats the purpose of a backup.')
-                    ->schema([
-                        Toggle::make('enabled')
-                            ->label('Automated backups enabled')
-                            ->inline(false),
-
-                        Select::make('disk')
-                            ->label('Storage driver')
-                            ->options([
-                                'server' => 'This server (private folder)',
-                                'local' => 'Local filesystem (media disk)',
-                                'public' => 'Public (local, web-accessible)',
-                                's3' => 'Amazon S3',
-                                's3-like' => 'S3-compatible (R2, MinIO, etc.)',
-                            ])
-                            ->required()
-                            ->live(),
-
-                        ...S3CredentialFields::make(fn (callable $get): bool => in_array($get('disk'), ['s3', 's3-like'], true)),
-                    ]),
-
-                Section::make('Encryption')
-                    ->description('Required whenever the primary or secondary destination is S3/S3-compatible — the archive leaves the server, so it must be encrypted before it does. Not required for local/public, where it never leaves the filesystem.')
-                    ->schema([
-                        TextInput::make('encryption_password')
-                            ->label('Encryption password')
-                            ->password()
-                            ->nullable()
-                            ->placeholder('[secret — leave blank to keep current]')
-                            ->helperText('Archive-level AES-256 (ZipArchive native encryption). Leave blank to keep the existing password unchanged. Store this somewhere separate from the backups themselves — losing it means the backups are unrecoverable.'),
-                    ]),
-
-                Section::make('Secondary destination (offsite copy)')
-                    ->description('Optional. Completes the 3-2-1 backup rule: a second copy, ideally on a different provider/region than the primary above.')
-                    ->schema([
-                        Select::make('secondary_disk')
-                            ->label('Storage driver')
-                            ->options([
-                                'server' => 'This server (private folder)',
-                                'local' => 'Local filesystem (media disk)',
-                                'public' => 'Public (local, web-accessible)',
-                                's3' => 'Amazon S3',
-                                's3-like' => 'S3-compatible (R2, MinIO, etc.)',
-                            ])
-                            ->nullable()
-                            ->placeholder('Not configured — single destination only')
-                            ->helperText('Choosing the same provider/region as the primary works, but defeats part of the point of a second copy.')
-                            ->live(),
-
-                        TextInput::make('secondary_s3_key')
-                            ->label('S3 access key')
-                            ->maxLength(255)
-                            ->nullable()
-                            ->visible(fn (callable $get): bool => in_array($get('secondary_disk'), ['s3', 's3-like'], true)),
-
-                        TextInput::make('secondary_s3_secret')
-                            ->label('S3 secret key')
-                            ->password()
-                            ->nullable()
-                            ->placeholder('[secret — leave blank to keep current]')
-                            ->helperText('Leave blank to keep the existing secret unchanged.')
-                            ->visible(fn (callable $get): bool => in_array($get('secondary_disk'), ['s3', 's3-like'], true)),
-
-                        TextInput::make('secondary_s3_bucket')
-                            ->label('S3 bucket')
-                            ->maxLength(255)
-                            ->nullable()
-                            ->visible(fn (callable $get): bool => in_array($get('secondary_disk'), ['s3', 's3-like'], true)),
-
-                        TextInput::make('secondary_s3_region')
-                            ->label('S3 region')
-                            ->maxLength(100)
-                            ->nullable()
-                            ->placeholder('us-east-1')
-                            ->visible(fn (callable $get): bool => in_array($get('secondary_disk'), ['s3', 's3-like'], true)),
-
-                        TextInput::make('secondary_s3_url')
-                            ->label('S3 endpoint URL')
-                            ->url()
-                            ->maxLength(500)
-                            ->nullable()
-                            ->helperText('Leave blank for AWS S3. Set for S3-compatible services (R2, MinIO).')
-                            ->visible(fn (callable $get): bool => in_array($get('secondary_disk'), ['s3', 's3-like'], true)),
-                    ]),
-
-                Section::make('Schedule & retention')
-                    ->schema([
-                        Select::make('frequency')
-                            ->label('Frequency')
-                            ->options([
-                                'daily' => 'Daily',
-                                'weekly' => 'Weekly',
-                                'custom_cron' => 'Custom cron expression',
-                            ])
-                            ->required()
-                            ->live(),
-
-                        TextInput::make('cron_expression')
-                            ->label('Cron expression')
-                            ->maxLength(100)
-                            ->nullable()
-                            ->placeholder('0 2 * * *')
-                            ->helperText('Standard 5-field cron syntax. Validated on save — an invalid expression is rejected rather than silently never firing.')
-                            ->visible(fn (callable $get): bool => $get('frequency') === 'custom_cron'),
-
-                        TextInput::make('run_at')
-                            ->label('Run at (HH:MM)')
-                            ->maxLength(5)
-                            ->required()
-                            ->placeholder('02:00')
-                            ->visible(fn (callable $get): bool => $get('frequency') !== 'custom_cron'),
-
-                        TextInput::make('retention_count')
-                            ->label('Keep at least this many recent backups')
-                            ->numeric()
-                            ->required()
-                            ->minValue(1)
-                            ->maxValue(1000),
-
-                        TextInput::make('retention_days')
-                            ->label('Keep backups for this many days')
-                            ->numeric()
-                            ->required()
-                            ->minValue(1)
-                            ->maxValue(3650),
-                    ]),
-
-                Section::make('What to back up')
-                    ->schema([
-                        Toggle::make('include_database')->label('Database')->inline(false)->live(),
-                        Toggle::make('include_files')->label('Media & files')->inline(false),
-                        Toggle::make('include_config')->label('App settings (config export)')->inline(false),
-
-                        TagsInput::make('excluded_tables')
-                            ->label('Exclude these tables from the database dump')
-                            ->placeholder('Add a table name')
-                            ->helperText('E.g. a huge analytics/log table that does not need to ride along in every backup.')
-                            ->visible(fn (callable $get): bool => (bool) $get('include_database')),
-                    ]),
-
-                Section::make('Notifications')
-                    ->schema([
-                        TagsInput::make('notify_emails')
-                            ->label('Notify these emails')
-                            ->placeholder('Add an email address')
-                            ->nestedRecursiveRules(['email'])
-                            ->helperText('Failure alerts always send — to this list if set, otherwise to every super admin. Success and size-warning alerts are optional and only send if this list is non-empty.'),
-
-                        TextInput::make('size_warning_mb')
-                            ->label('Size warning threshold (MB)')
-                            ->numeric()
-                            ->nullable()
-                            ->minValue(1)
-                            ->helperText('Alert (not block) when a backup exceeds this size — an early signal of runaway growth. Leave blank to disable.'),
-                    ]),
+                $this->destinationSection(),
+                $this->encryptionSection(),
+                $this->secondaryDestinationSection(),
+                $this->scheduleSection(),
+                $this->contentSection(),
+                $this->notificationsSection(),
 
                 SchemaActions::make([
                     Action::make('saveBottom')
@@ -267,129 +124,155 @@ class BackupSettingsPage extends Page implements HasForms
             ]);
     }
 
+    private function destinationSection(): Section
+    {
+        return Section::make('Destination')
+            ->description('Where backups are written. Must be a different disk/bucket than the Storage settings media disk — pointing both at the same place defeats the purpose of a backup.')
+            ->schema([
+                Toggle::make('enabled')
+                    ->label('Automated backups enabled')
+                    ->inline(false),
+
+                Select::make('disk')
+                    ->label('Storage driver')
+                    ->options(self::DRIVER_OPTIONS)
+                    ->required()
+                    ->live(),
+
+                ...S3CredentialFields::make(fn (callable $get): bool => in_array($get('disk'), ['s3', 's3-like'], true)),
+            ]);
+    }
+
+    private function encryptionSection(): Section
+    {
+        return Section::make('Encryption')
+            ->description('Required whenever the primary or secondary destination is S3/S3-compatible — the archive leaves the server, so it must be encrypted before it does. Not required for local/public, where it never leaves the filesystem.')
+            ->schema([
+                TextInput::make('encryption_password')
+                    ->label('Encryption password')
+                    ->password()
+                    ->nullable()
+                    ->placeholder('[secret — leave blank to keep current]')
+                    ->helperText('Archive-level AES-256 (ZipArchive native encryption). Leave blank to keep the existing password unchanged. Store this somewhere separate from the backups themselves — losing it means the backups are unrecoverable.'),
+            ]);
+    }
+
+    private function secondaryDestinationSection(): Section
+    {
+        return Section::make('Secondary destination (offsite copy)')
+            ->description('Optional. Completes the 3-2-1 backup rule: a second copy, ideally on a different provider/region than the primary above.')
+            ->schema([
+                Select::make('secondary_disk')
+                    ->label('Storage driver')
+                    ->options(self::DRIVER_OPTIONS)
+                    ->nullable()
+                    ->placeholder('Not configured — single destination only')
+                    ->helperText('Choosing the same provider/region as the primary works, but defeats part of the point of a second copy.')
+                    ->live(),
+
+                ...S3CredentialFields::make(
+                    fn (callable $get): bool => in_array($get('secondary_disk'), ['s3', 's3-like'], true),
+                    prefix: 'secondary_',
+                ),
+            ]);
+    }
+
+    private function scheduleSection(): Section
+    {
+        return Section::make('Schedule & retention')
+            ->schema([
+                Select::make('frequency')
+                    ->label('Frequency')
+                    ->options([
+                        'daily' => 'Daily',
+                        'weekly' => 'Weekly',
+                        'custom_cron' => 'Custom cron expression',
+                    ])
+                    ->required()
+                    ->live(),
+
+                TextInput::make('cron_expression')
+                    ->label('Cron expression')
+                    ->maxLength(100)
+                    ->nullable()
+                    ->placeholder('0 2 * * *')
+                    ->helperText('Standard 5-field cron syntax. Validated on save — an invalid expression is rejected rather than silently never firing.')
+                    ->visible(fn (callable $get): bool => $get('frequency') === 'custom_cron'),
+
+                TextInput::make('run_at')
+                    ->label('Run at (HH:MM)')
+                    ->maxLength(5)
+                    ->required()
+                    ->placeholder('02:00')
+                    ->visible(fn (callable $get): bool => $get('frequency') !== 'custom_cron'),
+
+                TextInput::make('retention_count')
+                    ->label('Keep at least this many recent backups')
+                    ->numeric()
+                    ->required()
+                    ->minValue(1)
+                    ->maxValue(1000),
+
+                TextInput::make('retention_days')
+                    ->label('Keep backups for this many days')
+                    ->numeric()
+                    ->required()
+                    ->minValue(1)
+                    ->maxValue(3650),
+            ]);
+    }
+
+    private function contentSection(): Section
+    {
+        return Section::make('What to back up')
+            ->schema([
+                Toggle::make('include_database')->label('Database')->inline(false)->live(),
+                Toggle::make('include_files')->label('Media & files')->inline(false),
+                Toggle::make('include_config')->label('App settings (config export)')->inline(false),
+
+                TagsInput::make('excluded_tables')
+                    ->label('Exclude these tables from the database dump')
+                    ->placeholder('Add a table name')
+                    ->helperText('E.g. a huge analytics/log table that does not need to ride along in every backup.')
+                    ->visible(fn (callable $get): bool => (bool) $get('include_database')),
+            ]);
+    }
+
+    private function notificationsSection(): Section
+    {
+        return Section::make('Notifications')
+            ->schema([
+                TagsInput::make('notify_emails')
+                    ->label('Notify these emails')
+                    ->placeholder('Add an email address')
+                    ->nestedRecursiveRules(['email'])
+                    ->helperText('Failure alerts always send — to this list if set, otherwise to every super admin. Success and size-warning alerts are optional and only send if this list is non-empty.'),
+
+                TextInput::make('size_warning_mb')
+                    ->label('Size warning threshold (MB)')
+                    ->numeric()
+                    ->nullable()
+                    ->minValue(1)
+                    ->helperText('Alert (not block) when a backup exceeds this size — an early signal of runaway growth. Leave blank to disable.'),
+            ]);
+    }
+
     public function save(): void
     {
         /** @var array<string, mixed> $data */
         $data = $this->form->getState();
 
-        $settings = BackupSettings::get();
-        $settings->enabled = (bool) ($data['enabled'] ?? false);
-        $settings->disk = (string) ($data['disk'] ?? 'local');
-        $settings->s3_key = ($data['s3_key'] ?? null) ?: null;
-        $settings->s3_bucket = ($data['s3_bucket'] ?? null) ?: null;
-        $settings->s3_region = ($data['s3_region'] ?? null) ?: null;
-        $settings->s3_url = ($data['s3_url'] ?? null) ?: null;
+        $result = app(BackupPlanPersister::class)->persist($data);
 
-        if (filled($data['s3_secret'] ?? null)) {
-            $settings->s3_secret = (string) $data['s3_secret'];
-        }
-
-        $settings->secondary_disk = ($data['secondary_disk'] ?? null) ?: null;
-        $settings->secondary_s3_key = ($data['secondary_s3_key'] ?? null) ?: null;
-        $settings->secondary_s3_bucket = ($data['secondary_s3_bucket'] ?? null) ?: null;
-        $settings->secondary_s3_region = ($data['secondary_s3_region'] ?? null) ?: null;
-        $settings->secondary_s3_url = ($data['secondary_s3_url'] ?? null) ?: null;
-
-        if (filled($data['secondary_s3_secret'] ?? null)) {
-            $settings->secondary_s3_secret = (string) $data['secondary_s3_secret'];
-        }
-
-        if (filled($data['encryption_password'] ?? null)) {
-            $settings->encryption_password = (string) $data['encryption_password'];
-        }
-
-        $settings->size_warning_mb = filled($data['size_warning_mb'] ?? null) ? (int) $data['size_warning_mb'] : null;
-
-        // See docs/backup-manager-plan.md, Decision #1: a backup destination
-        // identical to the live media disk is a single point of failure and
-        // is rejected outright, not just warned about. Stage 7 extends the
-        // same rule to the secondary destination, plus two new Stage 7
-        // guards: a secondary that's really just the primary again, and a
-        // bucket-based destination with no encryption password.
-        if ($settings->collidesWithMediaDisk(StorageSettings::get())) {
+        if (! $result['ok']) {
             Notification::make()
-                ->title('Backup destination not saved')
-                ->body('The backup destination resolves to the same disk/bucket as the Storage settings media disk. Backups must be written somewhere independent of live media — pick a different disk, bucket, or path.')
+                ->title($result['title'])
+                ->body((string) $result['message'])
                 ->danger()
                 ->send();
 
             return;
         }
-
-        if ($settings->secondaryCollidesWithMediaDisk(StorageSettings::get())) {
-            Notification::make()
-                ->title('Backup settings not saved')
-                ->body('The secondary destination resolves to the same disk/bucket as the Storage settings media disk.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        if ($settings->secondaryCollidesWithPrimary()) {
-            Notification::make()
-                ->title('Backup settings not saved')
-                ->body('The secondary destination resolves to the same place as the primary — that is not a second copy. Pick a genuinely different disk, bucket, or path.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        if ($settings->encryptionMisconfigured()) {
-            Notification::make()
-                ->title('Backup settings not saved')
-                ->body('A bucket-based destination (S3/S3-compatible) is configured without an encryption password. Set one before saving.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $frequency = (string) ($data['frequency'] ?? 'daily');
-        $cronExpression = ($data['cron_expression'] ?? null) ?: null;
-
-        // Stage 8: an invalid cron expression must be rejected at save time,
-        // not saved and then silently never fire — BackupSchedule::isDueNow()
-        // already fails closed on one, but that only surfaces as "backups
-        // quietly stopped running," which is exactly the failure mode this
-        // whole feature exists to prevent.
-        if ($frequency === 'custom_cron') {
-            if ($cronExpression === null) {
-                Notification::make()
-                    ->title('Backup settings not saved')
-                    ->body('A cron expression is required when frequency is set to "Custom cron expression".')
-                    ->danger()
-                    ->send();
-
-                return;
-            }
-
-            try {
-                new CronExpression($cronExpression);
-            } catch (Throwable) {
-                Notification::make()
-                    ->title('Backup settings not saved')
-                    ->body("'{$cronExpression}' is not a valid cron expression.")
-                    ->danger()
-                    ->send();
-
-                return;
-            }
-        }
-
-        $settings->frequency = $frequency;
-        $settings->cron_expression = $cronExpression;
-        $settings->run_at = (string) ($data['run_at'] ?? '02:00');
-        $settings->retention_count = (int) ($data['retention_count'] ?? 7);
-        $settings->retention_days = (int) ($data['retention_days'] ?? 30);
-        $settings->include_database = (bool) ($data['include_database'] ?? true);
-        $settings->include_files = (bool) ($data['include_files'] ?? true);
-        $settings->include_config = (bool) ($data['include_config'] ?? true);
-        $settings->excluded_tables = array_values((array) ($data['excluded_tables'] ?? []));
-        $settings->notify_emails = array_values((array) ($data['notify_emails'] ?? []));
-
-        $settings->save();
 
         // Refresh secret fields so they show blank again, same convention as
         // SettingsPage::save().
@@ -400,7 +283,7 @@ class BackupSettingsPage extends Page implements HasForms
         ]));
 
         Notification::make()
-            ->title('Backup settings saved.')
+            ->title($result['title'])
             ->success()
             ->send();
     }
