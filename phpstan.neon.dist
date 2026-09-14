@@ -9,13 +9,16 @@ parameters:
         - src
         - database
 
-    # Filament 5 resource and page classes are Livewire components with extensive
-    # magic property access, dynamic closures, and fluent component builders that
-    # PHPStan cannot fully type at level 9. The property.nativeType / property.static
-    # errors they produce are marked ignorable:false by PHPStan, so they must be
-    # excluded by path rather than via ignoreErrors. Everything else stays at level 9.
+    # The remaining Filament admin debt, being retired folder by folder (W4-1);
+    # ArchitectureTest holds this list shrink-only — entries can be removed,
+    # never added. The Admin root, Support, Widgets, Concerns, Console and
+    # Notifications folders are already analysed at level 9.
     excludePaths:
-        - src/Magna/Admin
+        - src/Magna/Admin/Pages
+        - src/Magna/Admin/Resources
+        # View concern whose only users are the excluded Pages; PHPStan
+        # analyses a trait only through its users, so it retires with them.
+        - src/Magna/Admin/Concerns/ReloadsBrowser.php
         # Reusable trait offered to plugin authors (documented in
         # plugin-development-guide.md). Its only consumers are Filament pages
         # (excluded above) and installed plugins (outside PHPStan's paths), so it

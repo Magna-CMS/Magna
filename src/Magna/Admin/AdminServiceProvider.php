@@ -7,6 +7,7 @@ namespace Magna\Admin;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
+use Filament\Widgets\Widget;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Magna\Admin\Console\NotificationsPruneCommand;
@@ -77,9 +78,14 @@ class AdminServiceProvider extends ServiceProvider
                             $navItem->url(fn (): string => route($item->route));
                         }
 
+                        // ->hidden(), not ->isHidden(): in Filament 5 isHidden()
+                        // is the GETTER and ignores arguments, so this closure
+                        // was silently discarded and permission-gated nav items
+                        // rendered for everyone. Visibility only — the pages
+                        // behind the items still authorize via canAccess().
                         $perm = $item->getRequiredPermission();
                         if ($perm !== null) {
-                            $navItem->isHidden(fn (): bool => ! auth()->user()?->can($perm));
+                            $navItem->hidden(fn (): bool => ! (auth()->user()?->can($perm) ?? false));
                         }
 
                         $filamentItems[] = $navItem;
@@ -90,10 +96,15 @@ class AdminServiceProvider extends ServiceProvider
                         ->items($filamentItems);
                 }
 
-                // RegistersDashboardWidgets → injected into panel widget list
+                // RegistersDashboardWidgets → injected into panel widget list.
+                // The contract promises class-strings but not Widget subclasses;
+                // anything else would take the whole dashboard down, so it is
+                // dropped here — one bad plugin costs exactly itself.
                 if ($plugin instanceof RegistersDashboardWidgets) {
                     foreach ($plugin->dashboardWidgets() as $widgetClass) {
-                        $widgets[] = $widgetClass;
+                        if (is_a($widgetClass, Widget::class, true)) {
+                            $widgets[] = $widgetClass;
+                        }
                     }
                 }
 

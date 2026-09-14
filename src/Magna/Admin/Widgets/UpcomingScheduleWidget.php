@@ -39,7 +39,7 @@ class UpcomingScheduleWidget extends Widget
         return ['rows' => $this->loadRows()];
     }
 
-    /** @return list<array{label: string, type: string, status: string, locale: string, event: string, at: Carbon}> */
+    /** @return list<array{label: string, type: string, status: 'publish'|'unpublish', locale: string, at: Carbon}> */
     private function loadRows(): array
     {
         /** @var SchemaRegistry $registry */
@@ -73,10 +73,10 @@ class UpcomingScheduleWidget extends Widget
             ) {
                 $at = $entry->getAttribute('published_at');
                 $rows[] = [
-                    'label' => (string) ($entry->getAttribute('title') ?? $entry->getAttribute('name') ?? $entry->getKey()),
+                    'label' => $this->labelFor($entry),
                     'type' => $type->displayName,
                     'status' => 'publish',
-                    'locale' => (string) ($entry->getAttribute('locale') ?? ''),
+                    'locale' => $this->localeFor($entry),
                     'at' => $at instanceof Carbon ? $at : now(),
                 ];
             }
@@ -94,10 +94,10 @@ class UpcomingScheduleWidget extends Widget
                 ) {
                     $at = $entry->getAttribute('unpublish_at');
                     $rows[] = [
-                        'label' => (string) ($entry->getAttribute('title') ?? $entry->getAttribute('name') ?? $entry->getKey()),
+                        'label' => $this->labelFor($entry),
                         'type' => $type->displayName,
                         'status' => 'unpublish',
-                        'locale' => (string) ($entry->getAttribute('locale') ?? ''),
+                        'locale' => $this->localeFor($entry),
                         'at' => $at instanceof Carbon ? $at : now(),
                     ];
                 }
@@ -107,5 +107,20 @@ class UpcomingScheduleWidget extends Widget
         usort($rows, fn (array $a, array $b): int => $a['at']->timestamp <=> $b['at']->timestamp);
 
         return array_slice($rows, 0, 20);
+    }
+
+    /** A display string for a dynamic entry: title, name, or the key. */
+    private function labelFor(Entry $entry): string
+    {
+        $label = $entry->getAttribute('title') ?? $entry->getAttribute('name') ?? $entry->getKey();
+
+        return is_scalar($label) ? (string) $label : '';
+    }
+
+    private function localeFor(Entry $entry): string
+    {
+        $locale = $entry->getAttribute('locale');
+
+        return is_string($locale) ? $locale : '';
     }
 }

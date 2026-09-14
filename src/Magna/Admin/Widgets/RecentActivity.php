@@ -57,7 +57,7 @@ class RecentActivity extends TableWidget
 
                 TextColumn::make('actor')
                     ->label('User')
-                    ->getStateUsing(fn (AuditLog $record): string => $record->actorUser?->name ?? 'System')
+                    ->getStateUsing(fn (AuditLog $record): string => $record->actorUser->name ?? 'System')
                     ->icon('heroicon-m-user-circle')
                     ->iconColor('gray'),
             ])

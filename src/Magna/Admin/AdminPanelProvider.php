@@ -444,13 +444,15 @@ class AdminPanelProvider extends PanelProvider
                 continue;
             }
 
+            // The name comes from a plugin, so it is checked against the view
+            // finder rather than trusted as a view-string.
             $view = $instance->view();
-            if ($view === null) {
+            if ($view === null || ! view()->exists($view)) {
                 continue;
             }
 
             try {
-                $html .= view($view)->render();
+                $html .= view()->make($view)->render();
             } catch (\Throwable) {
                 // A plugin's broken widget view must not break sign-in.
             }

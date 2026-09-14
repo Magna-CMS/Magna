@@ -26,7 +26,11 @@ class InitialsAvatarProvider implements AvatarProvider
     {
         $initials = $this->initialsFor(Filament::getNameForDefaultAvatar($record));
 
-        $background = Color::convertToHex(FilamentColor::getColor('gray')[950] ?? Color::Gray[950]);
+        // getColor() values may be palette indices (int) as well as CSS color
+        // strings; only a string can be converted, so anything else falls back
+        // to the stock gray.
+        $shade = FilamentColor::getColor('gray')[950] ?? null;
+        $background = Color::convertToHex(is_string($shade) ? $shade : Color::Gray[950]);
 
         $svg = <<<SVG
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">

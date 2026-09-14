@@ -50,7 +50,7 @@ class ActionLabel
 
     public static function get(string $action): string
     {
-        return static::$map[$action]
+        return self::$map[$action]
             ?? ucwords(str_replace(['.', '_', '-'], ' ', $action));
     }
 }

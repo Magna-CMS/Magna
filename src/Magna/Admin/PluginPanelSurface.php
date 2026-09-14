@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Admin;
 
+use Filament\Widgets\Widget;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -46,8 +47,7 @@ class PluginPanelSurface
     {
         return $this->collect(
             RegistersAdminResources::class,
-            /** @param Plugin&RegistersAdminResources $plugin */
-            static fn (object $plugin): iterable => $plugin->adminResources(),
+            static fn (RegistersAdminResources $plugin): iterable => $plugin->adminResources(),
         );
     }
 
@@ -61,24 +61,33 @@ class PluginPanelSurface
     {
         return $this->collect(
             RegistersSettingsPages::class,
-            /** @param Plugin&RegistersSettingsPages $plugin */
-            static fn (object $plugin): iterable => $plugin->settingsPages(),
+            static fn (RegistersSettingsPages $plugin): iterable => $plugin->settingsPages(),
         );
     }
 
     /**
      * Collects Filament widget classes from plugins that implement
      * RegistersDashboardWidgets, so plugin cards appear on the dashboard.
+     * Narrowed to actual Widget subclasses — the contract promises
+     * class-strings, and a non-widget in the panel's list would take the
+     * whole dashboard down instead of costing one plugin its card.
      *
-     * @return list<class-string>
+     * @return list<class-string<Widget>>
      */
     public function widgets(): array
     {
-        return $this->collect(
+        $widgets = [];
+
+        foreach ($this->collect(
             RegistersDashboardWidgets::class,
-            /** @param Plugin&RegistersDashboardWidgets $plugin */
-            static fn (object $plugin): iterable => $plugin->dashboardWidgets(),
-        );
+            static fn (RegistersDashboardWidgets $plugin): iterable => $plugin->dashboardWidgets(),
+        ) as $class) {
+            if (is_a($class, Widget::class, true)) {
+                $widgets[] = $class;
+            }
+        }
+
+        return $widgets;
     }
 
     /**
@@ -94,8 +103,10 @@ class PluginPanelSurface
      * not exist, which is a 500 on every admin request. One broken plugin now
      * costs exactly itself.
      *
-     * @param  class-string  $contract
-     * @param  callable(object): iterable<class-string>  $classes
+     * @template TContract of object
+     *
+     * @param  class-string<TContract>  $contract
+     * @param  callable(TContract): iterable<class-string>  $classes
      * @return list<class-string>
      */
     private function collect(string $contract, callable $classes): array
@@ -139,6 +150,11 @@ class PluginPanelSurface
     /**
      * The plugin behind a record, or null when it cannot contribute to this
      * contract (not installed on disk, not autoloadable, does not implement it).
+     *
+     * @template TContract of object
+     *
+     * @param  class-string<TContract>  $contract
+     * @return (Plugin&TContract)|null
      */
     private function pluginFor(PluginRecord $record, string $contract): ?Plugin
     {
@@ -155,11 +171,11 @@ class PluginPanelSurface
             return null;
         }
 
-        if (! is_a($entryClass, $contract, true)) {
+        if (! is_a($entryClass, $contract, true) || ! is_a($entryClass, Plugin::class, true)) {
             return null;
         }
 
-        /** @var Plugin $plugin */
+        /** @var Plugin&TContract $plugin */
         $plugin = $this->app->make($entryClass, [
             'app' => $this->app,
             'basePath' => $record->base_path,
@@ -189,7 +205,7 @@ class PluginPanelSurface
     {
         $basePath = $record->base_path;
 
-        if (! is_string($basePath) || $basePath === '') {
+        if ($basePath === '') {
             return;
         }
 

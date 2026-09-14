@@ -23,10 +23,10 @@ use Filament\Schemas\Components\Component;
 class S3CredentialFields
 {
     /**
-     * @param  (callable(callable $get): bool)|null  $visible
+     * @param  (\Closure(callable $get): bool)|null  $visible
      * @return list<Component>
      */
-    public static function make(?callable $visible = null, string $prefix = ''): array
+    public static function make(?\Closure $visible = null, string $prefix = ''): array
     {
         $fields = [
             TextInput::make($prefix.'s3_key')

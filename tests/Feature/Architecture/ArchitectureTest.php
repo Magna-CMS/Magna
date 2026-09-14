@@ -637,6 +637,32 @@ it('keeps every Blade view under the view ceiling', function (): void {
  * backing class at all (they are rendered by the block renderer from data
  * arrays) and is shrink-only.
  */
+it('only ever shrinks the phpstan exclusion list', function (): void {
+    // Every entry here is analysed-at-level-9 debt being paid down (W4-1).
+    // Retiring one is progress: fix the folder, delete it from BOTH
+    // phpstan.neon.dist and this list. Adding one is regression: new code is
+    // written type-clean, never excluded — there is deliberately no
+    // mechanism for growing this list short of editing this test, which is
+    // the review conversation the rule exists to force.
+    $allowed = [
+        'src/Magna/Admin/Pages',
+        'src/Magna/Admin/Resources',
+        'src/Magna/Admin/Concerns/ReloadsBrowser.php',
+        'src/Magna/Media/Concerns/IngestsMedia.php',
+        'src/Magna/Licensing/Concerns/ChecksOutWithRazorpay.php',
+        'src/Magna/Blocks/Livewire',
+    ];
+
+    $neon = (string) file_get_contents(dirname(__DIR__, 3).'/phpstan.neon.dist');
+
+    preg_match('/excludePaths:\n((?:\s+(?:#[^\n]*|- [^\n]+)\n)+)/', $neon, $matches);
+    preg_match_all('/- ([^\n]+)/', $matches[1] ?? '', $entries);
+
+    $current = array_map('trim', $entries[1]);
+
+    expect(array_diff($current, $allowed))->toBe([]);
+});
+
 it('service-locates and queries nothing from inside a Blade view', function (): void {
     $allowed = [
         // Block views rendered straight from the renderer with a data array
