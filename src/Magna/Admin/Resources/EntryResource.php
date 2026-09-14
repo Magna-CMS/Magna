@@ -19,9 +19,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\View\View;
 use Magna\Admin\Resources\Entry\CreateEntry;
 use Magna\Admin\Resources\Entry\EditEntry;
 use Magna\Admin\Resources\Entry\ListEntries;
@@ -50,29 +50,29 @@ class EntryResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return static::hasContentPermission('view');
+        return self::hasContentPermission('view');
     }
 
     public static function canCreate(): bool
     {
-        return static::hasContentPermission('create');
+        return self::hasContentPermission('create');
     }
 
     public static function canEdit(Model $record): bool
     {
         /** @var Entry $record */
-        return static::hasContentPermission('update', $record->getHandle());
+        return self::hasContentPermission('update', $record->getHandle());
     }
 
     public static function canDelete(Model $record): bool
     {
         /** @var Entry $record */
-        return static::hasContentPermission('delete', $record->getHandle());
+        return self::hasContentPermission('delete', $record->getHandle());
     }
 
     public static function canDeleteAny(): bool
     {
-        return static::hasContentPermission('delete');
+        return self::hasContentPermission('delete');
     }
 
     private static function hasContentPermission(string $action, ?string $handle = null): bool
@@ -110,12 +110,12 @@ class EntryResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        $type = static::resolveCurrentType();
+        $type = self::resolveCurrentType();
         if ($type === null) {
             return $schema->components([]);
         }
 
-        $fieldComponents = static::buildFieldComponents($type);
+        $fieldComponents = self::buildFieldComponents($type);
 
         return $schema->components([
             Section::make('Fields')
@@ -132,13 +132,18 @@ class EntryResource extends Resource
             $components[] = $field->type->toFilamentComponent($field);
         }
 
-        // Merge Filament components contributed by enabled plugins implementing ExtendsEntryForm.
+        // Merge Filament components contributed by enabled plugins implementing
+        // ExtendsEntryForm. The contract promises components but cannot type
+        // them; anything else would break the whole entry form, so it is
+        // dropped rather than trusted.
         if (app()->bound('magna.entry_form_plugins')) {
             /** @var list<ExtendsEntryForm> $entryFormPlugins */
             $entryFormPlugins = app()->make('magna.entry_form_plugins');
             foreach ($entryFormPlugins as $plugin) {
                 foreach ($plugin->entryFormExtensions($type->handle) as $component) {
-                    $components[] = $component;
+                    if ($component instanceof Component) {
+                        $components[] = $component;
+                    }
                 }
             }
         }
@@ -209,7 +214,7 @@ class EntryResource extends Resource
                             $locales,
                         ));
                     })
-                    ->visible(fn (): bool => static::resolveCurrentType()?->localizable ?? false),
+                    ->visible(fn (): bool => self::resolveCurrentType()->localizable ?? false),
             ])
             ->actions([
                 // Publish action
@@ -225,7 +230,7 @@ class EntryResource extends Resource
                         }
                     })
                     ->visible(fn (Entry $record): bool => $record->status !== EntryStatus::Published
-                        && static::hasContentPermission('publish', $record->getHandle())),
+                        && self::hasContentPermission('publish', $record->getHandle())),
 
                 // Unpublish action
                 Action::make('unpublish')
@@ -237,7 +242,7 @@ class EntryResource extends Resource
                         app(EntryManager::class)->unpublish($record);
                     })
                     ->visible(fn (Entry $record): bool => $record->status === EntryStatus::Published
-                        && static::hasContentPermission('publish', $record->getHandle())),
+                        && self::hasContentPermission('publish', $record->getHandle())),
 
                 // Create translation action (localizable types only)
                 Action::make('create_translation')
@@ -260,15 +265,16 @@ class EntryResource extends Resource
                     ->action(function (Entry $record, array $data): void {
                         $locale = is_string($data['target_locale']) ? $data['target_locale'] : '';
                         if ($locale !== '') {
+                            $actorId = auth()->id();
                             app(EntryManager::class)->createTranslation(
                                 $record,
                                 $locale,
-                                auth()->id(),
+                                $actorId !== null ? (string) $actorId : null,
                             );
                         }
                     })
-                    ->visible(fn (Entry $record): bool => (static::resolveCurrentType()?->localizable ?? false)
-                        && static::hasContentPermission('create', $record->getHandle()))
+                    ->visible(fn (Entry $record): bool => (self::resolveCurrentType()->localizable ?? false)
+                        && self::hasContentPermission('create', $record->getHandle()))
                     ->successNotificationTitle('Translation created as draft.'),
 
                 // View revisions action
@@ -277,13 +283,13 @@ class EntryResource extends Resource
                     ->icon('heroicon-m-clock')
                     ->color('gray')
                     ->modalHeading('Revision History')
-                    ->modalContent(fn (Entry $record): View => view(
+                    ->modalContent(fn (Entry $record): View => view()->make(
                         'magna::admin.entry-revisions',
-                        ['entry' => $record, 'type' => static::getTypeHandleFromRequest()]
+                        ['entry' => $record, 'type' => self::getTypeHandleFromRequest()]
                     ))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close')
-                    ->visible(fn (Entry $record): bool => static::hasContentPermission('view', $record->getHandle())),
+                    ->visible(fn (Entry $record): bool => self::hasContentPermission('view', $record->getHandle())),
 
                 EditAction::make(),
             ])
@@ -297,6 +303,7 @@ class EntryResource extends Resource
 
     // ── Query scoped to the current content type ─────────────────────────────
 
+    /** @return Builder<Entry> */
     public static function getEloquentQuery(): Builder
     {
         $handle = static::getTypeHandleFromRequest();
@@ -312,8 +319,9 @@ class EntryResource extends Resource
 
     public static function getGlobalSearchResultTitle(Model $record): string|Htmlable
     {
-        /** @var Entry $record */
-        return (string) ($record->getAttribute('title') ?? $record->getAttribute('name') ?? $record->getKey());
+        $title = $record->getAttribute('title') ?? $record->getAttribute('name') ?? $record->getKey();
+
+        return is_scalar($title) ? (string) $title : '';
     }
 
     public static function getGlobalSearchResultDetails(Model $record): array

@@ -7,6 +7,7 @@ namespace Magna\Admin\Resources;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Resources\Pages\PageRegistration;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
@@ -101,7 +102,7 @@ class UserResource extends \Filament\Resources\Resource
                 ->options(
                     fn (): array => Role::query()
                         ->when(
-                            ! (auth()->user()?->isSuperAdmin() ?? false),
+                            ! (User::current()?->isSuperAdmin() ?? false),
                             fn ($query) => $query->where('is_super_admin', false),
                         )
                         ->orderBy('name')
@@ -109,7 +110,7 @@ class UserResource extends \Filament\Resources\Resource
                         ->all(),
                 )
                 ->helperText(
-                    fn (): ?string => (auth()->user()?->isSuperAdmin() ?? false)
+                    fn (): ?string => (User::current()?->isSuperAdmin() ?? false)
                         ? null
                         : 'Super admin roles are hidden — only a super admin can grant super admin access.',
                 )
@@ -191,7 +192,7 @@ class UserResource extends \Filament\Resources\Resource
             ->defaultSort('created_at', 'desc');
     }
 
-    /** @return array<string, class-string> */
+    /** @return array<string, PageRegistration> */
     public static function getPages(): array
     {
         return [

@@ -15,7 +15,6 @@ parameters:
     # Notifications folders are already analysed at level 9.
     excludePaths:
         - src/Magna/Admin/Pages
-        - src/Magna/Admin/Resources
         # View concern whose only users are the excluded Pages; PHPStan
         # analyses a trait only through its users, so it retires with them.
         - src/Magna/Admin/Concerns/ReloadsBrowser.php

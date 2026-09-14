@@ -12,6 +12,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\PageRegistration;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -130,7 +131,7 @@ class MediaResource extends \Filament\Resources\Resource
             ->modifyQueryUsing(function (Builder $query, $livewire): void {
                 $query->with(['folder', 'uploader']);
 
-                if (method_exists($livewire, 'applyCategory')) {
+                if (is_object($livewire) && method_exists($livewire, 'applyCategory')) {
                     $livewire->applyCategory($query);
                 }
             })
@@ -224,7 +225,7 @@ class MediaResource extends \Filament\Resources\Resource
             ->defaultSort('created_at', 'desc');
     }
 
-    /** @return array<string, class-string> */
+    /** @return array<string, PageRegistration> */
     public static function getPages(): array
     {
         return [

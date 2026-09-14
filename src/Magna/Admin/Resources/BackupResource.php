@@ -10,6 +10,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -20,6 +21,7 @@ use Illuminate\Support\HtmlString;
 use Magna\Admin\Resources\BackupRun\ListBackupRuns;
 use Magna\Backup\BackupRun;
 use Magna\Backup\Jobs\RestoreBackupJob;
+use Magna\Users\User;
 
 class BackupResource extends Resource
 {
@@ -98,7 +100,7 @@ class BackupResource extends Resource
 
                 TextColumn::make('size_bytes')
                     ->label('Size')
-                    ->formatStateUsing(fn (?int $state): string => static::formatBytes($state))
+                    ->formatStateUsing(fn (?int $state): string => self::formatBytes($state))
                     ->placeholder('—'),
 
                 TextColumn::make('duration')
@@ -159,7 +161,7 @@ class BackupResource extends Resource
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->color('danger')
                     ->visible(fn (BackupRun $record): bool => $record->status === BackupRun::STATUS_SUCCESS
-                        && (auth()->user()?->isSuperAdmin() ?? false)
+                        && (User::current()?->isSuperAdmin() ?? false)
                         && (auth()->user()?->can('backup.restore') ?? false))
                     ->schema([
                         Placeholder::make('warning')
@@ -223,7 +225,7 @@ class BackupResource extends Resource
         };
     }
 
-    /** @return array<string, class-string> */
+    /** @return array<string, PageRegistration> */
     public static function getPages(): array
     {
         return [

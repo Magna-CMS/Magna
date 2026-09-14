@@ -10,6 +10,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
+use Illuminate\Support\Carbon;
 use Magna\Admin\Resources\ApiKeyResource;
 use Magna\Auth\ApiKeyService;
 use Magna\Users\User;
@@ -78,7 +79,17 @@ class ManageApiKeys extends ManageRecords
                     /** @var User $user */
                     $user = auth()->user();
 
-                    $credentials = app(ApiKeyService::class)->generate($data, $user);
+                    // The form validates these; the shapes below only restate
+                    // what validation guarantees, in types the service declares.
+                    $rateLimit = $data['rate_limit_per_minute'] ?? null;
+                    $expiresAt = $data['expires_at'] ?? null;
+
+                    $credentials = app(ApiKeyService::class)->generate([
+                        'name' => is_string($data['name'] ?? null) ? $data['name'] : '',
+                        'scope' => is_string($data['scope'] ?? null) ? $data['scope'] : 'delivery',
+                        'rate_limit_per_minute' => is_numeric($rateLimit) ? (int) $rateLimit : null,
+                        'expires_at' => is_string($expiresAt) || $expiresAt instanceof Carbon ? $expiresAt : null,
+                    ], $user);
 
                     $this->generatedKey = $credentials['key'];
                     $this->generatedSecret = $credentials['secret'];

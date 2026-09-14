@@ -6,6 +6,7 @@ namespace Magna\Admin\Resources;
 
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\PageRegistration;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -137,7 +138,7 @@ class ApiKeyResource extends \Filament\Resources\Resource
             ->emptyStateDescription('Generate your first key to connect external apps to Magna.');
     }
 
-    /** @return array<string, class-string> */
+    /** @return array<string, PageRegistration> */
     public static function getPages(): array
     {
         return [

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Admin\Resources;
 
+use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -81,7 +82,7 @@ class AuditLogResource extends Resource
 
                 TextColumn::make('actor_name')
                     ->label('User')
-                    ->getStateUsing(fn (AuditLog $record): string => $record->actorUser?->name ?? 'System')
+                    ->getStateUsing(fn (AuditLog $record): string => $record->actorUser->name ?? 'System')
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas('actorUser', fn (Builder $q) => $q->where('name', 'like', "%{$search}%"))
                     )
                     ->icon('heroicon-m-user-circle')
@@ -113,21 +114,23 @@ class AuditLogResource extends Resource
             ->filters([
                 SelectFilter::make('action')
                     ->label('Action')
-                    ->options(
-                        fn (): array => AuditLog::query()
-                            ->select('action')
-                            ->distinct()
-                            ->orderBy('action')
-                            ->pluck('action', 'action')
-                            ->mapWithKeys(fn (string $action): array => [$action => ActionLabel::get($action)])
-                            ->all(),
-                    ),
+                    ->options(function (): array {
+                        $options = [];
+
+                        foreach (AuditLog::query()->select('action')->distinct()->orderBy('action')->pluck('action') as $action) {
+                            if (is_string($action)) {
+                                $options[$action] = ActionLabel::get($action);
+                            }
+                        }
+
+                        return $options;
+                    }),
             ])
             ->defaultSort('created_at', 'desc')
             ->recordAction(null);
     }
 
-    /** @return array<string, class-string> */
+    /** @return array<string, PageRegistration> */
     public static function getPages(): array
     {
         return [

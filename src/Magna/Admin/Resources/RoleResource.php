@@ -10,6 +10,7 @@ use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Resources\Pages\PageRegistration;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Model;
 use Magna\Admin\Resources\Role\ManageRoles;
 use Magna\Auth\PermissionRegistry;
 use Magna\Auth\Role;
+use Magna\Users\User;
 
 class RoleResource extends \Filament\Resources\Resource
 {
@@ -53,7 +55,7 @@ class RoleResource extends \Filament\Resources\Resource
         }
 
         /** @var Role $record */
-        return ! static::isLastSuperAdminRole($record);
+        return ! self::isLastSuperAdminRole($record);
     }
 
     private static function isLastSuperAdminRole(Role $role): bool
@@ -86,8 +88,8 @@ class RoleResource extends \Filament\Resources\Resource
                 ->label('Super admin')
                 ->helperText('Super admins bypass all permission checks. Only an existing super admin can grant or revoke this.')
                 ->inline(false)
-                ->disabled(fn (): bool => ! (auth()->user()?->isSuperAdmin() ?? false))
-                ->dehydrated(fn (): bool => auth()->user()?->isSuperAdmin() ?? false),
+                ->disabled(fn (): bool => ! (User::current()?->isSuperAdmin() ?? false))
+                ->dehydrated(fn (): bool => User::current()?->isSuperAdmin() ?? false),
 
             CheckboxList::make('permission_keys')
                 ->label('Permissions')
@@ -136,7 +138,7 @@ class RoleResource extends \Filament\Resources\Resource
             ->actions([
                 EditAction::make()
                     ->visible(fn (Role $record): bool => (auth()->user()?->can('roles.manage') ?? false)
-                        && ! static::isLastSuperAdminRole($record)
+                        && ! self::isLastSuperAdminRole($record)
                     )
                     ->mutateRecordDataUsing(fn (array $data, Role $record): array => array_merge($data, [
                         'permission_keys' => $record->grants(),
@@ -144,7 +146,7 @@ class RoleResource extends \Filament\Resources\Resource
                     ->using(function (Role $record, array $data) use (&$editKeys): void {
                         // S1-02 defense in depth: the form field is disabled+non-dehydrated
                         // for non-super-admins, but never trust client state for this flag.
-                        if (! (auth()->user()?->isSuperAdmin() ?? false)) {
+                        if (! (User::current()?->isSuperAdmin() ?? false)) {
                             $data['is_super_admin'] = $record->is_super_admin;
                         }
 
@@ -157,13 +159,13 @@ class RoleResource extends \Filament\Resources\Resource
                     }),
                 DeleteAction::make()
                     ->visible(fn (Role $record): bool => (auth()->user()?->can('roles.manage') ?? false)
-                        && ! static::isLastSuperAdminRole($record)
+                        && ! self::isLastSuperAdminRole($record)
                     ),
             ])
             ->defaultSort('name');
     }
 
-    /** @return array<string, class-string> */
+    /** @return array<string, PageRegistration> */
     public static function getPages(): array
     {
         return [

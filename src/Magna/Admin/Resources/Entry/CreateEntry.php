@@ -21,18 +21,19 @@ class CreateEntry extends CreateRecord
 
     public function getTitle(): string|Htmlable
     {
-        return 'Create '.(app(SchemaRegistry::class)->get($this->type)?->displayName ?? 'Entry');
+        return 'Create '.(app(SchemaRegistry::class)->get($this->type)->displayName ?? 'Entry');
     }
 
     protected function handleRecordCreation(array $data): Model
     {
         /** @var EntryManager $manager */
         $manager = app(EntryManager::class);
+        $authorId = auth()->id();
 
         return $manager->create(
             typeHandle: $this->type,
             data: $data,
-            authorId: auth()->id(),
+            authorId: $authorId !== null ? (string) $authorId : null,
         );
     }
 

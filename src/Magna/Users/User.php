@@ -29,6 +29,7 @@ use Magna\Auth\SuspendedAccessRevoker;
  * @property string|null $two_factor_secret
  * @property list<string>|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
+ * @property list<string>|null $widget_order Dashboard widget order, as class_basename keys
  */
 #[Fillable(['name', 'email', 'password', 'status', 'widget_order', 'avatar_path'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
@@ -62,6 +63,20 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, MustVerif
             'two_factor_confirmed_at' => 'datetime',
             'widget_order' => 'array',
         ];
+    }
+
+    /**
+     * The signed-in core user, or null when the current authenticatable is
+     * not one (plugin guards — the marketplace's developer and account
+     * models — share the auth manager, so auth()->user() is a union that
+     * cannot answer core-only questions like isSuperAdmin()). The same
+     * narrow static-gateway shape as Settings::get() / Entry::type().
+     */
+    public static function current(): ?self
+    {
+        $user = auth()->user();
+
+        return $user instanceof self ? $user : null;
     }
 
     public function isActive(): bool

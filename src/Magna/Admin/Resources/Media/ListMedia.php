@@ -39,7 +39,11 @@ class ListMedia extends ListRecords
      */
     public ?string $sourceKey = null;
 
-    /** Holds data for the in-grid preview modal; null = closed. */
+    /**
+     * Holds data for the in-grid preview modal; null = closed.
+     *
+     * @var array<string, mixed>|null
+     */
     public ?array $galleryPreview = null;
 
     public function getHeading(): string

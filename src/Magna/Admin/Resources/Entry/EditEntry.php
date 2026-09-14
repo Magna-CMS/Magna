@@ -9,9 +9,9 @@ use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
-use Illuminate\View\View;
 use Livewire\Attributes\Url;
 use Magna\Admin\Resources\EntryResource;
 use Magna\Content\Entry;
@@ -35,19 +35,37 @@ class EditEntry extends EditRecord
 
     public function getTitle(): string|Htmlable
     {
-        /** @var Entry $record */
-        $record = $this->getRecord();
+        $title = $this->entry()->getAttribute('title') ?? $this->entry()->getAttribute('name');
 
-        return 'Edit '.(string) ($record->getAttribute('title') ?? $record->getAttribute('name') ?? 'Entry');
+        return 'Edit '.(is_scalar($title) ? (string) $title : 'Entry');
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        /** @var Entry $record */
         /** @var EntryManager $manager */
         $manager = app(EntryManager::class);
+        $actorId = auth()->id();
 
-        return $manager->update($record, $data, auth()->id());
+        return $manager->update(
+            $record instanceof Entry ? $record : $this->entry(),
+            $data,
+            $actorId !== null ? (string) $actorId : null,
+        );
+    }
+
+    /**
+     * The record as the Entry it always is — resolveRecord() only ever
+     * builds one, but the framework hands it back as a plain Model.
+     */
+    private function entry(): Entry
+    {
+        $record = $this->getRecord();
+
+        if (! $record instanceof Entry) {
+            throw new \LogicException('EditEntry received a non-Entry record.');
+        }
+
+        return $record;
     }
 
     protected function getHeaderActions(): array
@@ -72,7 +90,7 @@ class EditEntry extends EditRecord
                 ->requiresConfirmation()
                 ->action(function (): void {
                     $this->save();
-                    app(EntryManager::class)->publish($this->getRecord());
+                    app(EntryManager::class)->publish($this->entry());
                     $this->fillForm();
                 })
                 ->visible(fn (): bool => $record->status !== EntryStatus::Published),
@@ -92,7 +110,7 @@ class EditEntry extends EditRecord
                 ->action(function (array $data): void {
                     $this->save();
                     $publishAt = Carbon::parse($data['publish_at']);
-                    app(EntryManager::class)->publish($this->getRecord(), $publishAt);
+                    app(EntryManager::class)->publish($this->entry(), $publishAt);
                     $this->fillForm();
                 }),
 
@@ -103,7 +121,7 @@ class EditEntry extends EditRecord
                 ->color('warning')
                 ->requiresConfirmation()
                 ->action(function (): void {
-                    app(EntryManager::class)->unpublish($this->getRecord());
+                    app(EntryManager::class)->unpublish($this->entry());
                     $this->fillForm();
                 })
                 ->visible(fn (): bool => $record->status === EntryStatus::Published),
@@ -115,8 +133,7 @@ class EditEntry extends EditRecord
                 ->color('gray')
                 ->modalHeading('Revision History')
                 ->modalContent(function (): View {
-                    /** @var Entry $entry */
-                    $entry = $this->getRecord();
+                    $entry = $this->entry();
                     $revisions = Revision::query()
                         ->where('entry_id', $entry->getKey())
                         ->where('entry_type', $this->type)
@@ -124,7 +141,7 @@ class EditEntry extends EditRecord
                         ->limit(20)
                         ->get();
 
-                    return view('magna::admin.entry-revisions', [
+                    return view()->make('magna::admin.entry-revisions', [
                         'entry' => $entry,
                         'revisions' => $revisions,
                     ]);
@@ -134,7 +151,8 @@ class EditEntry extends EditRecord
 
             DeleteAction::make()
                 ->action(function (): void {
-                    app(EntryManager::class)->delete($this->getRecord(), auth()->id());
+                    $actorId = auth()->id();
+                    app(EntryManager::class)->delete($this->entry(), $actorId !== null ? (string) $actorId : null);
                 }),
         ];
     }

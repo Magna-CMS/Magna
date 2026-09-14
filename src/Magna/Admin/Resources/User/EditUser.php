@@ -32,20 +32,20 @@ class EditUser extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        if (auth()->user()?->isSuperAdmin() ?? false) {
+        if (User::current()?->isSuperAdmin() ?? false) {
             return $data;
         }
 
-        $superAdminRoleIds = Role::query()->where('is_super_admin', true)->pluck('id')->all();
+        $superAdminRoleIds = $this->idStrings(Role::query()->where('is_super_admin', true)->pluck('id')->all());
 
         /** @var User $record */
         $record = $this->record;
         $currentSuperAdminIds = array_values(array_intersect(
-            $record->roles()->pluck('roles.id')->all(),
+            $this->idStrings($record->roles()->pluck('roles.id')->all()),
             $superAdminRoleIds,
         ));
 
-        $submittedRoles = is_array($data['roles'] ?? null) ? $data['roles'] : [];
+        $submittedRoles = is_array($data['roles'] ?? null) ? $this->idStrings($data['roles']) : [];
 
         $data['roles'] = array_values(array_unique(array_merge(
             array_diff($submittedRoles, $superAdminRoleIds),
@@ -53,5 +53,25 @@ class EditUser extends EditRecord
         )));
 
         return $data;
+    }
+
+    /**
+     * Role ids as strings, whatever mix of ints and strings the source held
+     * — the set arithmetic above compares by string value either way.
+     *
+     * @param  array<mixed>  $ids
+     * @return list<string>
+     */
+    private function idStrings(array $ids): array
+    {
+        $strings = [];
+
+        foreach ($ids as $id) {
+            if (is_int($id) || is_string($id)) {
+                $strings[] = (string) $id;
+            }
+        }
+
+        return $strings;
     }
 }

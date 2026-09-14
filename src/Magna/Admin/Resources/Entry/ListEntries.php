@@ -8,7 +8,6 @@ use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Livewire\Attributes\Url;
 use Magna\Admin\Resources\EntryResource;
 use Magna\Content\Entry;
@@ -30,7 +29,8 @@ class ListEntries extends ListRecords
         return $contentType ? $contentType->displayName : 'Content';
     }
 
-    protected function getTableQuery(): Builder|Relation|null
+    /** @return Builder<Entry>|null */
+    protected function getTableQuery(): ?Builder
     {
         if ($this->type === '') {
             return Entry::query()->whereRaw('1 = 0');

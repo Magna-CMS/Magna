@@ -22,6 +22,7 @@ class TrashMedia extends ListRecords
         return 'Recycle Bin';
     }
 
+    /** @return Builder<Media> */
     protected function getTableQuery(): Builder
     {
         return Media::onlyTrashed();

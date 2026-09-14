@@ -646,7 +646,6 @@ it('only ever shrinks the phpstan exclusion list', function (): void {
     // the review conversation the rule exists to force.
     $allowed = [
         'src/Magna/Admin/Pages',
-        'src/Magna/Admin/Resources',
         'src/Magna/Admin/Concerns/ReloadsBrowser.php',
         'src/Magna/Media/Concerns/IngestsMedia.php',
         'src/Magna/Licensing/Concerns/ChecksOutWithRazorpay.php',
