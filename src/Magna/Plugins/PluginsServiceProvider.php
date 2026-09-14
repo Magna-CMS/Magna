@@ -54,6 +54,7 @@ class PluginsServiceProvider extends ServiceProvider
                 new PluginRegistry($this->app->make(PluginDiscovery::class)),
                 new PluginContractWirer($this->app),
                 new PluginSettingsPurger,
+                new PluginCacheInvalidator($this->app),
             );
         });
 

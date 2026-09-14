@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Magna\Plugins;
 
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Foundation\Application as LaravelApplication;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Magna\Licensing\LicenseGate;
@@ -37,6 +35,7 @@ class PluginManager
         private readonly PluginRegistry $registry,
         private readonly PluginContractWirer $contractWirer,
         private readonly PluginSettingsPurger $settingsPurger,
+        private readonly PluginCacheInvalidator $cacheInvalidator,
     ) {}
 
     /**
@@ -107,7 +106,7 @@ class PluginManager
                 // throws RouteNotFoundException and takes the whole panel down
                 // with it. Manual disable() clears the cache; the automatic
                 // path must too.
-                $this->invalidateAdminPanelCache();
+                $this->cacheInvalidator->invalidate();
             }
         }
 
@@ -124,7 +123,7 @@ class PluginManager
                 // Same stale-cache hazard as the register() pass: the plugin's
                 // panel components may be cached but its routes are not
                 // registered this request.
-                $this->invalidateAdminPanelCache();
+                $this->cacheInvalidator->invalidate();
             }
         }
 
@@ -142,27 +141,7 @@ class PluginManager
      */
     public function enable(string $name): void
     {
-        $info = $this->discovery->find($name)
-            // A plugin already recorded is installed, whatever discovery can
-            // currently see. Licensed installs write into plugins-dev/, which
-            // discoverFromDev() skips outright in production and otherwise only
-            // reads when the directory is a wired Composer path repository — so
-            // enabling one answered "Plugin [x] was not found. Run `composer
-            // require x` first." for files sitting on disk. The record carries
-            // the manifest and base path this needs; nothing has to be
-            // rediscovered to use them.
-            ?? $this->registry->find($name);
-
-        if ($info === null) {
-            throw new PluginNotFoundException($name);
-        }
-
-        if (! $info->manifest->isCompatibleWith(MagnaServiceProvider::VERSION)) {
-            throw new PluginCompatibilityException(
-                "Plugin [{$name}] requires magna {$info->manifest->magnaCompat} "
-                .'but the installed core is '.MagnaServiceProvider::VERSION.'.'
-            );
-        }
+        $info = $this->resolveInstallable($name);
 
         // Required plugins must be enabled and version-compatible, and nothing
         // enabled may conflict with this one. Throws DependencyException with a
@@ -218,9 +197,41 @@ class PluginManager
 
         // Enabling a plugin adds resources/pages/widgets to the admin panel. If the
         // Filament component cache is warm it would hide them, so invalidate it.
-        $this->invalidateAdminPanelCache();
+        $this->cacheInvalidator->invalidate();
 
         $this->commandRegistrar->register($plugin);
+    }
+
+    /**
+     * The plugin a lifecycle operation may act on: discovered on disk, or —
+     * failing that — already recorded. A plugin already recorded is
+     * installed, whatever discovery can currently see: licensed installs
+     * write into plugins-dev/, which discoverFromDev() skips outright in
+     * production and otherwise only reads when the directory is a wired
+     * Composer path repository — so enabling one answered "Plugin [x] was
+     * not found. Run `composer require x` first." for files sitting on
+     * disk. The record carries the manifest and base path this needs;
+     * nothing has to be rediscovered to use them.
+     *
+     * @throws PluginNotFoundException
+     * @throws PluginCompatibilityException
+     */
+    private function resolveInstallable(string $name): PluginInfo
+    {
+        $info = $this->discovery->find($name) ?? $this->registry->find($name);
+
+        if ($info === null) {
+            throw new PluginNotFoundException($name);
+        }
+
+        if (! $info->manifest->isCompatibleWith(MagnaServiceProvider::VERSION)) {
+            throw new PluginCompatibilityException(
+                "Plugin [{$name}] requires magna {$info->manifest->magnaCompat} "
+                .'but the installed core is '.MagnaServiceProvider::VERSION.'.'
+            );
+        }
+
+        return $info;
     }
 
     /**
@@ -275,7 +286,7 @@ class PluginManager
         $record->update(['enabled' => false, 'disabled_at' => now()]);
 
         // Its admin resources/pages/widgets are gone now — drop any stale panel cache.
-        $this->invalidateAdminPanelCache();
+        $this->cacheInvalidator->invalidate();
     }
 
     /**
@@ -367,7 +378,7 @@ class PluginManager
             $this->discovery->reset();
         }
 
-        $this->invalidateAdminPanelCache();
+        $this->cacheInvalidator->invalidate();
     }
 
     /**
@@ -408,62 +419,6 @@ class PluginManager
         DB::transaction(function () use ($plugin): void {
             $this->contentTypes->persist($plugin);
         });
-    }
-
-    /**
-     * Drop Filament's cached component manifest so a plugin's admin resources,
-     * pages, and widgets are re-discovered on the next request. Without this, a
-     * warm cache (from `filament:cache-components`, common in production) keeps
-     * serving the panel surface from before the plugin changed — the new pages
-     * and settings simply never appear. Best-effort: a caching failure must never
-     * block enabling/disabling a plugin.
-     */
-    private function invalidateAdminPanelCache(): void
-    {
-        try {
-            $cached = $this->app->bootstrapPath('cache/filament');
-
-            // Only bother when a panel manifest was actually cached.
-            $manifests = glob($cached.'/panels/*.php');
-            if (is_array($manifests) && $manifests !== []) {
-                Artisan::call('filament:clear-cached-components');
-            }
-        } catch (Throwable) {
-            // No Filament cache command available, or nothing to clear — ignore.
-        }
-
-        $this->invalidateRouteCache();
-    }
-
-    /**
-     * Drop the cached route table after a plugin's routes change.
-     *
-     * Production installs run `route:cache`, and a cached route table is built
-     * once from whatever was enabled at deploy time — Laravel skips route
-     * registration entirely while it exists, so a plugin enabled afterwards
-     * gets no routes at all. Its nav items and dashboard widgets still appear
-     * (those are read from the plugins table on every request), and the first
-     * one that resolves a page URL throws
-     *
-     *     Route [filament.magna.pages.…] not defined.
-     *
-     * on EVERY admin request — locking the admin out of the very page they
-     * would disable the plugin from. Clearing costs a little per-request route
-     * building until the next deploy re-caches; that beats a dead panel.
-     */
-    private function invalidateRouteCache(): void
-    {
-        try {
-            $app = $this->app;
-
-            // routesAreCached() is on the concrete application, not the contract.
-            if ($app instanceof LaravelApplication && $app->routesAreCached()) {
-                Artisan::call('route:clear');
-            }
-        } catch (Throwable) {
-            // Read-only bootstrap/cache, no console kernel — never block the
-            // enable/disable that asked for this.
-        }
     }
 
     /**
