@@ -7,6 +7,7 @@ namespace Magna\Install\Http;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 use Magna\Auth\Role;
@@ -20,7 +21,7 @@ use Magna\Users\User;
 use Magna\Users\UserStatus;
 use Throwable;
 
-class InstallController
+class InstallController extends Controller
 {
     public function __construct(
         private readonly Requirements $requirements,

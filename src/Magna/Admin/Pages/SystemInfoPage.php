@@ -8,6 +8,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\HtmlString;
 use Laravel\Octane\OctaneServiceProvider;
 use Livewire\Attributes\Locked;
@@ -422,7 +423,7 @@ class SystemInfoPage extends Page
      */
     private function authorizeSettingsManage(): void
     {
-        abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
+        Gate::authorize('settings.manage');
     }
 
     public function runDiagnostics(): void

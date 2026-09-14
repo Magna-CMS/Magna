@@ -6,6 +6,7 @@ namespace Magna\Admin\Pages;
 
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\Gate;
 use Magna\AccountCentre\AccountCentreClient;
 use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
@@ -161,7 +162,7 @@ class AccountCentrePage extends Page
      */
     public function renew(int $licenseId): void
     {
-        abort_unless(auth()->user()?->can('licensing.manage') ?? false, 403);
+        Gate::authorize('licensing.manage');
 
         $product = null;
 
@@ -189,7 +190,7 @@ class AccountCentrePage extends Page
      */
     public function cancelAutoRenew(int $subscriptionId): void
     {
-        abort_unless(auth()->user()?->can('licensing.manage') ?? false, 403);
+        Gate::authorize('licensing.manage');
 
         $result = app(LicenseClient::class)->cancelAutoRenew($subscriptionId);
 

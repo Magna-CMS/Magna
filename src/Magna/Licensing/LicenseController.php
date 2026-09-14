@@ -7,6 +7,8 @@ namespace Magna\Licensing;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Gate;
 use Magna\Admin\Pages\AccountCentrePage;
 use RuntimeException;
 
@@ -18,7 +20,7 @@ use RuntimeException;
  * group; none of them accept a licence key from anywhere but the signed-in
  * admin's own form.
  */
-class LicenseController
+class LicenseController extends Controller
 {
     public function __construct(
         private readonly LicenseClient $client,
@@ -216,7 +218,7 @@ class LicenseController
      */
     private function authorize(): void
     {
-        abort_unless(auth()->user()?->can('licensing.manage') ?? false, 403);
+        Gate::authorize('licensing.manage');
     }
 
     private function ok(string $message): RedirectResponse

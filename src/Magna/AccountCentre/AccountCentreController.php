@@ -6,6 +6,8 @@ namespace Magna\AccountCentre;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Magna\Admin\Pages\AccountCentrePage;
 use Magna\Marketplace\Marketplace;
@@ -19,7 +21,7 @@ use Magna\Support\OriginResolver;
  * a one-time code and exchanges it server-to-server for a bearer token,
  * which is the only thing ever stored locally.
  */
-class AccountCentreController
+class AccountCentreController extends Controller
 {
     private const SESSION_STATE_KEY = 'magna_account_centre.state';
 
@@ -28,7 +30,7 @@ class AccountCentreController
 
     public function connect(Request $request, string $provider): RedirectResponse
     {
-        abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
+        Gate::authorize('settings.manage');
         abort_unless(in_array($provider, self::ALLOWED_PROVIDERS, true), 404);
 
         $siteUrl = $this->handshakeOrigin($request);
@@ -47,7 +49,7 @@ class AccountCentreController
 
     public function callback(Request $request, AccountCentreClient $client): RedirectResponse
     {
-        abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
+        Gate::authorize('settings.manage');
 
         $expectedState = $request->session()->pull(self::SESSION_STATE_KEY);
         $accountPageUrl = AccountCentrePage::getUrl();
@@ -114,7 +116,7 @@ class AccountCentreController
 
     public function disconnect(AccountCentreClient $client): RedirectResponse
     {
-        abort_unless(auth()->user()?->can('settings.manage') ?? false, 403);
+        Gate::authorize('settings.manage');
 
         $settings = AccountCentreSettings::get();
         $accountPageUrl = AccountCentrePage::getUrl();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Plugins;
 
 use Illuminate\Http\Response;
+use Illuminate\Routing\Controller;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -16,7 +17,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * twice rather than trusting a value that was merely valid when the plugin
  * was enabled.
  */
-class PluginIconController
+class PluginIconController extends Controller
 {
     public function show(string $vendor, string $package): BinaryFileResponse|Response
     {
