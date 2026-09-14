@@ -93,3 +93,12 @@ it('always refuses a signature that fails verification', function (): void {
     expect(app(ReleaseArchive::class)->checkChecksumSignature(str_repeat('c', 64), base64_encode('garbage')))
         ->toContain('failed signature verification');
 });
+
+it('requires a signed checksum by default (W1-5)', function (): void {
+    // The flip to secure-by-default: Update Manager publishes an Ed25519
+    // signature for every core release, so an unsigned /updates response is
+    // refused unless an operator explicitly opts out with
+    // MAGNA_UPDATER_REQUIRE_SIGNED_CHECKSUM=false. This pin stops the
+    // default quietly sliding back to permissive.
+    expect(config('magna.updater.require_signed_checksum'))->toBeTrue();
+});

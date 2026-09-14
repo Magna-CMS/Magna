@@ -132,8 +132,10 @@ return [
     | require_signed_checksum: refuse a core update whose sha256 arrives without
     |   a valid Ed25519 signature. The checksum alone only defeats an attacker
     |   who can swap the archive but not the /updates response; the signature
-    |   also defeats one who can forge both. Enable once Update Manager
-    |   publishes `zip_sha256_signature` for every release.
+    |   also defeats one who can forge both. ON by default since Update
+    |   Manager publishes the signature for every core release (verified in
+    |   live check-in data); MAGNA_UPDATER_REQUIRE_SIGNED_CHECKSUM=false is
+    |   the escape hatch for an install talking to a hub that does not sign.
     */
     /*
     |--------------------------------------------------------------------------
@@ -162,7 +164,7 @@ return [
     ],
 
     'updater' => [
-        'require_signed_checksum' => (bool) env('MAGNA_UPDATER_REQUIRE_SIGNED_CHECKSUM', false),
+        'require_signed_checksum' => (bool) env('MAGNA_UPDATER_REQUIRE_SIGNED_CHECKSUM', true),
     ],
 
     /*

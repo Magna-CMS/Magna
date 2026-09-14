@@ -89,6 +89,10 @@ it('treats a path that does not exist as no blocker, since the overlay creates i
 
 // apply() must refuse before the backup, not partway through the overlay.
 it('refuses to apply an update when core files are not writable', function (): void {
+    // This test is about writability, not signing — the signed-checksum
+    // gate (on by default, W1-5) would otherwise refuse first.
+    config(['magna.updater.require_signed_checksum' => false]);
+
     $updater = app(CoreUpdater::class);
     $sample = base_path('src/Magna/MagnaServiceProvider.php');
 
