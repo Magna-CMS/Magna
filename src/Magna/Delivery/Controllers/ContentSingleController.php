@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Magna\Delivery\Controllers;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
-use Magna\Content\ContentType;
 use Magna\Content\Entry;
 use Magna\Content\EntryStatus;
 use Magna\Content\SchemaRegistry;
@@ -15,7 +16,7 @@ use Magna\Delivery\ETagService;
 use Magna\Delivery\PreviewTokenService;
 use Magna\Delivery\RelationLoader;
 use Magna\Delivery\ResponseCacheService;
-use Magna\Delivery\SurrogateKeyCollector;
+use Magna\Delivery\SingleEntryLookup;
 use Magna\Settings\GeneralSettings;
 use Magna\Settings\LocalizationSettings;
 use Symfony\Component\HttpFoundation\Response;
@@ -35,39 +36,47 @@ final class ContentSingleController extends DeliveryController
     public function __invoke(Request $request, string $type, string $id): Response
     {
         $context = $this->beginRequest($request, $type, $this->schema, $this->etag);
-        [$contentType, $keys, $cacheKey] = [$context->contentType, $context->keys, $context->cacheKey];
 
         $preview = $request->boolean('preview');
         $previewToken = $request->string('preview_token')->value();
 
-        // Body cache is only for public (non-preview) requests.
-        $bodyCacheKey = $this->responseCache->cacheKey($request);
-        $isPublic = ! $preview || $previewToken === '';
+        $lookup = new SingleEntryLookup(
+            contentType: $context->contentType,
+            keys: $context->keys,
+            cacheKey: $context->cacheKey,
+            type: $type,
+            id: $id,
+            bodyCacheKey: $this->responseCache->cacheKey($request),
+            preview: $preview,
+            previewToken: $previewToken,
+            // Body cache is only for public (non-preview) requests.
+            isPublic: ! $preview || $previewToken === '',
+        );
+
         $wonLock = false;
-        if ($isPublic) {
-            $cachedBody = $this->responseCache->get($bodyCacheKey, $contentType->handle);
+        if ($lookup->isPublic) {
+            $cachedBody = $this->responseCache->get($lookup->bodyCacheKey, $lookup->contentType->handle);
             if ($cachedBody !== null) {
-                return $this->cachedResponse($cachedBody, $keys);
+                return $this->cachedResponse($cachedBody, $lookup->keys);
             }
 
-            $wonLock = $this->responseCache->tryLock($bodyCacheKey);
+            $wonLock = $this->responseCache->tryLock($lookup->bodyCacheKey);
             if (! $wonLock) {
-                $stale = $this->responseCache->getStale($bodyCacheKey);
+                $stale = $this->responseCache->getStale($lookup->bodyCacheKey);
                 if ($stale !== null) {
-                    return $this->cachedResponse($stale, $keys);
+                    return $this->cachedResponse($stale, $lookup->keys);
                 }
             }
         }
 
         // try/finally guarantees the rebuild lock is released on every exit
-        // path below (404/403/400 early returns, serialization 500, success).
+        // path below — the 404/403 throws inside findEntry(), a
+        // serialization 500, and success alike.
         try {
-            return $this->resolveEntryResponse(
-                $request, $contentType, $type, $id, $keys, $cacheKey, $bodyCacheKey, $preview, $previewToken, $isPublic,
-            );
+            return $this->resolveEntryResponse($request, $lookup);
         } finally {
             if ($wonLock) {
-                $this->responseCache->releaseLock($bodyCacheKey);
+                $this->responseCache->releaseLock($lookup->bodyCacheKey);
             }
         }
     }
@@ -76,95 +85,119 @@ final class ContentSingleController extends DeliveryController
      * Resolve, transform, cache and return a single entry. Split from
      * __invoke() so the caller can wrap it in try/finally for lock release.
      */
-    private function resolveEntryResponse(
-        Request $request,
-        ContentType $contentType,
-        string $type,
-        string $id,
-        SurrogateKeyCollector $keys,
-        string $cacheKey,
-        string $bodyCacheKey,
-        bool $preview,
-        string $previewToken,
-        bool $isPublic,
-    ): Response {
-        // Build query — allow drafts if a preview token is present
-        $query = Entry::type($type);
-        if ($preview && $previewToken !== '') {
+    private function resolveEntryResponse(Request $request, SingleEntryLookup $lookup): Response
+    {
+        $entry = $this->findEntry($request, $lookup);
+
+        $json = $this->encodeOrFail(['data' => $this->transformEntry($request, $lookup, $entry)]);
+
+        $etagValue = '"'.hash('sha256', $json).'"';
+        $this->etag->store($lookup->cacheKey, $etagValue, $lookup->type);
+
+        if ($lookup->isPublic) {
+            $this->responseCache->put($lookup->bodyCacheKey, $json, $lookup->contentType->handle);
+        }
+
+        return $this->deliveryResponse($json, $etagValue, $lookup->keys, 'MISS');
+    }
+
+    /**
+     * Locate the entry the request addresses, by ULID or slug, within the
+     * statuses and locale the lookup allows. Not-found and invalid-token
+     * outcomes throw their response (the delivery-layer convention — see
+     * DeliveryController), so the lock-releasing finally in __invoke()
+     * covers them.
+     */
+    private function findEntry(Request $request, SingleEntryLookup $lookup): Entry
+    {
+        $query = Entry::type($lookup->type);
+        if ($lookup->allowsDrafts()) {
             $query->whereIn('status', [EntryStatus::Published->value, EntryStatus::Draft->value]);
         } else {
             $query->where('status', EntryStatus::Published->value);
         }
 
-        // For localizable types, constrain by locale with fallback chain.
-        if ($contentType->localizable) {
-            $locSettings = LocalizationSettings::get();
-            $generalSettings = GeneralSettings::get();
-            $default = $generalSettings->default_locale;
-            $requested = $request->string('locale')->value();
-            $chain = array_values(array_unique([$requested, $locSettings->fallback_locale, $default, '']));
+        $this->constrainLocale($request, $lookup, $query);
 
-            $resolvedLocale = $default;
-            foreach ($chain as $locale) {
-                if ($query->clone()->where('locale', $locale)->exists()) {
-                    $resolvedLocale = $locale;
-                    break;
-                }
-            }
-            $query->where('locale', $resolvedLocale);
-            $keys->addLocale($resolvedLocale);
-        }
-
-        // Resolve by ULID or slug
-        $isUlid = (bool) preg_match('/^[0-9A-Z]{26}$/i', $id);
-        $hasSlug = $contentType->getField('slug') !== null;
+        // Resolve by ULID or slug.
+        $isUlid = (bool) preg_match('/^[0-9A-Z]{26}$/i', $lookup->id);
+        $hasSlug = $lookup->contentType->getField('slug') !== null;
 
         if ($isUlid) {
-            $query->where('id', strtolower($id));
+            $query->where('id', strtolower($lookup->id));
         } elseif ($hasSlug) {
-            $query->where('slug', $id);
+            $query->where('slug', $lookup->id);
         } else {
-            return response()->json(['message' => 'Entry not found.'], 404);
+            throw new HttpResponseException(response()->json(['message' => 'Entry not found.'], 404));
         }
 
         $entry = $query->first();
         if ($entry === null) {
-            return response()->json(['message' => 'Entry not found.'], 404);
+            throw new HttpResponseException(response()->json(['message' => 'Entry not found.'], 404));
         }
 
-        // Validate preview token — it is entry-scoped, so we check after finding the entry
-        if ($preview && $previewToken !== '') {
-            if (! $this->previewTokens->validate($previewToken, $entry->id, $type)) {
-                return response()->json(['message' => 'Invalid or expired preview token.'], 403);
+        // The preview token is entry-scoped, so it is checked after finding
+        // the entry.
+        if ($lookup->allowsDrafts() && ! $this->previewTokens->validate($lookup->previewToken, $entry->id, $lookup->type)) {
+            throw new HttpResponseException(response()->json(['message' => 'Invalid or expired preview token.'], 403));
+        }
+
+        return $entry;
+    }
+
+    /**
+     * For localizable types, constrain the query by locale with the
+     * requested -> fallback -> default -> none chain, and record the locale
+     * that won on the surrogate keys.
+     *
+     * @param  Builder<Entry>  $query
+     */
+    private function constrainLocale(Request $request, SingleEntryLookup $lookup, Builder $query): void
+    {
+        if (! $lookup->contentType->localizable) {
+            return;
+        }
+
+        $default = GeneralSettings::get()->default_locale;
+        $requested = $request->string('locale')->value();
+        $chain = array_values(array_unique([$requested, LocalizationSettings::get()->fallback_locale, $default, '']));
+
+        $resolvedLocale = $default;
+        foreach ($chain as $locale) {
+            if ($query->clone()->where('locale', $locale)->exists()) {
+                $resolvedLocale = $locale;
+                break;
             }
         }
 
-        $relationHandles = $this->parseRelationHandles($request, $contentType);
+        $query->where('locale', $resolvedLocale);
+        $lookup->keys->addLocale($resolvedLocale);
+    }
+
+    /**
+     * The transform phase: relation loading, media batch-load, field
+     * selection, and optional block resolution.
+     *
+     * @return array<string, mixed>
+     */
+    private function transformEntry(Request $request, SingleEntryLookup $lookup, Entry $entry): array
+    {
+        $relationHandles = $this->parseRelationHandles($request, $lookup->contentType);
         $fields = $this->parseFieldSelection($request);
 
         $entries = collect([$entry]);
-        $mediaCache = $this->loadMediaCache($entries, $contentType, $this->transformer);
+        $mediaCache = $this->loadMediaCache($entries, $lookup->contentType, $this->transformer);
 
         $relations = $relationHandles !== []
-            ? $this->relationLoader->load($entries, $relationHandles, $type)
+            ? $this->relationLoader->load($entries, $relationHandles, $lookup->type)
             : [];
 
-        $data = $this->transformer->transformOne($entry, $contentType, $fields, $relations, $mediaCache, $keys);
+        $data = $this->transformer->transformOne($entry, $lookup->contentType, $fields, $relations, $mediaCache, $lookup->keys);
 
         if ($request->boolean('resolve')) {
-            $data = $this->blocksResolution->apply($data, $contentType);
+            $data = $this->blocksResolution->apply($data, $lookup->contentType);
         }
 
-        $body = ['data' => $data];
-        $json = $this->encodeOrFail($body);
-
-        $etagValue = '"'.hash('sha256', $json).'"';
-        $this->etag->store($cacheKey, $etagValue, $type);
-
-        if ($isPublic) {
-            $this->responseCache->put($bodyCacheKey, $json, $contentType->handle);
-        }
-
-        return $this->deliveryResponse($json, $etagValue, $keys, 'MISS');
+        return $data;
     }
 }
