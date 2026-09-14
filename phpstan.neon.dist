@@ -9,28 +9,17 @@ parameters:
         - src
         - database
 
-    # The remaining Filament admin debt, being retired folder by folder (W4-1);
     # ArchitectureTest holds this list shrink-only — entries can be removed,
-    # never added. The Admin root, Support, Widgets, Concerns, Console and
-    # Notifications folders are already analysed at level 9.
+    # never added. The whole src/Magna/Admin tree (once a blanket exclusion)
+    # analyses at level 9 as of W4-1.
     excludePaths:
-        - src/Magna/Admin/Pages
-        # View concern whose only users are the excluded Pages; PHPStan
-        # analyses a trait only through its users, so it retires with them.
-        - src/Magna/Admin/Concerns/ReloadsBrowser.php
         # Reusable trait offered to plugin authors (documented in
-        # plugin-development-guide.md). Its only consumers are Filament pages
-        # (excluded above) and installed plugins (outside PHPStan's paths), so it
-        # structurally reads as "unused" here even though it is part of the public
-        # extension API — the same modelling limitation as the Filament exclusion.
+        # plugin-development-guide.md). Its only consumers are installed
+        # plugins, outside PHPStan's paths, so it structurally reads as
+        # "unused" here even though it is part of the public extension API.
         - src/Magna/Media/Concerns/IngestsMedia.php
-        # Checkout trait whose only consumers are the Filament pages excluded
-        # above (Plugins, Themes, Magna Account). PHPStan analyses a trait
-        # only through its users, so this entry can only retire together with
-        # the src/Magna/Admin exclusion — the same change, not before it.
-        - src/Magna/Licensing/Concerns/ChecksOutWithRazorpay.php
         # Livewire component with deeply nested dynamic `public array $sections`
         # that Livewire hydrates and mutates at runtime. PHPStan cannot narrow the
-        # nested mixed types through reference-based mutations and array_splice calls
-        # — the same structural limitation as the Filament Livewire page exclusion above.
+        # nested mixed types through reference-based mutations and array_splice
+        # calls.
         - src/Magna/Blocks/Livewire

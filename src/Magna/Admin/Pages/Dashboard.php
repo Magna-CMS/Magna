@@ -32,7 +32,7 @@ class Dashboard extends \Filament\Pages\Dashboard
         app()->terminating(function (): void {
             rescue(function (): void {
                 $last = UpdateCheck::query()->max('checked_at');
-                if ($last === null || Carbon::parse((string) $last)->lessThanOrEqualTo(now()->subHours(12))) {
+                if (! is_string($last) || Carbon::parse($last)->lessThanOrEqualTo(now()->subHours(12))) {
                     app(UpdateCheckClient::class)->checkIn();
                 }
             }, report: false);
@@ -56,11 +56,9 @@ class Dashboard extends \Filament\Pages\Dashboard
         // a plugin widget lands in a sensible position rather than at the bottom.
         usort($all, fn (string $a, string $b): int => $this->widgetSort($a) <=> $this->widgetSort($b));
 
-        /** @var User|null $user */
-        $user = auth()->user();
-        $savedOrder = $user?->widget_order ?? [];
+        $savedOrder = User::current()->widget_order ?? [];
 
-        if (empty($savedOrder)) {
+        if ($savedOrder === []) {
             return $all;
         }
 
@@ -80,7 +78,11 @@ class Dashboard extends \Filament\Pages\Dashboard
         return array_merge($sorted, $missing);
     }
 
-    /** Read a widget's declared static $sort (Filament convention); default last. */
+    /**
+     * Read a widget's declared static $sort (Filament convention); default last.
+     *
+     * @param  class-string  $class
+     */
     private function widgetSort(string $class): int
     {
         try {
@@ -105,6 +107,8 @@ class Dashboard extends \Filament\Pages\Dashboard
      * columnSpan = 'full' get CSS `column-span: all` instead, which breaks
      * them out of the masonry columns for a true full-width row while
      * everything stays in one flat, drag-reorderable container.
+     *
+     * @param  class-string  $class
      */
     public function widgetIsFullWidth(string $class): bool
     {
@@ -138,7 +142,18 @@ class Dashboard extends \Filament\Pages\Dashboard
     /** @return list<class-string<Widget>> */
     public function getVisibleWidgets(): array
     {
-        return $this->filterVisibleWidgets($this->getWidgets());
+        // filterVisibleWidgets() is typed to also yield WidgetConfiguration
+        // entries; getWidgets() never produces one, so only the class-strings
+        // this dashboard actually lays out come back.
+        $visible = [];
+
+        foreach ($this->filterVisibleWidgets($this->getWidgets()) as $widget) {
+            if (is_string($widget)) {
+                $visible[] = $widget;
+            }
+        }
+
+        return $visible;
     }
 
     public function getColumns(): int|array
@@ -153,8 +168,6 @@ class Dashboard extends \Filament\Pages\Dashboard
      */
     public function reorderWidgets(array $order): void
     {
-        /** @var User|null $user */
-        $user = auth()->user();
-        $user?->update(['widget_order' => $order]);
+        User::current()?->update(['widget_order' => $order]);
     }
 }

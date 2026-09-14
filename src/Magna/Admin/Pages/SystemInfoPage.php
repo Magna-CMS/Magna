@@ -133,13 +133,13 @@ class SystemInfoPage extends Page
                 }),
 
             Action::make('updateNow')
-                ->label(fn (): string => 'Update to v'.(UpdateCheck::core()?->latest_version ?? ''))
+                ->label(fn (): string => 'Update to v'.(UpdateCheck::core()->latest_version ?? ''))
                 ->icon('heroicon-o-rocket-launch')
                 ->color('warning')
-                ->visible(fn (): bool => (UpdateCheck::core()?->update_available ?? false) && ! $this->updating)
+                ->visible(fn (): bool => (UpdateCheck::core()->update_available ?? false) && ! $this->updating)
                 ->authorize(fn (): bool => auth()->user()?->can('settings.manage') ?? false)
                 ->requiresConfirmation()
-                ->modalHeading(fn (): string => 'Update Magna CMS to v'.(UpdateCheck::core()?->latest_version ?? '').'?')
+                ->modalHeading(fn (): string => 'Update Magna CMS to v'.(UpdateCheck::core()->latest_version ?? '').'?')
                 ->modalDescription('The site goes into maintenance mode during the update. Current files are backed up first and restored automatically if anything fails.')
                 ->modalSubmitActionLabel('Update now')
                 ->action(function (CoreUpdater $updater, CoreUpdateStarter $starter): void {
@@ -434,7 +434,7 @@ class SystemInfoPage extends Page
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] PHP engine: '.$data['php_version']];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] Laravel framework: '.$data['laravel_version']];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] Database: '.$data['db_driver'].' v'.$data['db_version']];
-        $this->terminalLines[] = ['type' => 'info',    'text' => "[INFO] Cache driver: '{$data['cache_driver']}' — status: ".strtoupper((string) $data['cache_status'])];
+        $this->terminalLines[] = ['type' => 'info',    'text' => "[INFO] Cache driver: '{$data['cache_driver']}' — status: ".strtoupper($data['cache_status'])];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] Queue: '.$data['queue_connection'].' | Storage: '.$data['storage_disk']];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] Octane: '.($data['octane_installed'] ? ($data['octane_running'] ? 'RUNNING ('.$data['octane_server'].')' : 'installed, not running (plain PHP-FPM/CLI request)') : 'not installed')];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] Plugins installed: '.$data['plugins_total'].' ('.$data['plugins_enabled'].' enabled)'];
@@ -452,7 +452,7 @@ class SystemInfoPage extends Page
     {
         $this->authorizeSettingsManage();
 
-        $driver = (string) config('cache.default', 'file');
+        $driver = $this->configString('cache.default', 'file');
         $this->terminalLines[] = ['type' => 'cmd',  'text' => 'php artisan cache:clear'];
         $this->terminalLines[] = ['type' => 'info', 'text' => "[INFO] Clearing internal storage caches on driver '{$driver}'..."];
 
@@ -472,13 +472,18 @@ class SystemInfoPage extends Page
         $this->terminalLines = [];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>&array{db_driver: string, php_version: string, laravel_version: string, db_version: string, cache_driver: string, cache_status: string, queue_connection: string, storage_disk: string, octane_installed: bool, octane_running: bool, octane_server: string, plugins_total: int, plugins_enabled: int}
+     */
     public function getViewData(): array
     {
         $pluginsEnabled = PluginRecord::query()->where('enabled', true)->count();
         $pluginsTotal = PluginRecord::query()->count();
 
         $health = app(SystemHealthCollector::class);
+
+        $appUrl = $this->configString('app.url', 'http://localhost');
+        $host = parse_url($appUrl, PHP_URL_HOST);
 
         return [
             'magna_version' => MagnaServiceProvider::VERSION,
@@ -488,18 +493,18 @@ class SystemInfoPage extends Page
             'db_version' => $health->dbVersion(),
             'environment' => app()->environment(),
             'debug_mode' => (bool) config('app.debug'),
-            'cache_driver' => (string) config('cache.default', 'file'),
-            'queue_connection' => (string) config('queue.default', 'sync'),
-            'storage_disk' => (string) config('filesystems.default', 'local'),
+            'cache_driver' => $this->configString('cache.default', 'file'),
+            'queue_connection' => $this->configString('queue.default', 'sync'),
+            'storage_disk' => $this->configString('filesystems.default', 'local'),
             'plugins_total' => $pluginsTotal,
             'plugins_enabled' => $pluginsEnabled,
             'plugins_disabled' => $pluginsTotal - $pluginsEnabled,
             'cache_status' => $health->cacheStatus(),
-            'app_url' => parse_url((string) config('app.url', 'http://localhost'), PHP_URL_HOST) ?? config('app.url', 'localhost'),
-            'session_lifetime' => (int) config('session.lifetime', 120),
+            'app_url' => is_string($host) ? $host : $appUrl,
+            'session_lifetime' => $this->configInt('session.lifetime', 120),
             'octane_installed' => class_exists(OctaneServiceProvider::class),
             'octane_running' => Runtime::isOctane(),
-            'octane_server' => (string) config('octane.server', 'frankenphp'),
+            'octane_server' => $this->configString('octane.server', 'frankenphp'),
             'performance_warnings' => $health->performanceWarnings(),
             'security_warnings' => $health->securityWarnings(),
             'boot_time_ms' => $health->bootTimeMs(),
@@ -514,5 +519,21 @@ class SystemInfoPage extends Page
             'queue_oldest_minutes' => $health->queueOldestPendingMinutes(),
             'backup_health' => $health->backupHealth(),
         ];
+    }
+
+    // ── Typed reads over the untyped config repository ────────────────────
+
+    private function configString(string $key, string $default): string
+    {
+        $value = config($key);
+
+        return is_string($value) ? $value : $default;
+    }
+
+    private function configInt(string $key, int $default): int
+    {
+        $value = config($key);
+
+        return is_numeric($value) ? (int) $value : $default;
     }
 }

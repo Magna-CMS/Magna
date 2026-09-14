@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Magna\Admin\Pages;
 
 use Filament\Actions\Action;
-use Filament\Forms\ComponentContainer;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -21,7 +20,7 @@ use Magna\Media\MediaIngestor;
 use Magna\Users\User;
 
 /**
- * @property ComponentContainer $form
+ * @property Schema $form
  */
 class ProfilePage extends Page implements HasForms
 {
@@ -38,6 +37,7 @@ class ProfilePage extends Page implements HasForms
     // Exclude from sidebar nav — only accessible via the user menu.
     protected static bool $shouldRegisterNavigation = false;
 
+    /** @var array<string, mixed>|null */
     public ?array $data = [];
 
     public function mount(): void

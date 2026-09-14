@@ -97,36 +97,12 @@ class PluginsPage extends Page
 
     protected function getViewData(): array
     {
-        $search = strtolower(trim($this->searchInstalled));
-
-        $filteredInstalled = array_values(array_filter(
-            $this->installed,
-            function (array $p) use ($search): bool {
-                $statusOk = match ($this->statusFilter) {
-                    'active' => (bool) $p['enabled'],
-                    'inactive' => ! (bool) $p['enabled'],
-                    'update' => $p['update_version'] !== null,
-                    default => true,
-                };
-                if (! $statusOk) {
-                    return false;
-                }
-                if ($search === '') {
-                    return true;
-                }
-
-                return str_contains(strtolower($p['display_name']), $search)
-                    || str_contains(strtolower($p['description']), $search)
-                    || str_contains(strtolower($p['author']), $search);
-            }
-        ));
+        $filteredInstalled = $this->filteredInstalled();
 
         $searchAvail = strtolower(trim($this->searchAvailable));
         $filteredAvailable = $searchAvail === '' ? $this->available : array_values(array_filter(
             $this->available,
-            fn (array $p): bool => str_contains(strtolower($p['display_name']), $searchAvail)
-                || str_contains(strtolower($p['description']), $searchAvail)
-                || str_contains(strtolower($p['author']), $searchAvail)
+            fn (array $p): bool => $this->matchesSearch($p, $searchAvail),
         ));
 
         $counts = [
@@ -136,7 +112,7 @@ class PluginsPage extends Page
             'update' => count(array_filter($this->installed, fn ($p) => $p['update_version'] !== null)),
         ];
 
-        $filteredNames = array_column($filteredInstalled, 'name');
+        $filteredNames = $this->currentFilteredNames();
         $allSelected = $filteredNames !== []
             && count(array_intersect($this->selectedPlugins, $filteredNames)) === count($filteredNames);
 
@@ -461,8 +437,9 @@ class PluginsPage extends Page
     private function feedbackDisplayName(): string
     {
         $plugin = collect($this->available)->firstWhere('name', $this->feedbackPackage);
+        $name = is_array($plugin) ? ($plugin['display_name'] ?? null) : null;
 
-        return is_array($plugin) ? (string) ($plugin['display_name'] ?? $this->feedbackPackage) : $this->feedbackPackage;
+        return is_string($name) ? $name : $this->feedbackPackage;
     }
 
     /** Poll install progress for the queued packages; notify + reload when done. */
@@ -516,8 +493,9 @@ class PluginsPage extends Page
     private function pendingDisplayName(): string
     {
         $plugin = collect($this->available)->firstWhere('name', $this->pendingPluginName ?? '');
+        $name = is_array($plugin) ? ($plugin['display_name'] ?? null) : null;
 
-        return is_array($plugin) ? (string) ($plugin['display_name'] ?? $this->pendingPluginName) : (string) $this->pendingPluginName;
+        return is_string($name) ? $name : ($this->pendingPluginName ?? '');
     }
 
     /** Android-style install sheet: what it does, the permissions it wants, and a trust notice. */
@@ -534,9 +512,13 @@ class PluginsPage extends Page
         if ($permissions !== []) {
             $items = '';
             foreach ($permissions as $permission) {
+                if (! is_string($permission)) {
+                    continue;
+                }
+
                 $items .= '<li class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">'
                     .'<svg class="w-4 h-4 text-primary-500 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>'
-                    .'<code class="font-mono">'.e((string) $permission).'</code></li>';
+                    .'<code class="font-mono">'.e($permission).'</code></li>';
             }
             $html .= '<ul class="space-y-1.5">'.$items.'</ul>';
         } else {
@@ -657,13 +639,20 @@ class PluginsPage extends Page
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    /** Returns the names of plugins currently visible in the filtered installed table. */
-    private function currentFilteredNames(): array
+    /**
+     * The installed rows after the status filter and search — one filter for
+     * the table, the bulk-action name list and the select-all state, which
+     * previously each carried their own copy.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function filteredInstalled(): array
     {
-        $q = strtolower(trim($this->searchInstalled));
+        $search = strtolower(trim($this->searchInstalled));
 
-        return array_column(
-            array_filter($this->installed, function (array $p) use ($q): bool {
+        return array_values(array_filter(
+            $this->installed,
+            function (array $p) use ($search): bool {
                 $statusOk = match ($this->statusFilter) {
                     'active' => (bool) $p['enabled'],
                     'inactive' => ! (bool) $p['enabled'],
@@ -671,15 +660,48 @@ class PluginsPage extends Page
                     default => true,
                 };
 
-                if (! $statusOk || $q === '') {
+                if (! $statusOk || $search === '') {
                     return $statusOk;
                 }
 
-                return str_contains(strtolower($p['display_name']), $q)
-                    || str_contains(strtolower($p['description']), $q)
-                    || str_contains(strtolower($p['author']), $q);
-            }),
-            'name'
-        );
+                return $this->matchesSearch($p, $search);
+            },
+        ));
+    }
+
+    /**
+     * Case-insensitive search over the fields both plugin lists show.
+     *
+     * @param  array<string, mixed>  $plugin
+     */
+    private function matchesSearch(array $plugin, string $query): bool
+    {
+        foreach (['display_name', 'description', 'author'] as $key) {
+            $value = $plugin[$key] ?? null;
+
+            if (is_string($value) && str_contains(strtolower($value), $query)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns the names of plugins currently visible in the filtered installed table.
+     *
+     * @return list<string>
+     */
+    private function currentFilteredNames(): array
+    {
+        $names = [];
+
+        foreach ($this->filteredInstalled() as $plugin) {
+            if (is_string($plugin['name'] ?? null)) {
+                $names[] = $plugin['name'];
+            }
+        }
+
+        return $names;
     }
 }

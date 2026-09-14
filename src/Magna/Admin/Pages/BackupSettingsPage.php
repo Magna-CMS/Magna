@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Magna\Admin\Pages;
 
 use Filament\Actions\Action;
-use Filament\Forms\ComponentContainer;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -27,13 +26,14 @@ use Magna\Backup\BackupRun;
 use Magna\Backup\Jobs\RestoreBackupJob;
 use Magna\Backup\Jobs\RunBackupJob;
 use Magna\Settings\BackupSettings;
+use Magna\Users\User;
 
 /**
  * Backup Manager settings. Unlike the other *SettingsPage classes, this one
  * keeps its own sidebar entry rather than folding into the unified
  * SettingsPage hub — see docs/backup-manager-plan.md, Decision #4.
  *
- * @property ComponentContainer $form
+ * @property Schema $form
  */
 class BackupSettingsPage extends Page implements HasForms
 {
@@ -51,6 +51,7 @@ class BackupSettingsPage extends Page implements HasForms
 
     protected string $view = 'magna::admin.backup-settings';
 
+    /** @var array<string, mixed>|null */
     public ?array $data = [];
 
     /** True while a manually-triggered run is in progress, so the page polls RunBackupJob::progress(). */
@@ -323,8 +324,11 @@ class BackupSettingsPage extends Page implements HasForms
                 ->label('Import backup')
                 ->icon('heroicon-o-arrow-up-tray')
                 ->color('danger')
-                ->visible(fn (): bool => (auth()->user()?->isSuperAdmin() ?? false)
-                    && (auth()->user()?->can('backup.restore') ?? false))
+                ->visible(function (): bool {
+                    $user = User::current();
+
+                    return $user !== null && $user->isSuperAdmin() && $user->can('backup.restore');
+                })
                 ->schema([
                     Placeholder::make('warning')
                         ->hiddenLabel()

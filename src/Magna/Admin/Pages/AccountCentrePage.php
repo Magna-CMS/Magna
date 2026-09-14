@@ -53,10 +53,11 @@ class AccountCentrePage extends Page
 
         $otherSites = [];
         if ($settings->connected && $settings->token !== null) {
-            $otherSites = array_values(array_filter(
-                app(AccountCentreClient::class)->sites($settings->token),
-                fn (array $s): bool => ! ($s['is_this_site'] ?? false),
-            ));
+            foreach (app(AccountCentreClient::class)->sites($settings->token) as $site) {
+                if (! $site['is_this_site']) {
+                    $otherSites[] = $site;
+                }
+            }
         }
 
         return [
@@ -112,12 +113,16 @@ class AccountCentrePage extends Page
             // check-in and outlive an uninstall until the next one, and a
             // licence row offering "Update" for a product with no files here
             // can only produce an error after the click.
-            $installed = PluginRecord::query()
-                ->whereIn('name', array_keys($updates))
-                ->pluck('name')
-                ->all();
+            $installed = $this->installedProductSlugs();
 
-            return array_intersect_key($updates, array_flip($installed));
+            $available = [];
+            foreach ($updates as $slug => $version) {
+                if (is_string($slug) && is_string($version) && in_array($slug, $installed, true)) {
+                    $available[$slug] = $version;
+                }
+            }
+
+            return $available;
         } catch (Throwable) {
             // Never let the update hint break the account page.
             return [];
@@ -128,7 +133,15 @@ class AccountCentrePage extends Page
     private function installedProductSlugs(): array
     {
         try {
-            return PluginRecord::query()->pluck('name')->all();
+            $slugs = [];
+
+            foreach (PluginRecord::query()->pluck('name') as $name) {
+                if (is_string($name)) {
+                    $slugs[] = $name;
+                }
+            }
+
+            return $slugs;
         } catch (Throwable) {
             return [];
         }
@@ -153,7 +166,8 @@ class AccountCentrePage extends Page
         $product = null;
 
         foreach ($this->licenses() as $licence) {
-            if ((int) ($licence['id'] ?? 0) === $licenseId) {
+            $id = $licence['id'] ?? null;
+            if (is_numeric($id) && (int) $id === $licenseId) {
                 $product = is_string($licence['product_slug'] ?? null) ? $licence['product_slug'] : null;
                 break;
             }

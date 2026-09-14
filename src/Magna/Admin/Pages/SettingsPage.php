@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Magna\Admin\Pages;
 
 use Filament\Actions\Action;
-use Filament\Forms\ComponentContainer;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TagsInput;
@@ -16,6 +15,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions as SchemaActions;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
@@ -38,7 +38,7 @@ use Magna\Settings\UrlSettings;
  * split into anchored sections with a sticky side sub-nav (see the view). This
  * replaces the previous one-page-per-group navigation.
  *
- * @property ComponentContainer $form
+ * @property Schema $form
  */
 class SettingsPage extends Page implements HasForms
 {
@@ -58,6 +58,7 @@ class SettingsPage extends Page implements HasForms
 
     protected string $view = 'magna::admin.settings';
 
+    /** @var array<string, mixed>|null */
     public ?array $data = [];
 
     public static function canAccess(): bool
@@ -250,7 +251,7 @@ class SettingsPage extends Page implements HasForms
     }
 
     /**
-     * @param  array<int, mixed>  $components
+     * @param  array<int, Component>  $components
      * @param  array<int, Action>  $headerActions
      */
     private function anchor(string $id, string $label, array $components, array $headerActions = []): Section
@@ -262,7 +263,7 @@ class SettingsPage extends Page implements HasForms
     }
 
     /**
-     * @return array<int, mixed>
+     * @return array<int, Component>
      */
     private function urlComponents(): array
     {
@@ -299,7 +300,18 @@ class SettingsPage extends Page implements HasForms
 
         $str = static fn (mixed $v): string => is_string($v) ? $v : '';
         $trim = static fn (mixed $v): string => rtrim(is_string($v) ? $v : '', '/');
-        $int = static fn (mixed $v): int => (int) $v;
+        $int = static fn (mixed $v): int => is_numeric($v) ? (int) $v : 0;
+        $strOrNull = static fn (mixed $v): ?string => is_string($v) && $v !== '' ? $v : null;
+        $strList = static function (mixed $values): array {
+            $strings = [];
+            foreach (is_array($values) ? $values : [] as $value) {
+                if (is_string($value)) {
+                    $strings[] = $value;
+                }
+            }
+
+            return $strings;
+        };
 
         $general = GeneralSettings::get();
         $general->registration_enabled = (bool) ($data['registration_enabled'] ?? false);
@@ -312,9 +324,9 @@ class SettingsPage extends Page implements HasForms
         $general->save();
 
         $localization = LocalizationSettings::get();
-        $localization->available_locales = array_values((array) ($data['available_locales'] ?? []));
+        $localization->available_locales = $strList($data['available_locales'] ?? []);
         $localization->fallback_locale = $str($data['fallback_locale'] ?? 'en');
-        $localization->rtl_locales = array_values((array) ($data['rtl_locales'] ?? []));
+        $localization->rtl_locales = $strList($data['rtl_locales'] ?? []);
         $localization->save();
 
         $content = ContentSettings::get();
@@ -347,10 +359,10 @@ class SettingsPage extends Page implements HasForms
 
         $storage = StorageSettings::get();
         $storage->disk = $str($data['disk'] ?? 'local');
-        $storage->s3_key = ($data['s3_key'] ?? null) ?: null;
-        $storage->s3_bucket = ($data['s3_bucket'] ?? null) ?: null;
-        $storage->s3_region = ($data['s3_region'] ?? null) ?: null;
-        $storage->s3_url = ($data['s3_url'] ?? null) ?: null;
+        $storage->s3_key = $strOrNull($data['s3_key'] ?? null);
+        $storage->s3_bucket = $strOrNull($data['s3_bucket'] ?? null);
+        $storage->s3_region = $strOrNull($data['s3_region'] ?? null);
+        $storage->s3_url = $strOrNull($data['s3_url'] ?? null);
         if (filled($data['s3_secret'] ?? null)) {
             $storage->s3_secret = $str($data['s3_secret']);
         }
@@ -371,8 +383,18 @@ class SettingsPage extends Page implements HasForms
         $security->save();
 
         $performance = PerformanceSettings::get();
-        $performance->cache_driver = $str($data['cache_driver'] ?? 'database');
-        $performance->queue_connection = $str($data['queue_connection'] ?? 'database');
+
+        // The selects only offer these values; anything else is tampered
+        // client state and must not reach the typed settings properties.
+        $cacheDriver = $data['cache_driver'] ?? null;
+        if (in_array($cacheDriver, ['database', 'file', 'redis'], true)) {
+            $performance->cache_driver = $cacheDriver;
+        }
+
+        $queueConnection = $data['queue_connection'] ?? null;
+        if (in_array($queueConnection, ['database', 'redis', 'sync'], true)) {
+            $performance->queue_connection = $queueConnection;
+        }
         // Only written when actually present: these inputs are ->visible()
         // behind a Redis driver being selected, and Filament omits hidden
         // components from the state. Falling back to a default here would
@@ -387,7 +409,10 @@ class SettingsPage extends Page implements HasForms
         if (array_key_exists('redis_database', $data)) {
             $performance->redis_database = $int($data['redis_database']);
         }
-        $performance->octane_server = $str($data['octane_server'] ?? 'frankenphp');
+        $octaneServer = $data['octane_server'] ?? null;
+        if (in_array($octaneServer, ['frankenphp', 'roadrunner', 'swoole'], true)) {
+            $performance->octane_server = $octaneServer;
+        }
         if (filled($data['redis_password'] ?? null)) {
             $performance->redis_password = $str($data['redis_password']);
         }

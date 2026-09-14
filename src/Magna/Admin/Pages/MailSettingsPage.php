@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Magna\Admin\Pages;
 
 use Filament\Actions\Action;
-use Filament\Forms\ComponentContainer;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -20,7 +19,7 @@ use Magna\Settings\MailTester;
 use Magna\Settings\MailTransports;
 
 /**
- * @property ComponentContainer $form
+ * @property Schema $form
  */
 class MailSettingsPage extends Page implements HasForms
 {
@@ -41,6 +40,7 @@ class MailSettingsPage extends Page implements HasForms
 
     protected string $view = 'magna::admin.mail-settings';
 
+    /** @var array<string, mixed>|null */
     public ?array $data = [];
 
     public static function canAccess(): bool
@@ -242,39 +242,40 @@ class MailSettingsPage extends Page implements HasForms
          * the answer"; absent means "not this driver's business, leave it".
          */
         if (array_key_exists('host', $data)) {
-            $settings->host = (string) ($data['host'] ?? '');
+            $settings->host = self::stringFrom($data, 'host');
         }
 
         if (array_key_exists('port', $data)) {
-            $settings->port = (int) $data['port'];
+            $settings->port = is_numeric($data['port']) ? (int) $data['port'] : 0;
         }
 
         if (array_key_exists('username', $data)) {
-            $settings->username = $data['username'] ?: null;
+            $settings->username = self::stringOrNullFrom($data, 'username');
         }
 
-        if (filled($data['from_address'] ?? null)) {
-            $settings->from_address = (string) $data['from_address'];
+        $fromAddress = self::filledStringFrom($data, 'from_address');
+        if ($fromAddress !== null) {
+            $settings->from_address = $fromAddress;
         }
 
         if (array_key_exists('from_name', $data)) {
-            $settings->from_name = (string) ($data['from_name'] ?? '');
+            $settings->from_name = self::stringFrom($data, 'from_name');
         }
 
         if (array_key_exists('ses_key', $data)) {
-            $settings->ses_key = $data['ses_key'] ?: null;
+            $settings->ses_key = self::stringOrNullFrom($data, 'ses_key');
         }
 
         if (array_key_exists('ses_region', $data)) {
-            $settings->ses_region = (string) ($data['ses_region'] ?? 'us-east-1');
+            $settings->ses_region = self::stringFrom($data, 'ses_region', 'us-east-1');
         }
 
         if (array_key_exists('mailgun_domain', $data)) {
-            $settings->mailgun_domain = $data['mailgun_domain'] ?: null;
+            $settings->mailgun_domain = self::stringOrNullFrom($data, 'mailgun_domain');
         }
 
         if (array_key_exists('mailgun_endpoint', $data)) {
-            $settings->mailgun_endpoint = (string) ($data['mailgun_endpoint'] ?? 'api.mailgun.net');
+            $settings->mailgun_endpoint = self::stringFrom($data, 'mailgun_endpoint', 'api.mailgun.net');
         }
 
         /*
@@ -284,12 +285,48 @@ class MailSettingsPage extends Page implements HasForms
          * typed now overwrites one.
          */
         foreach (['password', 'ses_secret', 'mailgun_secret', 'resend_key', 'postmark_token'] as $secret) {
-            if (filled($data[$secret] ?? null)) {
-                $settings->{$secret} = (string) $data[$secret];
+            $value = self::filledStringFrom($data, $secret);
+            if ($value !== null) {
+                $settings->{$secret} = $value;
             }
         }
 
         return $settings;
+    }
+
+    // ── Typed reads over the untyped form-state array ─────────────────────
+
+    /** @param array<string, mixed> $data */
+    private static function stringFrom(array $data, string $key, string $default = ''): string
+    {
+        $value = $data[$key] ?? null;
+
+        return is_string($value) ? $value : $default;
+    }
+
+    /**
+     * A non-empty string, or null — the "optional field left blank" read.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function stringOrNullFrom(array $data, string $key): ?string
+    {
+        $value = $data[$key] ?? null;
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * Like stringOrNullFrom(), but blank in Laravel's filled() sense — the
+     * secret-field read, where whitespace is not a new secret.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function filledStringFrom(array $data, string $key): ?string
+    {
+        $value = $data[$key] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     /**

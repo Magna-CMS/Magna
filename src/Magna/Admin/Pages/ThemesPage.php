@@ -108,7 +108,7 @@ class ThemesPage extends Page
             // Anything already on disk is not for sale again.
             'available' => array_values(array_filter(
                 $this->available,
-                fn (array $t): bool => ! isset($installed[$t['name']]),
+                fn (array $t): bool => ! (is_string($t['name'] ?? null) && isset($installed[$t['name']])),
             )),
             'activeName' => $activeName,
         ];

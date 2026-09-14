@@ -79,7 +79,7 @@ class ContentTypeBuilder extends Page
                 ->where('handle', $this->editHandle)
                 ->first();
 
-            if ($record instanceof ContentTypeRecord && is_array($record->schema)) {
+            if ($record instanceof ContentTypeRecord) {
                 $this->typeData = $record->schema;
             }
         }

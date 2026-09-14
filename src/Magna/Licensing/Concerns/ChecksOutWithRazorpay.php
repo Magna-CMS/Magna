@@ -108,10 +108,10 @@ trait ChecksOutWithRazorpay
         $client = app(LicenseClient::class);
         $result = $client->startTrial($package);
 
-        if (($result['ok'] ?? false) !== true) {
+        if ($result['ok'] !== true) {
             Notification::make()
                 ->title('Trial could not be started')
-                ->body(is_string($result['message'] ?? null) ? $result['message'] : 'The marketplace refused this trial.')
+                ->body($result['message'] ?? 'The marketplace refused this trial.')
                 ->danger()
                 ->send();
 
@@ -265,10 +265,11 @@ trait ChecksOutWithRazorpay
             $this->orderWait = 0;
             $this->pendingRefundTerms = $terms;
 
+            $amount = $subscription['amount'] ?? 0;
             $this->dispatch('magna-checkout', payload: $common + [
                 'subscription_id' => (int) $subscription['id'],
                 'gateway_subscription_id' => $subscription['gateway_subscription_id'],
-                'amount' => (int) ($subscription['amount'] ?? 0),
+                'amount' => is_numeric($amount) ? (int) $amount : 0,
                 'currency' => is_string($subscription['currency'] ?? null) ? $subscription['currency'] : 'INR',
             ]);
 
@@ -289,10 +290,11 @@ trait ChecksOutWithRazorpay
         $this->orderWait = 0;
         $this->pendingRefundTerms = $terms;
 
+        $amount = $order['amount'] ?? 0;
         $this->dispatch('magna-checkout', payload: $common + [
             'order_id' => (int) $order['id'],
             'gateway_order_id' => $order['gateway_order_id'],
-            'amount' => (int) ($order['amount'] ?? 0),
+            'amount' => is_numeric($amount) ? (int) $amount : 0,
             'currency' => is_string($order['currency'] ?? null) ? $order['currency'] : 'INR',
         ]);
     }

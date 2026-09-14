@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Magna\Admin\Pages;
 
 use Filament\Actions\Action;
-use Filament\Forms\ComponentContainer;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -23,7 +22,7 @@ use Magna\Settings\PerformanceSettings;
 use Magna\Support\Runtime;
 
 /**
- * @property ComponentContainer $form
+ * @property Schema $form
  */
 class PerformanceSettingsPage extends Page implements HasForms
 {
@@ -44,6 +43,7 @@ class PerformanceSettingsPage extends Page implements HasForms
 
     protected string $view = 'magna::admin.performance-settings';
 
+    /** @var array<string, mixed>|null */
     public ?array $data = [];
 
     public static function canAccess(): bool
@@ -157,7 +157,8 @@ class PerformanceSettingsPage extends Page implements HasForms
             ->content(function (): HtmlString {
                 $installed = class_exists(OctaneServiceProvider::class);
                 $running = Runtime::isOctane();
-                $server = (string) config('octane.server', 'frankenphp');
+                $configured = config('octane.server', 'frankenphp');
+                $server = is_string($configured) ? $configured : 'frankenphp';
 
                 $badge = function (string $label, string $color): string {
                     return '<span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium '.$color.'">'.e($label).'</span>';
@@ -183,9 +184,20 @@ class PerformanceSettingsPage extends Page implements HasForms
         $data = $this->form->getState();
 
         $settings = PerformanceSettings::get();
-        $settings->cache_driver = $data['cache_driver'];
-        $settings->queue_connection = $data['queue_connection'];
-        $settings->octane_server = $data['octane_server'];
+
+        // The selects only offer these values; anything else is tampered
+        // client state and must not reach the typed settings properties.
+        if (in_array($data['cache_driver'], ['database', 'file', 'redis'], true)) {
+            $settings->cache_driver = $data['cache_driver'];
+        }
+
+        if (in_array($data['queue_connection'], ['database', 'redis', 'sync'], true)) {
+            $settings->queue_connection = $data['queue_connection'];
+        }
+
+        if (in_array($data['octane_server'], ['frankenphp', 'roadrunner', 'swoole'], true)) {
+            $settings->octane_server = $data['octane_server'];
+        }
 
         // The Redis inputs are ->visible() only while a Redis driver is
         // selected, and Filament leaves hidden components out of getState()
@@ -304,7 +316,7 @@ class PerformanceSettingsPage extends Page implements HasForms
             ->modalWidth('2xl')
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
-            ->modalContent(fn (): HtmlString => static::guideHtml());
+            ->modalContent(fn (): HtmlString => self::guideHtml());
     }
 
     private static function guideHtml(): HtmlString
