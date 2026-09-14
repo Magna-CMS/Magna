@@ -1,0 +1,53 @@
+#!/bin/sh
+# Local definition-of-done gate (see the project coding standards).
+#
+# Runs the two fast checks on every commit so a style or type error is
+# caught before it reaches CI:
+#   1. pint --test --dirty  — style, only on files this commit touches
+#   2. phpstan              — level 9 on the staged PHP source files
+#
+# The full test suite stays a CI/pre-push concern — it is far too slow for
+# a commit hook. Bypassing with --no-verify is possible but the same
+# failures then land in CI, where they block the merge anyway.
+#
+# Activate with:  composer setup-hooks   (or automatically on composer install)
+
+set -e
+
+# Git runs hooks under its own sh, whose PATH may not carry php (Herd on
+# Windows, for one). Resolve it: an explicit `git config hooks.php` wins,
+# then PATH, then the Herd install locations.
+PHP="$(git config hooks.php || true)"
+
+if [ -z "$PHP" ] && command -v php >/dev/null 2>&1; then
+    PHP=php
+fi
+
+if [ -z "$PHP" ]; then
+    for candidate in "$HOME"/.config/herd/bin/php*/php.exe; do
+        if [ -x "$candidate" ]; then
+            PHP="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PHP" ]; then
+    echo "pre-commit: php not found. Point the hooks at one with:" >&2
+    echo "  git config hooks.php /path/to/php" >&2
+    exit 1
+fi
+
+staged_php=$(git diff --cached --name-only --diff-filter=ACMR |
+    grep -E '^(src|app|database|config|routes|tests)/.*\.php$' || true)
+
+if [ -z "$staged_php" ]; then
+    exit 0
+fi
+
+echo "pre-commit: pint --test --dirty"
+"$PHP" vendor/bin/pint --test --dirty
+
+echo "pre-commit: phpstan (staged files)"
+# shellcheck disable=SC2086
+"$PHP" vendor/bin/phpstan analyse --no-progress --memory-limit=1G $staged_php

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Delegate to the repository-local prepare-commit-msg hook, if one exists.
+#
+# core.hooksPath points at this directory, which would otherwise silently
+# disable any hook living in .git/hooks. This repo keeps a local (never
+# committed) prepare-commit-msg there that enforces commit-message policy;
+# this shim keeps it firing.
+
+local_hook="$(git rev-parse --git-dir)/hooks/prepare-commit-msg"
+
+if [ -x "$local_hook" ]; then
+    exec "$local_hook" "$@"
+fi
+
+exit 0

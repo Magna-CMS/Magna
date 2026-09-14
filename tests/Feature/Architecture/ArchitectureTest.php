@@ -624,6 +624,143 @@ it('keeps every Blade view under the view ceiling', function (): void {
 });
 
 /**
+ * The big classes are pinned, and pins only move down.
+ *
+ * The 600-line ceiling stops a god-class; it does nothing about a large
+ * class quietly growing back toward it after a decomposition. Every class
+ * currently within reach of the ceiling is pinned at its post-Wave-3 size:
+ * exceeding a pin fails CI the same as exceeding the ceiling. After real
+ * work shrinks one, lower its pin — never raise one, and never add a new
+ * class here (a new class approaching 600 lines is decomposed instead).
+ * The global ceiling steps down to 500 once every pin is below it.
+ */
+it('lets the pinned big classes only shrink', function (): void {
+    $pins = [
+        // Over the global ceiling and allowlisted there; the pin stops it
+        // growing further while it waits for its remaining splits.
+        'Admin/Pages/PluginsPage.php' => 710,
+        'Licensing/LicenseClient.php' => 592,
+        'Blocks/Livewire/BlockEditor.php' => 590,
+        'Plugins/PluginManager.php' => 555,
+        'Admin/Pages/SystemInfoPage.php' => 545,
+        'Content/EntryManager.php' => 510,
+        'Admin/AdminPanelProvider.php' => 500,
+        'Admin/Pages/SettingsPage.php' => 495,
+    ];
+
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $offenders = [];
+
+    foreach ($pins as $relative => $pin) {
+        $lines = count(file($srcDir.'/'.$relative) ?: []);
+
+        if ($lines > $pin) {
+            $offenders[] = $relative.' ('.$lines.' lines, pinned at '.$pin.')';
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
+ * app() is a ratchet, not a habit.
+ *
+ * Constructor injection is the rule; app() is tolerated only where the
+ * framework leaves no seam (Filament pages and Livewire components cannot
+ * constructor-inject) and in the sanctioned typed static gateways
+ * (Settings::get(), Entry::type(), User::current() — see the coding
+ * standards). The map below pins every file's CURRENT count of app() call
+ * sites. A file may only go DOWN or hold: fix a site, lower its pin (or
+ * delete the line at zero); a new app() anywhere — a higher count, or any
+ * count in an unpinned file — fails here. Pins never go up.
+ */
+it('never grows the number of app() call sites', function (): void {
+    $pins = [
+        'Admin/Pages/AccountCentrePage.php' => 8,
+        'Admin/Pages/BackupSettingsPage.php' => 1,
+        'Admin/Pages/ContentTypeBuilder.php' => 5,
+        'Admin/Pages/Dashboard.php' => 2,
+        'Admin/Pages/MailSettingsPage.php' => 2,
+        'Admin/Pages/PluginsPage.php' => 15,
+        'Admin/Pages/ProfilePage.php' => 1,
+        'Admin/Pages/SettingsPage.php' => 2,
+        'Admin/Pages/SystemInfoPage.php' => 8,
+        'Admin/Pages/ThemesPage.php' => 5,
+        'Admin/Resources/ApiKey/ManageApiKeys.php' => 1,
+        'Admin/Resources/Entry/CreateEntry.php' => 2,
+        'Admin/Resources/Entry/EditEntry.php' => 5,
+        'Admin/Resources/Entry/ListEntries.php' => 1,
+        'Admin/Resources/EntryResource.php' => 7,
+        'Admin/Resources/Media/CreateMedia.php' => 1,
+        'Admin/Resources/Media/ListMedia.php' => 2,
+        'Admin/Resources/MediaResource.php' => 2,
+        'Admin/Resources/RoleResource.php' => 1,
+        'Admin/Widgets/EntryCounts.php' => 1,
+        'Admin/Widgets/UpcomingScheduleWidget.php' => 1,
+        'Auth/Captcha/Rules/Captcha.php' => 1,
+        'Auth/Filament/Login.php' => 4,
+        'Auth/Http/Middleware/AdminCspMiddleware.php' => 1,
+        'Auth/Http/Middleware/SecureSessionCookieMiddleware.php' => 1,
+        'Backup/BackupService.php' => 1,
+        'Blocks/BlockField.php' => 1,
+        'Blocks/BlocksServiceProvider.php' => 3,
+        'Blocks/Livewire/BlockEditor.php' => 8,
+        'Blocks/Livewire/Concerns/RendersEditorChrome.php' => 5,
+        'Blocks/Rules/ValidBlockDocument.php' => 2,
+        // The sanctioned static gateways themselves.
+        'Content/Entry.php' => 1,
+        'Settings/Settings.php' => 2,
+        'Users/User.php' => 1,
+        'Content/FieldTypes/BlocksField.php' => 1,
+        'Content/Http/Resources/EntryResource.php' => 1,
+        'Delivery/EntryTransformer.php' => 2,
+        'Install/ConfigCache.php' => 1,
+        'Install/Http/InstallController.php' => 2,
+        'Licensing/Concerns/ChecksOutWithRazorpay.php' => 10,
+        'Licensing/LicensingServiceProvider.php' => 1,
+        'Media/Concerns/IngestsMedia.php' => 1,
+        'Media/Http/Resources/MediaResource.php' => 1,
+        'Media/Livewire/MediaPickerModal.php' => 1,
+        'Plugins/PluginDiscovery.php' => 1,
+        'Plugins/PluginManager.php' => 1,
+        'System/SystemHealthCollector.php' => 1,
+    ];
+
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        // Blade views are covered by their own no-service-location rule.
+        if (str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+
+        $count = preg_match_all('/\bapp\(/', (string) file_get_contents($file->getPathname()));
+        if ($count === 0 || $count === false) {
+            continue;
+        }
+
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($srcDir) + 1));
+
+        if ($count > ($pins[$relative] ?? 0)) {
+            $offenders[] = $relative.' ('.$count.' app() calls, pinned at '.($pins[$relative] ?? 0).')';
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
  * Views render; they do not fetch.
  *
  * A Blade file that calls app() or Model::query() is a controller hiding
