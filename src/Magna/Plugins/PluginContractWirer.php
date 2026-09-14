@@ -10,10 +10,8 @@ use Magna\Blocks\Conditions\DisplayConditionRegistry;
 use Magna\Blocks\DataSources\DataSourceRegistry;
 use Magna\Blocks\DynamicTags\DynamicTagRegistry;
 use Magna\Content\SchemaRegistry;
-use Magna\Contracts\CaptchaSurface;
 use Magna\Contracts\DecoratesDeliveryResponse;
 use Magna\Contracts\ExtendsEntryForm;
-use Magna\Contracts\LoginCheck;
 use Magna\Contracts\ProvidesFrontendPages;
 use Magna\Contracts\RegistersAdminNavigation;
 use Magna\Contracts\RegistersBlocks;
@@ -30,6 +28,11 @@ use Magna\Frontend\FrontendPageRegistry;
  * per-contract detail): admin navigation, content-type schemas, blocks,
  * data sources, dynamic tags, entry-form extensions, delivery decorators.
  *
+ * One private method per contract; the contracts whose consumers read a
+ * plain list out of the container all go through appendToBinding(), which
+ * owns the create-on-first-plugin/append-on-the-next accumulation those
+ * four blocks used to each repeat by hand.
+ *
  * The remaining capability contracts are dispatched where their target
  * surface is actually built, not here:
  *   - RegistersDashboardWidgets / RegistersSettingsPages → the Filament
@@ -42,121 +45,158 @@ class PluginContractWirer
 
     public function wire(Plugin $plugin): void
     {
+        $this->wireAdminNavigation($plugin);
+        $this->loadSchemas($plugin);
+        $this->wireBlocks($plugin);
+        $this->wireDataSources($plugin);
+        $this->wireDynamicTags($plugin);
+        $this->wireDisplayConditions($plugin);
+        $this->wireFrontendPages($plugin);
+
+        // ExtendsEntryForm: the Filament admin EntryResource merges these
+        // plugins' form components.
+        if ($plugin instanceof ExtendsEntryForm) {
+            $this->appendToBinding('magna.entry_form_plugins', [$plugin]);
+        }
+
+        // DecoratesDeliveryResponse: EntryTransformer injects these plugins'
+        // data into delivery API responses.
+        if ($plugin instanceof DecoratesDeliveryResponse) {
+            $this->appendToBinding('magna.delivery_decorators', [$plugin]);
+        }
+
+        // RegistersLoginChecks: pre-authentication checks the login seam runs
+        // before credentials are verified. Accumulation order is boot order
+        // (dependency-ordered, deterministic); the checks are AND-ed — any one
+        // denying denies the attempt — so order does not affect the security
+        // outcome. Only enabled plugins are wired.
+        if ($plugin instanceof RegistersLoginChecks) {
+            $this->appendToBinding('magna.auth.login_checks', $plugin->loginChecks());
+        }
+
+        // RegistersCaptchaSurfaces: the captcha-protectable surfaces plugins
+        // expose, so a security plugin can enumerate them for per-surface
+        // toggles without hardcoding which plugins exist.
+        if ($plugin instanceof RegistersCaptchaSurfaces) {
+            $this->appendToBinding('magna.captcha.surfaces', $plugin->captchaSurfaces());
+        }
+    }
+
+    private function wireAdminNavigation(Plugin $plugin): void
+    {
         if ($plugin instanceof RegistersAdminNavigation) {
             $this->app->instance(
                 'magna.nav.'.$plugin->getManifest()->name,
                 $plugin->adminNavigation(),
             );
         }
+    }
 
-        // Load plugin content type schemas from schemas/ directory.
+    /** Load plugin content type schemas from the schemas/ directory. */
+    private function loadSchemas(Plugin $plugin): void
+    {
         $schemasDir = $plugin->getBasePath().'/schemas';
-        if (is_dir($schemasDir)) {
-            /** @var SchemaRegistry $schemaRegistry */
-            $schemaRegistry = $this->app->make(SchemaRegistry::class);
-            $schemaRegistry->loadFromDirectory($schemasDir);
+        if (! is_dir($schemasDir)) {
+            return;
         }
 
-        // Wire RegistersBlocks: load plugin block definitions into the
-        // BlockRegistry, stamped with their source plugin — theme addons may
-        // only override views for blocks their pairsWith names (§C8).
-        if ($plugin instanceof RegistersBlocks) {
-            /** @var BlockRegistry $blockRegistry */
-            $blockRegistry = $this->app->make(BlockRegistry::class);
-            foreach ($plugin->blocks() as $definition) {
-                $blockRegistry->register(
-                    $definition->withSourcePlugin($plugin->getManifest()->name)
-                );
-            }
+        /** @var SchemaRegistry $schemaRegistry */
+        $schemaRegistry = $this->app->make(SchemaRegistry::class);
+        $schemaRegistry->loadFromDirectory($schemasDir);
+    }
+
+    /**
+     * Load plugin block definitions into the BlockRegistry, stamped with
+     * their source plugin — theme addons may only override views for blocks
+     * their pairsWith names (§C8).
+     */
+    private function wireBlocks(Plugin $plugin): void
+    {
+        if (! $plugin instanceof RegistersBlocks) {
+            return;
         }
 
-        // Wire RegistersDataSources: plugin data feeds for the Loop block.
-        if ($plugin instanceof RegistersDataSources) {
-            /** @var DataSourceRegistry $dataSources */
-            $dataSources = $this->app->make(DataSourceRegistry::class);
-            foreach ($plugin->dataSources() as $source) {
-                $dataSources->register($source);
-            }
+        /** @var BlockRegistry $blockRegistry */
+        $blockRegistry = $this->app->make(BlockRegistry::class);
+        foreach ($plugin->blocks() as $definition) {
+            $blockRegistry->register(
+                $definition->withSourcePlugin($plugin->getManifest()->name)
+            );
+        }
+    }
+
+    /** Plugin data feeds for the Loop block. */
+    private function wireDataSources(Plugin $plugin): void
+    {
+        if (! $plugin instanceof RegistersDataSources) {
+            return;
         }
 
-        // Wire RegistersDynamicTags: plugin values page fields can bind to.
-        if ($plugin instanceof RegistersDynamicTags) {
-            /** @var DynamicTagRegistry $dynamicTags */
-            $dynamicTags = $this->app->make(DynamicTagRegistry::class);
-            foreach ($plugin->dynamicTags() as $tag) {
-                $dynamicTags->register($tag);
-            }
+        /** @var DataSourceRegistry $dataSources */
+        $dataSources = $this->app->make(DataSourceRegistry::class);
+        foreach ($plugin->dataSources() as $source) {
+            $dataSources->register($source);
+        }
+    }
+
+    /** Plugin values page fields can bind to. */
+    private function wireDynamicTags(Plugin $plugin): void
+    {
+        if (! $plugin instanceof RegistersDynamicTags) {
+            return;
         }
 
-        // Wire RegistersDisplayConditions: plugin show/hide rules for nodes.
-        if ($plugin instanceof RegistersDisplayConditions) {
-            /** @var DisplayConditionRegistry $displayConditions */
-            $displayConditions = $this->app->make(DisplayConditionRegistry::class);
-            foreach ($plugin->displayConditions() as $condition) {
-                $displayConditions->register($condition);
-            }
+        /** @var DynamicTagRegistry $dynamicTags */
+        $dynamicTags = $this->app->make(DynamicTagRegistry::class);
+        foreach ($plugin->dynamicTags() as $tag) {
+            $dynamicTags->register($tag);
+        }
+    }
+
+    /** Plugin show/hide rules for nodes. */
+    private function wireDisplayConditions(Plugin $plugin): void
+    {
+        if (! $plugin instanceof RegistersDisplayConditions) {
+            return;
         }
 
-        // Wire ProvidesFrontendPages: public pages the Pages router mounts.
-        if ($plugin instanceof ProvidesFrontendPages) {
-            /** @var FrontendPageRegistry $frontendPages */
-            $frontendPages = $this->app->make(FrontendPageRegistry::class);
-            foreach ($plugin->frontendPages() as $page) {
-                $frontendPages->register($page);
-            }
+        /** @var DisplayConditionRegistry $displayConditions */
+        $displayConditions = $this->app->make(DisplayConditionRegistry::class);
+        foreach ($plugin->displayConditions() as $condition) {
+            $displayConditions->register($condition);
+        }
+    }
+
+    /** Public pages the Pages router mounts. */
+    private function wireFrontendPages(Plugin $plugin): void
+    {
+        if (! $plugin instanceof ProvidesFrontendPages) {
+            return;
         }
 
-        // Wire ExtendsEntryForm: accumulate plugins in the container so the
-        // Filament admin EntryResource (Magna\Admin\Resources\EntryResource)
-        // can merge their form components.
-        if ($plugin instanceof ExtendsEntryForm) {
-            /** @var list<ExtendsEntryForm> $current */
-            $current = $this->app->bound('magna.entry_form_plugins')
-                ? $this->app->make('magna.entry_form_plugins')
-                : [];
-            $current[] = $plugin;
-            $this->app->instance('magna.entry_form_plugins', $current);
+        /** @var FrontendPageRegistry $frontendPages */
+        $frontendPages = $this->app->make(FrontendPageRegistry::class);
+        foreach ($plugin->frontendPages() as $page) {
+            $frontendPages->register($page);
+        }
+    }
+
+    /**
+     * Append items to a container-held list binding, creating the list the
+     * first time any plugin contributes to it. Consumers read the finished
+     * list back out of the container by name.
+     *
+     * @param  iterable<mixed>  $items
+     */
+    private function appendToBinding(string $binding, iterable $items): void
+    {
+        /** @var list<mixed> $current */
+        $current = $this->app->bound($binding) ? $this->app->make($binding) : [];
+
+        foreach ($items as $item) {
+            $current[] = $item;
         }
 
-        // Wire DecoratesDeliveryResponse: accumulate plugins in the container so
-        // EntryTransformer can inject their data into delivery API responses.
-        if ($plugin instanceof DecoratesDeliveryResponse) {
-            /** @var list<DecoratesDeliveryResponse> $current */
-            $current = $this->app->bound('magna.delivery_decorators')
-                ? $this->app->make('magna.delivery_decorators')
-                : [];
-            $current[] = $plugin;
-            $this->app->instance('magna.delivery_decorators', $current);
-        }
-
-        // Wire RegistersLoginChecks: accumulate pre-authentication checks the
-        // login seam runs before credentials are verified. Accumulation order is
-        // boot order (dependency-ordered, deterministic); the checks are AND-ed
-        // — any one denying denies the attempt — so order does not affect the
-        // security outcome. Only enabled plugins are wired.
-        if ($plugin instanceof RegistersLoginChecks) {
-            /** @var list<class-string<LoginCheck>|LoginCheck> $current */
-            $current = $this->app->bound('magna.auth.login_checks')
-                ? $this->app->make('magna.auth.login_checks')
-                : [];
-            foreach ($plugin->loginChecks() as $check) {
-                $current[] = $check;
-            }
-            $this->app->instance('magna.auth.login_checks', $current);
-        }
-
-        // Wire RegistersCaptchaSurfaces: accumulate the captcha-protectable
-        // surfaces plugins expose, so a security plugin can enumerate them for
-        // per-surface toggles without hardcoding which plugins exist.
-        if ($plugin instanceof RegistersCaptchaSurfaces) {
-            /** @var list<CaptchaSurface> $current */
-            $current = $this->app->bound('magna.captcha.surfaces')
-                ? $this->app->make('magna.captcha.surfaces')
-                : [];
-            foreach ($plugin->captchaSurfaces() as $surface) {
-                $current[] = $surface;
-            }
-            $this->app->instance('magna.captcha.surfaces', $current);
-        }
+        $this->app->instance($binding, $current);
     }
 }

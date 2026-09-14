@@ -84,59 +84,75 @@ final class MailConfigurator
 
         $this->config->set('mail.default', $mailer);
 
-        // Only the SMTP transport takes host and credentials. The other drivers
-        // an admin can pick (log, array) are selected by name alone, and writing
-        // a host into them would be meaningless rather than harmless.
-        if ($mailer === 'smtp') {
-            $this->config->set('mail.mailers.smtp.host', $settings->host);
-            $this->config->set('mail.mailers.smtp.port', $settings->port);
-            $this->config->set('mail.mailers.smtp.username', $settings->username);
-            $this->config->set('mail.mailers.smtp.password', $settings->password);
-
-            // Laravel 11+ names this `scheme`: 'smtps' for implicit TLS, null to
-            // let the transport negotiate STARTTLS. The stored value is the older
-            // 'tls'/'ssl' vocabulary the settings page offers, so it is
-            // translated rather than passed through.
-            $this->config->set('mail.mailers.smtp.scheme', match ($settings->encryption) {
-                'ssl', 'smtps' => 'smtps',
-                default => null,
-            });
-        }
-
-        /*
-         * The API drivers authenticate through `services`, not through the
-         * mailer entry, which is why host and port say nothing about them.
-         */
-        if ($mailer === 'ses') {
-            $this->config->set('services.ses.key', $settings->ses_key);
-            $this->config->set('services.ses.secret', $settings->ses_secret);
-            $this->config->set('services.ses.region', $settings->ses_region);
-        }
-
-        if ($mailer === 'mailgun') {
-            $this->config->set('services.mailgun.domain', $settings->mailgun_domain);
-            $this->config->set('services.mailgun.secret', $settings->mailgun_secret);
-            $this->config->set('services.mailgun.endpoint', $settings->mailgun_endpoint);
-
-            // config/mail.php carries no `mailgun` entry — the driver was
-            // offered by the page and defined nowhere, so choosing it failed
-            // with `Mailer [mailgun] is not defined` before any credential was
-            // even read. Declared here so the mailer exists wherever the
-            // transport package does.
-            $this->config->set('mail.mailers.mailgun.transport', 'mailgun');
-        }
-
-        if ($mailer === 'resend') {
-            $this->config->set('services.resend.key', $settings->resend_key);
-        }
-
-        if ($mailer === 'postmark') {
-            // `token` first, `key` as the fallback — the order MailManager
-            // reads them in, and config/services.php ships the second name.
-            $this->config->set('services.postmark.token', $settings->postmark_token);
-        }
+        // One builder per transport. The drivers with no builder (log, array,
+        // sendmail) are selected by name alone, and writing credentials into
+        // them would be meaningless rather than harmless.
+        match ($mailer) {
+            'smtp' => $this->configureSmtp($settings),
+            'ses' => $this->configureSes($settings),
+            'mailgun' => $this->configureMailgun($settings),
+            'resend' => $this->configureResend($settings),
+            'postmark' => $this->configurePostmark($settings),
+            default => null,
+        };
 
         $this->applyFrom($settings);
+    }
+
+    /** The one transport addressed by host and credentials. */
+    private function configureSmtp(MailSettings $settings): void
+    {
+        $this->config->set('mail.mailers.smtp.host', $settings->host);
+        $this->config->set('mail.mailers.smtp.port', $settings->port);
+        $this->config->set('mail.mailers.smtp.username', $settings->username);
+        $this->config->set('mail.mailers.smtp.password', $settings->password);
+
+        // Laravel 11+ names this `scheme`: 'smtps' for implicit TLS, null to
+        // let the transport negotiate STARTTLS. The stored value is the older
+        // 'tls'/'ssl' vocabulary the settings page offers, so it is
+        // translated rather than passed through.
+        $this->config->set('mail.mailers.smtp.scheme', match ($settings->encryption) {
+            'ssl', 'smtps' => 'smtps',
+            default => null,
+        });
+    }
+
+    /*
+     * The API drivers below authenticate through `services`, not through the
+     * mailer entry, which is why host and port say nothing about them.
+     */
+
+    private function configureSes(MailSettings $settings): void
+    {
+        $this->config->set('services.ses.key', $settings->ses_key);
+        $this->config->set('services.ses.secret', $settings->ses_secret);
+        $this->config->set('services.ses.region', $settings->ses_region);
+    }
+
+    private function configureMailgun(MailSettings $settings): void
+    {
+        $this->config->set('services.mailgun.domain', $settings->mailgun_domain);
+        $this->config->set('services.mailgun.secret', $settings->mailgun_secret);
+        $this->config->set('services.mailgun.endpoint', $settings->mailgun_endpoint);
+
+        // config/mail.php carries no `mailgun` entry — the driver was
+        // offered by the page and defined nowhere, so choosing it failed
+        // with `Mailer [mailgun] is not defined` before any credential was
+        // even read. Declared here so the mailer exists wherever the
+        // transport package does.
+        $this->config->set('mail.mailers.mailgun.transport', 'mailgun');
+    }
+
+    private function configureResend(MailSettings $settings): void
+    {
+        $this->config->set('services.resend.key', $settings->resend_key);
+    }
+
+    private function configurePostmark(MailSettings $settings): void
+    {
+        // `token` first, `key` as the fallback — the order MailManager
+        // reads them in, and config/services.php ships the second name.
+        $this->config->set('services.postmark.token', $settings->postmark_token);
     }
 
     /**
