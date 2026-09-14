@@ -38,16 +38,23 @@ if [ -z "$PHP" ]; then
     exit 1
 fi
 
+# Only the paths the phpstan config analyses. Test files deliberately stay
+# out: they are not in the config's paths, and analysing one standalone
+# reports Pest/Mockery extension methods as undefined.
 staged_php=$(git diff --cached --name-only --diff-filter=ACMR |
-    grep -E '^(src|app|database|config|routes|tests)/.*\.php$' || true)
+    grep -E '^(src|app|database)/.*\.php$' || true)
 
-if [ -z "$staged_php" ]; then
+staged_any_php=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.php$' || true)
+
+if [ -z "$staged_any_php" ]; then
     exit 0
 fi
 
 echo "pre-commit: pint --test --dirty"
 "$PHP" vendor/bin/pint --test --dirty
 
-echo "pre-commit: phpstan (staged files)"
-# shellcheck disable=SC2086
-"$PHP" vendor/bin/phpstan analyse --no-progress --memory-limit=1G $staged_php
+if [ -n "$staged_php" ]; then
+    echo "pre-commit: phpstan (staged source files)"
+    # shellcheck disable=SC2086
+    "$PHP" vendor/bin/phpstan analyse --no-progress --memory-limit=1G $staged_php
+fi
