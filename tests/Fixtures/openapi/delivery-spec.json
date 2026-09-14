@@ -1,0 +1,738 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Magna CMS Delivery API",
+        "version": "1"
+    },
+    "components": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer"
+            }
+        },
+        "schemas": {
+            "article": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "article"
+                        ]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "draft",
+                            "scheduled",
+                            "published",
+                            "archived"
+                        ]
+                    },
+                    "locale": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "published_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "nullable": false
+                    },
+                    "summary": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "body": {
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "notes": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "reading_minutes": {
+                        "type": "number",
+                        "nullable": true
+                    },
+                    "featured": {
+                        "type": "boolean",
+                        "nullable": true
+                    },
+                    "published_on": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "reviewed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "category": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "hero": {
+                        "type": "object",
+                        "nullable": true,
+                        "description": "Resolved media object with url, srcset, width, height"
+                    },
+                    "related": {
+                        "type": "array",
+                        "items": {
+                            "type": "object"
+                        },
+                        "description": "Populated when requested via ?with="
+                    },
+                    "layout": {
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "slug": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "contact_email": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "canonical": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "accent": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            },
+            "articleList": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/article"
+                        }
+                    },
+                    "meta": {
+                        "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "included": {
+                        "type": "object"
+                    }
+                }
+            },
+            "landing_page": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "landing_page"
+                        ]
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "draft",
+                            "scheduled",
+                            "published",
+                            "archived"
+                        ]
+                    },
+                    "locale": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "published_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "nullable": false
+                    }
+                }
+            },
+            "landing_pageList": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/landing_page"
+                        }
+                    },
+                    "meta": {
+                        "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "included": {
+                        "type": "object"
+                    }
+                }
+            },
+            "PaginationMeta": {
+                "type": "object",
+                "properties": {
+                    "next_cursor": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "has_more": {
+                        "type": "boolean"
+                    },
+                    "per_page": {
+                        "type": "integer"
+                    }
+                }
+            }
+        }
+    },
+    "paths": {
+        "/api/v1/content/article": {
+            "get": {
+                "operationId": "list_article",
+                "summary": "List Article entries",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Opaque cursor from previous page meta.next_cursor"
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 25,
+                            "maximum": 100
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Field to sort by. Prefix with - for descending (e.g. -published_at)"
+                    },
+                    {
+                        "name": "fields",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Comma-separated list of field handles to include"
+                    },
+                    {
+                        "name": "with",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Comma-separated relation field handles to populate"
+                    },
+                    {
+                        "name": "filter",
+                        "in": "query",
+                        "style": "deepObject",
+                        "explode": true,
+                        "schema": {
+                            "type": "object"
+                        },
+                        "description": "Filters: filter[field][op]=value"
+                    },
+                    {
+                        "name": "preview",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "name": "preview_token",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "resolve",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        },
+                        "description": "Attach _resolved data (entry lists, sanitized richtext, menus) to every block in blocks fields"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/articleList"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not Modified"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Unknown content type"
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    }
+                }
+            }
+        },
+        "/api/v1/content/article/{id}": {
+            "get": {
+                "operationId": "get_article",
+                "summary": "Get a single Article entry",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Entry ULID or slug"
+                    },
+                    {
+                        "name": "fields",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "with",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "preview",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "name": "preview_token",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "resolve",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        },
+                        "description": "Attach _resolved data (entry lists, sanitized richtext, menus) to every block in blocks fields"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "304": {
+                        "description": "Not Modified"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Invalid preview token"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    }
+                }
+            }
+        },
+        "/api/v1/content/article/{id}/preview-token": {
+            "post": {
+                "operationId": "mint_preview_token_article",
+                "summary": "Mint a short-lived preview token for a Article entry",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "ttl_seconds": {
+                                        "type": "integer",
+                                        "default": 3600
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Token minted"
+                    },
+                    "401": {
+                        "description": "Unauthorized — management token required"
+                    },
+                    "404": {
+                        "description": "Entry not found"
+                    }
+                }
+            }
+        },
+        "/api/v1/content/landing_page": {
+            "get": {
+                "operationId": "list_landing_page",
+                "summary": "List Landing page entries",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "cursor",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Opaque cursor from previous page meta.next_cursor"
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 25,
+                            "maximum": 100
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Field to sort by. Prefix with - for descending (e.g. -published_at)"
+                    },
+                    {
+                        "name": "fields",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Comma-separated list of field handles to include"
+                    },
+                    {
+                        "name": "with",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Comma-separated relation field handles to populate"
+                    },
+                    {
+                        "name": "filter",
+                        "in": "query",
+                        "style": "deepObject",
+                        "explode": true,
+                        "schema": {
+                            "type": "object"
+                        },
+                        "description": "Filters: filter[field][op]=value"
+                    },
+                    {
+                        "name": "preview",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "name": "preview_token",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "resolve",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        },
+                        "description": "Attach _resolved data (entry lists, sanitized richtext, menus) to every block in blocks fields"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/landing_pageList"
+                                }
+                            }
+                        }
+                    },
+                    "304": {
+                        "description": "Not Modified"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Unknown content type"
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    }
+                }
+            }
+        },
+        "/api/v1/content/landing_page/{id}": {
+            "get": {
+                "operationId": "get_landing_page",
+                "summary": "Get a single Landing page entry",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Entry ULID or slug"
+                    },
+                    {
+                        "name": "fields",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "with",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "preview",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "name": "preview_token",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "resolve",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        },
+                        "description": "Attach _resolved data (entry lists, sanitized richtext, menus) to every block in blocks fields"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "304": {
+                        "description": "Not Modified"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Invalid preview token"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    }
+                }
+            }
+        },
+        "/api/v1/content/landing_page/{id}/preview-token": {
+            "post": {
+                "operationId": "mint_preview_token_landing_page",
+                "summary": "Mint a short-lived preview token for a Landing page entry",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "ttl_seconds": {
+                                        "type": "integer",
+                                        "default": 3600
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Token minted"
+                    },
+                    "401": {
+                        "description": "Unauthorized — management token required"
+                    },
+                    "404": {
+                        "description": "Entry not found"
+                    }
+                }
+            }
+        }
+    }
+}

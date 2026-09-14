@@ -526,3 +526,55 @@ it('reads the raw process environment only where the process is the subject', fu
 
     expect($offenders)->toBe([]);
 });
+
+/**
+ * No line of PHP source exceeds 400 characters.
+ *
+ * OpenApiGenerator carried 700-character single-line array literals — an
+ * entire public API operation per line — which is how a wrong description
+ * or a missing response code hides from every reviewer and diff. Data that
+ * wide is written multi-line or built by a named builder (see
+ * Delivery\OpenApi\ResponseShapes). The allowlist holds the two files that
+ * still exceed the ceiling and is shrink-only: fix a file, remove its line;
+ * never add one.
+ */
+it('writes no PHP source line wider than the ceiling', function (): void {
+    $ceiling = 400;
+    $allowed = [
+        // Shrink-only: both are Admin files queued for the W4 phpstan-debt
+        // pass; their wide lines retire with that rewrite.
+        'AdminPanelProvider.php',
+        'PerformanceSettingsPage.php',
+    ];
+
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        // Blade templates are markup, covered by the blade rules instead.
+        if (str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+
+        if (in_array($file->getFilename(), $allowed, true)) {
+            continue;
+        }
+
+        foreach (file($file->getPathname()) ?: [] as $number => $line) {
+            if (mb_strlen(rtrim($line, "\r\n")) > $ceiling) {
+                $offenders[] = $file->getFilename().':'.($number + 1);
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
