@@ -13,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Url;
 use Magna\Content\ContentType;
 use Magna\Content\ContentTypeApplier;
@@ -58,6 +59,18 @@ class ContentTypeBuilder extends Page
     public bool $allowDestructive = false;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    /**
+     * The registered content types the list at the top of the page renders.
+     * Fetched here rather than queried inside the Blade view — views render,
+     * pages fetch (enforced by the no-queries-in-views architecture rule).
+     *
+     * @return Collection<int, ContentTypeRecord>
+     */
+    public function contentTypeRecords(): Collection
+    {
+        return ContentTypeRecord::query()->orderBy('display_name')->get();
+    }
 
     public function mount(): void
     {

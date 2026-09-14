@@ -286,7 +286,7 @@ it('renders raw Blade output only in the allowlisted views', function (): void {
         // Registry SVGs: shipped icon files, sanitized on ingest.
         'Blocks/resources/views/blocks/icon.blade.php',
         'Blocks/resources/views/blocks/scheme-toggle.blade.php',
-        'Blocks/resources/views/block-editor/editor.blade.php',
+        'Blocks/resources/views/block-editor/partials/add-block-modal.blade.php',
         // The raw-HTML block: storing it requires blocks.raw_html, enforced
         // by PageTreeAuthorizer on every save path.
         'Blocks/resources/views/blocks/html.blade.php',
@@ -572,6 +572,100 @@ it('writes no PHP source line wider than the ceiling', function (): void {
         foreach (file($file->getPathname()) ?: [] as $number => $line) {
             if (mb_strlen(rtrim($line, "\r\n")) > $ceiling) {
                 $offenders[] = $file->getFilename().':'.($number + 1);
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
+ * Blade templates have a ceiling too.
+ *
+ * system-info.blade.php reached 775 lines, the block editor 524, the
+ * plugins page 520 — screens whose markup nobody could review as a whole,
+ * which is where an unescaped echo or a wrong wire:model hides. Each is
+ * now a thin composition of named partials (admin/partials/system-info,
+ * block-editor/partials, admin/partials/plugins); a view that outgrows the
+ * ceiling gets the same treatment. The allowlist is shrink-only: fix a
+ * file, remove its line; never add one.
+ */
+it('keeps every Blade view under the view ceiling', function (): void {
+    $ceiling = 300;
+    $allowed = [
+        // Queued for the same partial-split treatment; both shrank is the
+        // only direction allowed in the meantime.
+        'account-centre.blade.php' => 460,
+        'media-list.blade.php' => 420,
+    ];
+
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || ! str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+
+        $lines = count(file($file->getPathname()) ?: []);
+        $limit = $allowed[$file->getFilename()] ?? $ceiling;
+
+        if ($lines > $limit) {
+            $offenders[] = $file->getFilename().' ('.$lines.' lines)';
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
+ * Views render; they do not fetch.
+ *
+ * A Blade file that calls app() or Model::query() is a controller hiding
+ * in a template: it cannot be unit-tested, it re-runs its queries on every
+ * Livewire re-render, and nothing about a view file invites the reviewer
+ * scrutiny a service-location or persistence call deserves.
+ * content-type-builder.blade.php ran an Eloquent query in its @php block
+ * and the block editor service-located three registries inline — all four
+ * now live on their page/component class, where the view reaches them as
+ * $this->method(). The allowlist names the two block views that have no
+ * backing class at all (they are rendered by the block renderer from data
+ * arrays) and is shrink-only.
+ */
+it('service-locates and queries nothing from inside a Blade view', function (): void {
+    $allowed = [
+        // Block views rendered straight from the renderer with a data array
+        // — no component class exists to carry the IconRegistry lookup.
+        'Blocks/resources/views/blocks/icon.blade.php',
+        'Blocks/resources/views/blocks/scheme-toggle.blade.php',
+    ];
+
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || ! str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($srcDir) + 1));
+        if (in_array($relative, $allowed, true)) {
+            continue;
+        }
+
+        foreach (file($file->getPathname()) ?: [] as $number => $line) {
+            if (preg_match('/\bapp\(|::query\(/', $line) === 1) {
+                $offenders[] = $relative.':'.($number + 1);
             }
         }
     }

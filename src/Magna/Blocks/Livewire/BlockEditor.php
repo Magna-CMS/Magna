@@ -38,6 +38,8 @@ use RuntimeException;
  */
 class BlockEditor extends Component
 {
+    use Concerns\RendersEditorChrome;
+
     /**
      * The serialised blocks_data JSON string.
      * Marked @modelable so Filament's Livewire form component can bind the field
@@ -578,6 +580,7 @@ class BlockEditor extends Component
             'sections' => $this->sections,
             'availableBlocks' => $this->availableBlocks(),
             'saveStatus' => $this->saveStatus,
+            'documentPreviewUrl' => $this->documentPreviewUrl(),
         ]);
     }
 }

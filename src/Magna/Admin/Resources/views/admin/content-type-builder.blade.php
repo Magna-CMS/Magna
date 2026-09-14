@@ -1,7 +1,7 @@
 <x-filament-panels::page>
     {{-- Existing content types list --}}
     @php
-        $types = \Magna\Content\Models\ContentTypeRecord::orderBy('display_name')->get();
+        $types = $this->contentTypeRecords();
     @endphp
 
     @if ($types->isNotEmpty())
