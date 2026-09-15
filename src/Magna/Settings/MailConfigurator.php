@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Settings;
 
 use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -21,23 +22,69 @@ use Throwable;
  * which was never a Roya problem — the notification was built and handed to a
  * mailer pointed at localhost:25.
  *
- * Deliberately shaped like ErpSettings::applyToConfig(): read once at boot, fold
- * over the defaults, and stay silent when there is no database yet. Config is
- * still the fallback, so an install that configures SMTP in `.env` and never
- * opens the page keeps working exactly as before.
+ * Deliberately shaped like ErpSettings::applyToConfig(): fold over the defaults
+ * and stay silent when there is no database yet. Config is still the fallback,
+ * so an install that configures SMTP in `.env` and never opens the page keeps
+ * working exactly as before.
+ *
+ * Applied at boot and again on each Octane operation, because a worker outlives
+ * the request that changed the settings and Octane restores the configuration it
+ * snapshotted at boot before every one of them. See SettingsServiceProvider.
  */
 final class MailConfigurator
 {
-    public function __construct(private readonly Config $config) {}
+    /**
+     * Whether this process has already found the settings table.
+     *
+     * Memoised because apply() now runs on every Octane request: asking the
+     * schema each time is a `SHOW TABLES` per request, for an answer that only
+     * ever changes once in a process's life. Only the affirmative is kept — a
+     * worker that started before the first migration must keep looking.
+     *
+     * Static because the instance is not: each Octane operation resolves this
+     * from its own sandbox container, so a per-instance flag would memoise
+     * nothing. The subject really is the process, and a table that later goes
+     * missing still fails safely — the read below is inside the try.
+     */
+    private static bool $settingsTableFound = false;
 
+    public function __construct(
+        private readonly Config $config,
+        private readonly Container $app,
+    ) {}
+
+    /**
+     * Folds the stored settings over the config, and drops any mailer that was
+     * built from the values they replace.
+     *
+     * The second half is what makes this safe to call more than once. MailManager
+     * caches the mailer it builds, so under a long-running server an administrator
+     * who corrected a password would have gone on sending through the transport
+     * built from the wrong one.
+     */
     public function apply(): void
+    {
+        $before = $this->fingerprint();
+
+        $this->applyToConfig();
+
+        if ($before !== $this->fingerprint()) {
+            $this->forgetResolvedMailers();
+        }
+    }
+
+    private function applyToConfig(): void
     {
         try {
             // Before the first migration, during `migrate:fresh`, or with no
             // database at all — the config file's values are exactly right and
             // asking for the table would only throw.
-            if (! Schema::hasTable('settings')) {
-                return;
+            if (! self::$settingsTableFound) {
+                if (! Schema::hasTable('settings')) {
+                    return;
+                }
+
+                self::$settingsTableFound = true;
             }
 
             $settings = MailSettings::get();
@@ -165,6 +212,41 @@ final class MailConfigurator
     private static function needsHost(string $mailer): bool
     {
         return $mailer === 'smtp';
+    }
+
+    /**
+     * A cheap stand-in for "the mail configuration as it stands right now".
+     *
+     * Compared either side of a fold so the manager is only disturbed when a
+     * value genuinely moved. Under Octane this runs per request, and rebuilding
+     * a transport on every one of them to discover nothing had changed would be
+     * a poor trade for a setting an administrator edits twice a year.
+     */
+    private function fingerprint(): string
+    {
+        return md5(serialize([
+            $this->config->get('mail'),
+            $this->config->get('services.ses'),
+            $this->config->get('services.mailgun'),
+            $this->config->get('services.resend'),
+            $this->config->get('services.postmark'),
+        ]));
+    }
+
+    /**
+     * Discards mailers built from the previous configuration.
+     *
+     * Asked of the container only when something has already resolved the
+     * manager: at boot nothing has, and resolving it here to throw its contents
+     * away would build it for no reason.
+     */
+    private function forgetResolvedMailers(): void
+    {
+        if (! $this->app->resolved('mail.manager')) {
+            return;
+        }
+
+        $this->app->make('mail.manager')->forgetMailers();
     }
 
     /**

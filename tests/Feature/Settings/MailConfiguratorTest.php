@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 use Composer\InstalledVersions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Mail;
+use Laravel\Octane\Events\RequestReceived;
 use Magna\Admin\Pages\MailSettingsPage;
 use Magna\Admin\Pages\SettingsPage;
 use Magna\Settings\MailConfigurator;
@@ -303,4 +307,77 @@ it('offers the test send from the page an administrator can actually reach', fun
 
     expect($actions->isPublic() || $actions->isProtected())->toBeTrue()
         ->and(method_exists(SettingsPage::class, 'sendTestEmail'))->toBeTrue();
+});
+
+/*
+|--------------------------------------------------------------------------
+| A server that boots once
+|--------------------------------------------------------------------------
+|
+| Under Octane a worker survives thousands of requests and Octane restores the
+| configuration it snapshotted at boot before each one. Folded over the config
+| in boot() alone, the panel's mail settings reached exactly one process at one
+| moment. A Roya administrator pasted a corrected Resend key and kept getting
+|
+|     535 Missing password
+|
+| for three days, because the worker had started before the key existed. The
+| test button reported success throughout: MailTester folds the settings over
+| the config itself before sending, so it exercised a path real mail never took.
+*/
+
+it('reapplies the stored settings when Octane hands the worker a request', function (): void {
+    configureMail([
+        'driver' => 'smtp',
+        'host' => 'relay.profilebees.test',
+        'port' => 587,
+        'username' => 'relay',
+        'password' => 'corrected-secret',
+    ]);
+
+    // What Octane does between requests: put back the configuration the worker
+    // booted with, which on the install that found this predated the password.
+    config()->set('mail.mailers.smtp.password', '');
+    config()->set('mail.default', 'log');
+
+    Event::dispatch(new RequestReceived(app(), app(), Request::create('/')));
+
+    expect(config('mail.mailers.smtp.password'))->toBe('corrected-secret')
+        ->and(config('mail.default'))->toBe('smtp');
+});
+
+it('drops a mailer built from credentials that have since been corrected', function (): void {
+    configureMail([
+        'driver' => 'smtp',
+        'host' => 'relay.profilebees.test',
+        'port' => 587,
+        'username' => 'relay',
+        'password' => 'the-wrong-secret',
+    ]);
+
+    // MailManager caches what it builds. Without this the corrected password
+    // would sit in config while every send went through the old transport.
+    $built = Mail::mailer('smtp');
+
+    configureMail(['password' => 'corrected-secret']);
+
+    expect(Mail::mailer('smtp'))->not->toBe($built);
+});
+
+it('leaves the resolved mailer alone when nothing actually changed', function (): void {
+    configureMail([
+        'driver' => 'smtp',
+        'host' => 'relay.profilebees.test',
+        'port' => 587,
+        'username' => 'relay',
+        'password' => 'unchanged-secret',
+    ]);
+
+    $built = Mail::mailer('smtp');
+
+    // The common case by a wide margin: one of these per request, forever,
+    // against a settings row nobody has touched.
+    app(MailConfigurator::class)->apply();
+
+    expect(Mail::mailer('smtp'))->toBe($built);
 });

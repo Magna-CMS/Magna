@@ -45,6 +45,44 @@ class MediaIngestor
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        /*
+         * The rest of what a working document library is asked to hold.
+         *
+         * Added because a staff collection that refuses a phone photo, a slide
+         * deck or a CSV is not a library. The allowlist stays an allowlist: it
+         * is still content-sniffed rather than trusted from the extension, and
+         * what is deliberately absent is anything a browser or a host can
+         * execute — .exe, .msi, .sh, .bat, PHP and JavaScript source, HTML.
+         * Those travel inside a zip, which is allowed, rather than being served
+         * back as themselves.
+         *
+         * Images here that are not in IMAGE_MIMES below are stored verbatim,
+         * because no driver on a stock install can decode them to re-encode
+         * them. They are served as attachments, so bytes that turn out to be
+         * something other than a picture are downloaded rather than rendered.
+         */
+        'image/heic',
+        'image/heif',
+        'image/tiff',
+        'image/bmp',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.oasis.opendocument.text',
+        'application/vnd.oasis.opendocument.spreadsheet',
+        'application/vnd.oasis.opendocument.presentation',
+        'application/rtf',
+        'text/csv',
+        'text/plain',
+        'application/x-7z-compressed',
+        'application/vnd.rar',
+        'application/gzip',
+        'application/x-tar',
+        'video/quicktime',
+        'video/x-msvideo',
+        'video/x-matroska',
+        'audio/mp4',
+        'audio/flac',
+        'audio/aac',
     ];
 
     /**
@@ -72,16 +110,53 @@ class MediaIngestor
             return $s->max_document_upload_bytes;
         }
 
-        return match ($mime) {
-            'image/svg+xml' => $s->max_svg_upload_bytes,
-            'application/pdf',
-            'application/zip',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => $s->max_document_upload_bytes,
-            default => $s->max_image_upload_bytes,
+        if ($mime === 'image/svg+xml') {
+            return $s->max_svg_upload_bytes;
+        }
+
+        // Everything that is not a picture is a document as far as the ceiling
+        // is concerned. Asked this way round rather than by listing every type,
+        // because a list is what fell out of step when the allowlist grew: a
+        // spreadsheet added to one and not the other silently inherited the
+        // image limit, which is the smaller of the two.
+        return str_starts_with($mime, 'image/')
+            ? $s->max_image_upload_bytes
+            : $s->max_document_upload_bytes;
+    }
+
+    /**
+     * Whether this build can actually decode a raster well enough to re-encode it.
+     *
+     * The re-encode is a security step, not a convenience — it is what strips
+     * EXIF and any payload smuggled into the file. It can only happen where the
+     * image driver understands the format, and a stock GD build routinely does
+     * not understand AVIF. Re-encoding was attempted regardless, so an AVIF
+     * upload failed on a server whose allowlist said it was welcome.
+     *
+     * A format this build cannot open is stored verbatim instead of refused:
+     * the collection controller serves everything but pictures and PDFs as an
+     * attachment, under nosniff and a sandboxing CSP, so bytes that are not
+     * what they claim are downloaded rather than run.
+     */
+    private function canDecodeImage(string $mime): bool
+    {
+        if (! function_exists('gd_info')) {
+            return false;
+        }
+
+        /** @var array<string, mixed> $gd */
+        $gd = gd_info();
+
+        $key = match ($mime) {
+            'image/jpeg' => 'JPEG Support',
+            'image/png' => 'PNG Support',
+            'image/gif' => 'GIF Read Support',
+            'image/webp' => 'WebP Support',
+            'image/avif' => 'AVIF Support',
+            default => null,
         };
+
+        return $key !== null && ($gd[$key] ?? false) === true;
     }
 
     /** Canonical extensions, keyed by MIME type. */
@@ -105,6 +180,28 @@ class MediaIngestor
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
         'application/vnd.ms-excel' => 'xls',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'image/heic' => 'heic',
+        'image/heif' => 'heif',
+        'image/tiff' => 'tif',
+        'image/bmp' => 'bmp',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+        'application/vnd.ms-powerpoint' => 'ppt',
+        'application/vnd.oasis.opendocument.text' => 'odt',
+        'application/vnd.oasis.opendocument.spreadsheet' => 'ods',
+        'application/vnd.oasis.opendocument.presentation' => 'odp',
+        'application/rtf' => 'rtf',
+        'text/csv' => 'csv',
+        'text/plain' => 'txt',
+        'application/x-7z-compressed' => '7z',
+        'application/vnd.rar' => 'rar',
+        'application/gzip' => 'gz',
+        'application/x-tar' => 'tar',
+        'video/quicktime' => 'mov',
+        'video/x-msvideo' => 'avi',
+        'video/x-matroska' => 'mkv',
+        'audio/mp4' => 'm4a',
+        'audio/flac' => 'flac',
+        'audio/aac' => 'aac',
     ];
 
     public function __construct(
@@ -150,8 +247,10 @@ class MediaIngestor
         $disk ??= $this->defaultDisk;
 
         // 4. Process
+        $reEncodes = in_array($mime, self::IMAGE_MIMES, true) && $this->canDecodeImage($mime);
+
         [$content, $width, $height] = match (true) {
-            in_array($mime, self::IMAGE_MIMES, true) => $this->processImage($sourcePath, $mime),
+            $reEncodes => $this->processImage($sourcePath, $mime),
             $mime === 'image/svg+xml' => $this->processSvg($sourcePath),
             default => $this->readRaw($sourcePath),
         };
@@ -176,8 +275,10 @@ class MediaIngestor
             title: $title,
         );
 
-        // 7. Dispatch conversions for raster images (SVG/PDF do not get presets)
-        if (in_array($mime, self::IMAGE_MIMES, true)) {
+        // 7. Dispatch conversions for raster images (SVG/PDF do not get presets).
+        // Only for the ones actually decoded above: a preset job on a format the
+        // driver cannot open is a queued failure per upload, forever.
+        if ($reEncodes) {
             $this->dispatchConversions($media);
         }
 

@@ -16,6 +16,7 @@ use Magna\Media\MediaConversion;
 use Magna\Media\MediaIngestor;
 use Magna\Media\MediaUrlResolver;
 use Magna\Media\MediaViewObject;
+use Magna\Settings\MediaSettings;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
@@ -407,4 +408,73 @@ it('magna:media:reconvert queues jobs for all image media', function (): void {
 
     // 2 image records × 3 default presets (thumb, card, hero) = 6 jobs
     Queue::assertPushed(ProcessMediaConversionJob::class, 6);
+});
+
+/*
+|--------------------------------------------------------------------------
+| The library holds what a library is asked to hold
+|--------------------------------------------------------------------------
+|
+| Roya's staff could not put a phone photo, a slide deck or a CSV into a
+| collection: the ingestor refused everything outside a short allowlist, and the
+| collection controller turned that refusal into "That kind of file cannot be
+| uploaded here" against the file field. The allowlist is still an allowlist —
+| what stays out is anything a browser or a host can execute.
+*/
+
+it('accepts the document and media types an office actually exchanges', function (string $mime, string $bytes): void {
+    Storage::fake('public');
+
+    $path = tempnam(sys_get_temp_dir(), 'ingest');
+    file_put_contents($path, $bytes);
+
+    $media = app(MediaIngestor::class)->ingest($path, 'attachment');
+
+    expect($media->mime_type)->toBe($mime);
+
+    // Stored verbatim: nothing here is a raster this build can decode, so
+    // re-encoding it would be a failure rather than a safeguard.
+    expect(Storage::disk('public')->get($media->path))->toBe($bytes);
+
+    @unlink($path);
+})->with([
+    'plain text' => ['text/plain', 'a note
+'],
+    'csv' => ['text/csv', 'one,two
+1,2
+'],
+]);
+
+it('still refuses what a browser or a host can execute', function (): void {
+    Storage::fake('public');
+
+    $path = tempnam(sys_get_temp_dir(), 'ingest');
+    file_put_contents($path, '<?php echo "owned";');
+
+    expect(fn () => app(MediaIngestor::class)->ingest($path, 'payload.php'))
+        ->toThrow(MimeTypeNotAllowedException::class);
+
+    @unlink($path);
+});
+
+it('sizes a document against the document ceiling, not the image one', function (): void {
+    // The two ceilings ship different defaults, and every non-image type used to
+    // fall through a match arm to the image one — so a type added to the
+    // allowlist and not to that list silently inherited the smaller limit.
+    $settings = MediaSettings::get();
+    $settings->max_image_upload_bytes = 1_048_576;
+    $settings->max_document_upload_bytes = 8_388_608;
+    $settings->save();
+
+    Storage::fake('public');
+
+    $path = tempnam(sys_get_temp_dir(), 'ingest');
+    file_put_contents($path, str_repeat('x', 2_000_000).'
+');
+
+    $media = app(MediaIngestor::class)->ingest($path, 'big.txt');
+
+    expect($media->mime_type)->toBe('text/plain');
+
+    @unlink($path);
 });
