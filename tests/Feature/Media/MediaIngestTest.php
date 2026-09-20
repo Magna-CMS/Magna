@@ -271,6 +271,71 @@ it('accepts an image within the pixel dimension limit', function (): void {
     expect($media)->not->toBeNull();
 });
 
+// ── Privacy: metadata on verbatim-stored rasters ─────────────────────────────
+
+/** Minimal little-endian TIFF (header + one-entry IFD); finfo says image/tiff. */
+function mediaTestTiff(): string
+{
+    return "II\x2A\x00\x08\x00\x00\x00"
+        ."\x01\x00"
+        ."\x00\x01\x03\x00\x01\x00\x00\x00\x01\x00\x00\x00"
+        ."\x00\x00\x00\x00";
+}
+
+/*
+ * A verbatim-stored raster never goes through the metadata-stripping
+ * re-encode, and a phone photo's EXIF carries GPS. When a stripper exists
+ * the stored bytes are the stripped ones; when none exists the original
+ * bytes are kept — they are only served as an attachment either way.
+ * The stripper itself is faked: whether this runner has Imagick must not
+ * decide what the pipeline's contract is.
+ */
+it('stores the stripped bytes for a verbatim raster when a stripper is available', function (): void {
+    Storage::fake('public');
+    Queue::fake();
+
+    $ingestor = new class(app(ConversionPresetRegistry::class)) extends MediaIngestor
+    {
+        protected function stripMetadata(string $content): ?string
+        {
+            return 'STRIPPED-BYTES';
+        }
+    };
+
+    $path = mediaWriteTemp(mediaTestTiff());
+
+    try {
+        $media = $ingestor->ingest($path, 'scan.tif');
+    } finally {
+        unlink($path);
+    }
+
+    expect(Storage::disk('public')->get($media->path))->toBe('STRIPPED-BYTES');
+});
+
+it('keeps a verbatim raster byte-identical when no stripper is available', function (): void {
+    Storage::fake('public');
+    Queue::fake();
+
+    $ingestor = new class(app(ConversionPresetRegistry::class)) extends MediaIngestor
+    {
+        protected function stripMetadata(string $content): ?string
+        {
+            return null; // no Imagick, or a container it cannot parse
+        }
+    };
+
+    $path = mediaWriteTemp(mediaTestTiff());
+
+    try {
+        $media = $ingestor->ingest($path, 'scan.tif');
+    } finally {
+        unlink($path);
+    }
+
+    expect(Storage::disk('public')->get($media->path))->toBe(mediaTestTiff());
+});
+
 /*
  * Regression: an IMAGE_MIMES raster on a build without its decoder (AVIF on
  * stock GD is the common case) used to fall through to verbatim storage —

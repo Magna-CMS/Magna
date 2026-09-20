@@ -276,6 +276,7 @@ class MediaIngestor
         [$content, $width, $height] = match (true) {
             $reEncodes => $this->processImage($sourcePath, $mime),
             $mime === 'image/svg+xml' => $this->processSvg($sourcePath),
+            str_starts_with($mime, 'image/') => $this->readRawImage($sourcePath),
             default => $this->readRaw($sourcePath),
         };
 
@@ -494,5 +495,48 @@ class MediaIngestor
         }
 
         return [$content, null, null];
+    }
+
+    /**
+     * A raster stored verbatim (HEIC, TIFF, BMP — formats GD cannot
+     * re-encode) never goes through the metadata-stripping re-encode, and a
+     * phone photo's EXIF carries GPS coordinates this CMS then republishes.
+     * When a stripper is available the metadata is removed in place; when it
+     * is not, the bytes are kept as-is — they are only ever served as an
+     * attachment (MediaTypePolicy), so this is a privacy improvement layered
+     * on an already-safe serve path, not a gate.
+     *
+     * @return array{0: string, 1: null, 2: null}
+     */
+    private function readRawImage(string $sourcePath): array
+    {
+        [$content, $width, $height] = $this->readRaw($sourcePath);
+
+        return [$this->stripMetadata($content) ?? $content, $width, $height];
+    }
+
+    /**
+     * Strip embedded metadata from an image container without re-encoding
+     * its pixels. Returns null when no stripper is available or the format
+     * cannot be parsed — the caller keeps the original bytes. Protected so a
+     * test can pin both outcomes without an Imagick build on the runner.
+     */
+    protected function stripMetadata(string $content): ?string
+    {
+        if (! class_exists(\Imagick::class)) {
+            return null;
+        }
+
+        try {
+            $image = new \Imagick;
+            $image->readImageBlob($content);
+            $image->stripImage();
+            $stripped = $image->getImagesBlob();
+            $image->clear();
+
+            return $stripped;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }
