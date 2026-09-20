@@ -53,6 +53,10 @@
 /storage/*.key
 /storage/pail
 /storage/app/plugin-manager
+# Where an interrupted plugin swap's displaced copy gets parked — a full
+# plugin tree, i.e. another repository's contents. Same reasoning as
+# /plugins-dev/ above: one wide `git add` and it is in.
+/storage/quarantine
 /vendor
 _ide_helper.php
 Homestead.json
@@ -66,8 +70,8 @@ rr
 .rr.yaml
 /test-results
 
-# Python bytecode from the site-kit build script
-website-content/build/__pycache__/
+# Marketing-site drafts and their build tooling — owner's content, kept local.
+/website-content/
 
 # Themes are first-party design work and are never published with the core.
 # bin/build-release.php already excludes them from the release zip; this keeps

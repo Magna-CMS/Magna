@@ -87,7 +87,7 @@
             "git config core.hooksPath .githooks"
         ],
         "post-install-cmd": [
-            "git config core.hooksPath .githooks"
+            "git config core.hooksPath .githooks || exit 0"
         ],
         "post-root-package-install": [
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
