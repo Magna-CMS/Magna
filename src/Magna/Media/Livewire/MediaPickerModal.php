@@ -6,6 +6,7 @@ namespace Magna\Media\Livewire;
 
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -83,6 +84,10 @@ class MediaPickerModal extends Component
     #[On('magna:open-media-picker')]
     public function openPicker(string $target = '', string $mimeFilter = 'image/*'): void
     {
+        // Same abilities as the HTTP media endpoints: being able to open an
+        // editor page is not being allowed to browse the whole library.
+        Gate::authorize('media.view');
+
         $this->target = $target;
         $this->mimeFilter = $mimeFilter;
         $this->loadFiles();
@@ -99,6 +104,10 @@ class MediaPickerModal extends Component
 
     public function loadFiles(): void
     {
+        // Public Livewire method — directly callable from the browser, so it
+        // carries its own gate rather than trusting openPicker() ran first.
+        Gate::authorize('media.view');
+
         $query = Media::query()
             ->whereNull('deleted_at')
             ->orderByDesc('created_at');
@@ -129,6 +138,10 @@ class MediaPickerModal extends Component
 
     public function updatedDeviceUpload(): void
     {
+        // The HTTP upload endpoint gates on media.upload; this Livewire path
+        // ingests the same way and must clear the same bar.
+        Gate::authorize('media.upload');
+
         if ($this->deviceUpload === null) {
             return;
         }
@@ -153,6 +166,10 @@ class MediaPickerModal extends Component
     /** Called from the Alpine "Choose" button or on double-click. */
     public function confirm(string $path, string $disk = 'public'): void
     {
+        // Resolves a media row (and its id) for an arbitrary path — same
+        // visibility as browsing, so the same gate.
+        Gate::authorize('media.view');
+
         $url = Storage::disk($disk)->url($path);
 
         // Include the media id so hosts can store a stable reference (block

@@ -374,6 +374,65 @@ it('authorizes in every public management controller action', function (): void 
 });
 
 /**
+ * A Livewire public method that touches data carries its own gate.
+ *
+ * MediaPickerModal shipped listing the entire media table and ingesting
+ * device uploads from public Livewire methods with no permission check —
+ * while the HTTP endpoints for the same operations gate on media.view and
+ * media.upload. The management-controller rule above never saw it: its glob
+ * is controllers only. Every public method in a Magna Livewire component
+ * whose own body reaches for persistence or storage (Model::query/create/
+ * find, Storage::, ingest, delete/update/save calls) must contain a
+ * Gate::authorize, or be listed here with the reason it is exempt.
+ *
+ * Limitation, on purpose: access buried in a private helper is not seen —
+ * the slice scan reads each public method's own body. That is the same
+ * bargain the controller rule makes; the point is that the obvious direct
+ * shape can never ship ungated again.
+ */
+it('authorizes every Livewire public method that touches data', function (): void {
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $exempt = [
+        // Global-by-design dismissal: the banner renders only on the
+        // authenticated dashboard, every panel user it shows to is meant to
+        // be able to dismiss the notice for the install (stacking banners
+        // was ruled out), and there is no per-user state to authorize.
+        'Notices/Livewire/DashboardNoticesBanner.php::dismiss',
+    ];
+
+    $files = glob($srcDir.'/*/Livewire/{*.php,*/*.php}', GLOB_BRACE) ?: [];
+    expect($files)->not->toBe([]);
+
+    $touchesData = '/(::query\(|::create\(|::find\(|Storage::|->ingest\(|ingest\(|->delete\(|->update\(|->save\()/';
+    $offenders = [];
+
+    foreach ($files as $file) {
+        $source = (string) file_get_contents($file);
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file, strlen($srcDir) + 1));
+
+        $slices = preg_split('/(?=(?:public|protected|private)\s+(?:static\s+)?function\s)/', $source) ?: [];
+
+        foreach ($slices as $slice) {
+            if (preg_match('/^public\s+(?:static\s+)?function\s+(\w+)/', $slice, $matches) !== 1) {
+                continue;
+            }
+
+            if (preg_match($touchesData, $slice) !== 1 || str_contains($slice, 'Gate::authorize')) {
+                continue;
+            }
+
+            $key = $relative.'::'.$matches[1];
+            if (! in_array($key, $exempt, true)) {
+                $offenders[] = $key;
+            }
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
  * Error paths THROW; only success has a return type.
  *
  * A HELPER returning Response|SomethingElse forces every caller into an
