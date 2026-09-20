@@ -133,12 +133,17 @@ class MediaIngestor
      * not understand AVIF. Re-encoding was attempted regardless, so an AVIF
      * upload failed on a server whose allowlist said it was welcome.
      *
-     * A format this build cannot open is stored verbatim instead of refused:
-     * the collection controller serves everything but pictures and PDFs as an
-     * attachment, under nosniff and a sandboxing CSP, so bytes that are not
-     * what they claim are downloaded rather than run.
+     * A format this build cannot open is REFUSED, with a message naming the
+     * missing driver support. It used to be stored verbatim on the theory the
+     * serve path forces a download — but the browser-decodable formats this
+     * method covers are exactly the ones MediaTypePolicy serves inline, so a
+     * verbatim copy would render in our origin with whatever payload the
+     * re-encode exists to strip.
+     *
+     * Protected so a test can simulate a build without the decoder — gd_info()
+     * is a global that cannot be faked from a test.
      */
-    private function canDecodeImage(string $mime): bool
+    protected function canDecodeImage(string $mime): bool
     {
         if (! function_exists('gd_info')) {
             return false;
@@ -246,8 +251,27 @@ class MediaIngestor
 
         $disk ??= $this->defaultDisk;
 
+        // 3b. Pixel-footprint guard for EVERY raster, not just the re-encoded
+        // ones — a verbatim-stored TIFF can declare a pixel flood too, and
+        // getimagesize() only reads the header (formats it cannot parse are
+        // skipped, not refused; they are never decoded server-side).
+        if (str_starts_with($mime, 'image/') && $mime !== 'image/svg+xml') {
+            $this->guardPixelFootprint($sourcePath);
+        }
+
         // 4. Process
-        $reEncodes = in_array($mime, self::IMAGE_MIMES, true) && $this->canDecodeImage($mime);
+        $reEncodes = in_array($mime, self::IMAGE_MIMES, true);
+
+        // A browser-decodable raster this build cannot re-encode is refused,
+        // not stored verbatim: these are the formats served inline, and the
+        // re-encode is what strips whatever a crafted file smuggles in.
+        if ($reEncodes && ! $this->canDecodeImage($mime)) {
+            throw new MediaIngestException(
+                "This server's image driver cannot decode {$mime}, so the upload cannot be "
+                .'re-encoded for safe inline display. Install GD or Imagick support for this '
+                .'format, or convert the image before uploading.'
+            );
+        }
 
         [$content, $width, $height] = match (true) {
             $reEncodes => $this->processImage($sourcePath, $mime),
@@ -369,6 +393,20 @@ class MediaIngestor
      */
     private const MAX_IMAGE_PIXELS = 40_000_000; // e.g. ~8000x5000
 
+    /** Dimension guard BEFORE any decode — see MAX_IMAGE_PIXELS above. */
+    private function guardPixelFootprint(string $sourcePath): void
+    {
+        $dimensions = @getimagesize($sourcePath);
+
+        if (is_array($dimensions) && $dimensions[0] > 0 && $dimensions[1] > 0
+            && $dimensions[0] * $dimensions[1] > self::MAX_IMAGE_PIXELS
+        ) {
+            throw new MediaIngestException(
+                "Image dimensions ({$dimensions[0]}x{$dimensions[1]}) exceed the ".number_format(self::MAX_IMAGE_PIXELS).'-pixel limit.',
+            );
+        }
+    }
+
     /**
      * Re-encode a raster image to strip EXIF, embedded scripts, and ICC payloads.
      * Creating a brand-new image from raw pixel data guarantees no metadata survives.
@@ -377,16 +415,6 @@ class MediaIngestor
      */
     private function processImage(string $sourcePath, string $mime): array
     {
-        // Dimension guard BEFORE decode — see MAX_IMAGE_PIXELS docblock.
-        $dimensions = @getimagesize($sourcePath);
-        if (is_array($dimensions) && $dimensions[0] > 0 && $dimensions[1] > 0
-            && $dimensions[0] * $dimensions[1] > self::MAX_IMAGE_PIXELS
-        ) {
-            throw new MediaIngestException(
-                "Image dimensions ({$dimensions[0]}x{$dimensions[1]}) exceed the ".number_format(self::MAX_IMAGE_PIXELS).'-pixel limit.',
-            );
-        }
-
         $manager = new ImageManager(new Driver);
 
         try {

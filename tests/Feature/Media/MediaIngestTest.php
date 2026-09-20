@@ -271,6 +271,37 @@ it('accepts an image within the pixel dimension limit', function (): void {
     expect($media)->not->toBeNull();
 });
 
+/*
+ * Regression: an IMAGE_MIMES raster on a build without its decoder (AVIF on
+ * stock GD is the common case) used to fall through to verbatim storage —
+ * skipping the payload-stripping re-encode and the dimension guard — while
+ * staying on the inline-safe serve path. The re-encode is the security step;
+ * an upload it cannot run on must be refused, not quietly stored.
+ */
+it('refuses a decodable-class raster when the build lacks its decoder', function (): void {
+    Storage::fake('public');
+    Queue::fake();
+
+    $ingestor = new class(app(ConversionPresetRegistry::class)) extends MediaIngestor
+    {
+        protected function canDecodeImage(string $mime): bool
+        {
+            return false; // simulate e.g. a stock GD build without AVIF support
+        }
+    };
+
+    $path = mediaWriteTemp(mediaTestJpeg());
+
+    try {
+        expect(fn () => $ingestor->ingest($path, 'photo.jpg'))
+            ->toThrow(MediaIngestException::class, 'cannot decode image/jpeg');
+    } finally {
+        unlink($path);
+    }
+
+    Storage::disk('public')->assertDirectoryEmpty('media');
+});
+
 // ── Conversions: queued ───────────────────────────────────────────────────────
 
 it('dispatches a conversion job per preset when a JPEG is ingested', function (): void {
