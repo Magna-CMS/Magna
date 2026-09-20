@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
 use Magna\Media\Media;
+use Magna\Media\MediaTypePolicy;
 use Magna\Media\MediaUrlResolver;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -21,7 +22,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * Used by two routes:
  *   magna.media.serve        — signed, expiring (private disks)
- *   magna.media.serve.public — unsigned, permanent (public disk SVGs only)
+ *   magna.media.serve.public — unsigned, permanent (public-disk media that
+ *                              must not render inline — see MediaTypePolicy)
  *
  * That second route is the reason this controller enforces its own contract
  * rather than trusting the route definition: it has no signature, so without
@@ -59,13 +61,15 @@ class MediaServeController extends Controller
     }
 
     /**
-     * The unsigned route exists for exactly one case — an SVG on a public disk,
-     * which the resolver routes here only so the attachment header is
-     * guaranteed. Anything else must go through the signed route.
+     * The unsigned route exists for exactly one case — public-disk media the
+     * resolver routes here so the attachment header is guaranteed, i.e.
+     * everything MediaTypePolicy refuses to render inline. Inline-safe types
+     * keep their raw disk URL and never need this route; on a private disk
+     * everything must go through the signed route.
      */
     private function isPubliclyServable(Media $media): bool
     {
-        return $media->mime_type === 'image/svg+xml'
+        return ! MediaTypePolicy::inlineSafe((string) $media->mime_type)
             && in_array($media->disk, self::PUBLIC_DISKS, true);
     }
 
@@ -102,12 +106,7 @@ class MediaServeController extends Controller
     {
         $headers = ['X-Content-Type-Options' => 'nosniff'];
 
-        $inlineSafe = [
-            'image/png', 'image/jpeg', 'image/gif', 'image/webp',
-            'image/avif', 'application/pdf', 'video/mp4', 'audio/mpeg',
-        ];
-
-        if (! in_array((string) $media->mime_type, $inlineSafe, true)) {
+        if (! MediaTypePolicy::inlineSafe((string) $media->mime_type)) {
             $filename = $media->original_filename ?? basename($media->path);
             $headers['Content-Disposition'] = 'attachment; filename="'.addslashes($filename).'"';
         }

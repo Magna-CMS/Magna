@@ -38,10 +38,14 @@ class MediaUrlResolver
             return rtrim($cdnUrl, '/').'/'.ltrim($path, '/');
         }
 
-        // SVGs on non-CDN disks are routed through the serve controller so that
-        // Content-Disposition: attachment is always sent, regardless of web server.
-        // This prevents inline rendering even if the sanitizer is ever bypassed.
-        if ($media->mime_type === 'image/svg+xml' && Route::has('magna.media.serve.public')) {
+        // Anything the serve controller would refuse to render inline must
+        // actually reach that controller — a raw disk URL is the web server
+        // streaming bytes with no nosniff and no attachment header, which
+        // voids the whole policy for exactly the types it exists for (SVG,
+        // and every format the ingestor stores verbatim). No preset in the
+        // route: conversions only exist for re-encoded rasters, which are
+        // inline-safe and keep their raw URL above.
+        if (! MediaTypePolicy::inlineSafe((string) $media->mime_type) && Route::has('magna.media.serve.public')) {
             return URL::route('magna.media.serve.public', ['media' => $media->id]);
         }
 

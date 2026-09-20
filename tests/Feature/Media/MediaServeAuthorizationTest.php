@@ -6,17 +6,19 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Magna\Media\Media;
+use Magna\Media\MediaUrlResolver;
 use Tests\TestCase;
 
 // Feature/Media declares its base class per file — see tests/Pest.php.
 uses(TestCase::class, RefreshDatabase::class);
 
 /**
- * `/_media/pub/{media}` has no signature and no auth — it exists solely so a
- * public-disk SVG is always served with Content-Disposition: attachment.
- * Nothing but the controller enforces that narrow contract, and the failure
- * mode if it stops doing so is that every private-disk file becomes readable
- * by anyone holding an ID.
+ * `/_media/pub/{media}` has no signature and no auth — it exists solely so
+ * public-disk media that must not render inline (SVG, and every type the
+ * ingestor stores verbatim — see MediaTypePolicy) is always served with
+ * Content-Disposition: attachment. Nothing but the controller enforces that
+ * narrow contract, and the failure mode if it stops doing so is that every
+ * private-disk file becomes readable by anyone holding an ID.
  */
 function mediaRow(array $overrides = []): Media
 {
@@ -54,7 +56,7 @@ it('refuses to serve a private-disk file on the unsigned route', function (): vo
         ->assertNotFound();
 });
 
-it('refuses to serve a non-SVG on the unsigned route', function (): void {
+it('refuses to serve an inline-safe type on the unsigned route', function (): void {
     Storage::disk('public')->put('media/photo.jpg', 'jpeg-bytes');
 
     $media = mediaRow([
@@ -63,8 +65,53 @@ it('refuses to serve a non-SVG on the unsigned route', function (): void {
         'original_filename' => 'photo.jpg',
     ]);
 
+    // Inline-safe media keeps its raw disk URL and never needs this route —
+    // anything reaching it with such a type is probing, not the resolver.
     $this->get(route('magna.media.serve.public', ['media' => $media->id]))
         ->assertNotFound();
+});
+
+/*
+ * Regression: publicUrl() used to route ONLY SVG through the serve
+ * controller — every other type got a raw disk URL, i.e. the web server
+ * streaming bytes with no nosniff and no attachment header. For the types
+ * the ingestor stores verbatim (HEIC, text, archives...) those headers are
+ * the entire safety story.
+ */
+it('serves a verbatim-stored type as an attachment on the unsigned route', function (string $mime, string $path, string $filename, string $bytes): void {
+    Storage::disk('public')->put($path, $bytes);
+
+    $media = mediaRow([
+        'mime_type' => $mime,
+        'path' => $path,
+        'original_filename' => $filename,
+    ]);
+
+    $this->get(route('magna.media.serve.public', ['media' => $media->id]))
+        ->assertOk()
+        ->assertHeader('x-content-type-options', 'nosniff')
+        ->assertDownload($filename);
+})->with([
+    'plain text' => ['text/plain', 'media/notes.txt', 'notes.txt', '<html><script>alert(1)</script>'],
+    'HEIC photo' => ['image/heic', 'media/photo.heic', 'photo.heic', 'heic-bytes'],
+]);
+
+it('resolves a public URL through the serve controller for non-inline-safe types only', function (): void {
+    $text = mediaRow([
+        'mime_type' => 'text/plain',
+        'path' => 'media/notes.txt',
+        'original_filename' => 'notes.txt',
+    ]);
+    $image = mediaRow([
+        'mime_type' => 'image/png',
+        'path' => 'media/photo.png',
+        'original_filename' => 'photo.png',
+    ]);
+
+    $resolver = app(MediaUrlResolver::class);
+
+    expect($resolver->publicUrl($text))->toBe(route('magna.media.serve.public', ['media' => $text->id]))
+        ->and($resolver->publicUrl($image))->toBe(Storage::disk('public')->url('media/photo.png'));
 });
 
 it('sends nosniff on ordinary signed delivery too', function (): void {

@@ -57,10 +57,11 @@ class MediaServiceProvider extends ServiceProvider
             ->middleware(['signed', SubstituteBindings::class])
             ->name('magna.media.serve');
 
-        // Public (unsigned) route used exclusively for SVGs on public disks.
-        // SVG media IDs are ULIDs — 128-bit random identifiers — so enumeration
+        // Public (unsigned) route for public-disk media that must not render
+        // inline (SVG and every verbatim-stored type — see MediaTypePolicy).
+        // Media IDs are ULIDs — 128-bit random identifiers — so enumeration
         // is not a practical concern. The controller adds Content-Disposition:
-        // attachment so browsers cannot render SVGs inline from our origin.
+        // attachment so browsers cannot render these inline from our origin.
         Route::get('/_media/pub/{media}', MediaServeController::class)
             ->middleware(SubstituteBindings::class)
             ->name('magna.media.serve.public');
