@@ -73,3 +73,26 @@ it('lets a response with its own policy keep it', function (): void {
 
     expect($csp)->toBe("frame-ancestors 'self'");
 });
+
+/*
+ * Regression: the frontend had NO Content-Security-Policy at all — the
+ * admin CSP is panel-only, while public pages raw-echo theme layout HTML
+ * and resolver output. The floor policy blocks plugin-style embeds and an
+ * injected <base> re-rooting every relative URL; script-src is deliberately
+ * absent until the themes' script sources are inventoried.
+ */
+it('gives a frontend response without its own policy the floor CSP', function (): void {
+    Route::get('/_test_floor_csp', fn () => 'ok')->middleware('web');
+
+    $this->get('/_test_floor_csp')
+        ->assertHeader('Content-Security-Policy', "object-src 'none'; base-uri 'self'");
+});
+
+it('does not override a theme or panel policy with the floor CSP', function (): void {
+    Route::get('/_test_theme_csp', function () {
+        return response('ok', 200, ['Content-Security-Policy' => "default-src 'self'"]);
+    })->middleware('web');
+
+    $this->get('/_test_theme_csp')
+        ->assertHeader('Content-Security-Policy', "default-src 'self'");
+});
