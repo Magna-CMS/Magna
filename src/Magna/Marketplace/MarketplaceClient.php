@@ -225,21 +225,9 @@ class MarketplaceClient
      */
     private function fetch(string $path, array $query = []): ?array
     {
-        try {
-            $response = Http::timeout(Marketplace::REQUEST_TIMEOUT)
-                ->acceptJson()
-                ->get(Marketplace::API_BASE.$path, ['magna' => MagnaServiceProvider::VERSION] + $query);
-
-            if (! $response->successful()) {
-                return null;
-            }
-
-            $json = $response->json();
-
-            return is_array($json) ? $json : null;
-        } catch (\Throwable) {
-            return null;
-        }
+        return MarketplaceHttp::jsonOrNull(fn () => Http::timeout(Marketplace::REQUEST_TIMEOUT)
+            ->acceptJson()
+            ->get(Marketplace::API_BASE.$path, ['magna' => MagnaServiceProvider::VERSION] + $query));
     }
 
     /**

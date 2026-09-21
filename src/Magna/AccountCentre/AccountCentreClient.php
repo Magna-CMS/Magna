@@ -7,6 +7,7 @@ namespace Magna\AccountCentre;
 use Illuminate\Support\Facades\Http;
 use Magna\Licensing\SignedPayload;
 use Magna\Marketplace\Marketplace;
+use Magna\Marketplace\MarketplaceHttp;
 
 /**
  * Talks to Update Manager's Magna Account endpoints on managemagna.jrstudios.dev
@@ -122,39 +123,21 @@ class AccountCentreClient
      */
     private function post(string $path, array $payload, ?string $token = null): ?array
     {
-        try {
+        return MarketplaceHttp::jsonOrNull(function () use ($path, $payload, $token) {
             $request = Http::timeout(Marketplace::REQUEST_TIMEOUT)->acceptJson()->asJson();
             if ($token !== null) {
                 $request = $request->withToken($token);
             }
 
-            $response = $request->post(Marketplace::API_BASE.$path, $payload);
-            if (! $response->successful()) {
-                return null;
-            }
-
-            $json = $response->json();
-
-            return is_array($json) ? $json : null;
-        } catch (\Throwable) {
-            return null;
-        }
+            return $request->post(Marketplace::API_BASE.$path, $payload);
+        });
     }
 
     /** @return array<array-key, mixed>|null */
     private function get(string $path, string $token): ?array
     {
-        try {
-            $response = Http::timeout(Marketplace::REQUEST_TIMEOUT)->acceptJson()->withToken($token)->get(Marketplace::API_BASE.$path);
-            if (! $response->successful()) {
-                return null;
-            }
-
-            $json = $response->json();
-
-            return is_array($json) ? $json : null;
-        } catch (\Throwable) {
-            return null;
-        }
+        return MarketplaceHttp::jsonOrNull(
+            fn () => Http::timeout(Marketplace::REQUEST_TIMEOUT)->acceptJson()->withToken($token)->get(Marketplace::API_BASE.$path),
+        );
     }
 }

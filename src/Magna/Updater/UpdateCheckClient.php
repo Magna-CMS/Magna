@@ -7,6 +7,7 @@ namespace Magna\Updater;
 use Illuminate\Support\Facades\Http;
 use Magna\MagnaServiceProvider;
 use Magna\Marketplace\Marketplace;
+use Magna\Marketplace\MarketplaceHttp;
 use Magna\Notices\DashboardNotice;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\InstallFingerprint;
@@ -160,21 +161,9 @@ class UpdateCheckClient
      */
     private function post(string $path, array $payload): ?array
     {
-        try {
-            $response = Http::timeout(Marketplace::REQUEST_TIMEOUT)
-                ->acceptJson()
-                ->asJson()
-                ->post(Marketplace::API_BASE.$path, $payload);
-
-            if (! $response->successful()) {
-                return null;
-            }
-
-            $json = $response->json();
-
-            return is_array($json) ? $json : null;
-        } catch (\Throwable) {
-            return null;
-        }
+        return MarketplaceHttp::jsonOrNull(fn () => Http::timeout(Marketplace::REQUEST_TIMEOUT)
+            ->acceptJson()
+            ->asJson()
+            ->post(Marketplace::API_BASE.$path, $payload));
     }
 }
