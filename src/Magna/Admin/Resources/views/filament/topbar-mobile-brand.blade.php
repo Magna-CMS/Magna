@@ -4,5 +4,5 @@
      sidebar-toggle button and the search bar) and the lg+ display:none are in
      theme.css under "Mobile topbar brand mark". --}}
 <div class="fi-topbar-mobile-brand">
-    @include('filament.magna.brand')
+    @include('magna::filament.brand')
 </div>

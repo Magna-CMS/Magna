@@ -755,6 +755,56 @@ it('writes no PHP source line wider than the ceiling', function (): void {
 });
 
 /**
+ * A view core renders must live where a core update delivers it.
+ *
+ * CoreUpdater overlays a fixed list of core-owned paths — src/Magna, app,
+ * bootstrap, routes, database/migrations, public/build, public/fonts — and
+ * `resources/` is not among them. Three render-hook partials were added under
+ * resources/views/filament/magna/ in 1.4.0; the code that renders them shipped
+ * with src/Magna and the views did not, so every updated site answered 500 on
+ * every admin page with "View [filament.magna.footer] not found" while a fresh
+ * install of the same release was fine. Core panel views now live under
+ * src/Magna/Admin/Resources/views and are addressed through the `magna::`
+ * namespace, like every other core view.
+ *
+ * Same failure as the icon-font one recorded in CoreUpdater::CORE_OWNED_PATHS:
+ * code arrives on an update, the file it names does not. Keeping core's views
+ * out of `resources/` is what makes that unrepeatable, so this asserts it
+ * rather than trusting the next person to remember.
+ */
+it('keeps every view core renders on a path a core update replaces', function (): void {
+    $root = dirname(__DIR__, 3);
+
+    $stray = glob($root.'/resources/views/**/*.blade.php', GLOB_BRACE) ?: [];
+    $stray = array_merge($stray, glob($root.'/resources/views/*.blade.php') ?: []);
+
+    expect($stray)->toBe([], 'Core views belong under src/Magna/Admin/Resources/views — resources/ is not a core-owned update path.');
+
+    // And nothing in core may reach for one by the old unnamespaced path —
+    // in PHP or in Blade. The Blade half is not hypothetical: the partial
+    // that @include()s the brand mark was missed when the rest moved, which
+    // reproduced the whole failure from a file that had already been fixed.
+    // `filament.magna.pages.*` is excluded because those are ROUTE names.
+    $offenders = [];
+
+    foreach ((new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root.'/src/Magna', FilesystemIterator::SKIP_DOTS)
+    )) as $file) {
+        if (! $file instanceof SplFileInfo || ! in_array($file->getExtension(), ['php'], true)) {
+            continue;
+        }
+
+        $source = (string) file_get_contents($file->getPathname());
+
+        if (preg_match("/(?:view|@include(?:If|When)?)\(\s*'filament\.magna\.(?!pages\.)/", $source) === 1) {
+            $offenders[] = str_replace($root.DIRECTORY_SEPARATOR, '', $file->getPathname());
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
  * Blade templates have a ceiling too.
  *
  * system-info.blade.php reached 775 lines, the block editor 524, the

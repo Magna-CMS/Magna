@@ -72,7 +72,7 @@
 
             <div class="relative flex flex-col items-center space-y-5">
 
-                {{-- Application branding — the real animated Magna mark (see resources/views/filament/magna/brand.blade.php), not a placeholder icon. --}}
+                {{-- Application branding — the real animated Magna mark (see Admin/Resources/views/filament/brand.blade.php), not a placeholder icon. --}}
                 <div class="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-tr from-violet-600 via-fuchsia-500 to-amber-400 p-0.5 shadow-xl shadow-violet-500/10 flex-shrink-0">
                     <div class="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center overflow-hidden relative">
                         <svg class="w-14 h-14" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">

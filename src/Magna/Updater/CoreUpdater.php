@@ -85,6 +85,17 @@ class CoreUpdater
         // no bundled/ directory, and overlay() skips paths the archive does not
         // contain, so listing it here is a no-op outside a hub.
         self::SDK_SOURCE_PATH,
+        // `resources/` is deliberately NOT here, and core keeps nothing at
+        // runtime inside it. Three render-hook partials were added under
+        // resources/views in 1.4.0; the code that renders them shipped with
+        // src/Magna and the views did not, so every updated site answered 500
+        // on every admin page — "View [filament.magna.footer] not found" —
+        // while a fresh install of the same release was perfect. Core's own
+        // panel views now live in src/Magna/Admin/Resources/views under the
+        // `magna::` namespace, and an architecture test keeps them there.
+        // Overlaying resources/ instead would put core's hands on a directory
+        // whose remaining contents are build inputs a site may legitimately
+        // customise.
     ];
 
     /**

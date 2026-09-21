@@ -140,7 +140,7 @@ class AdminPanelProvider extends PanelProvider
             // brandName intentionally omitted: the brand logo view already
             // renders the "Magna" wordmark, so setting brandName too would
             // duplicate it on the login header.
-            ->brandLogo(fn (): View => view('filament.magna.brand'))
+            ->brandLogo(fn (): View => view('magna::filament.brand'))
             ->brandLogoHeight('1.75rem')
             ->favicon(asset('favicon.svg'))
             // Filament's own topbar logo slot (.fi-topbar-start) is
@@ -152,7 +152,7 @@ class AdminPanelProvider extends PanelProvider
             // bar; hidden again at lg+ so desktop still shows just the one.
             ->renderHook(
                 PanelsRenderHook::TOPBAR_START,
-                fn (): View => view('filament.magna.topbar-mobile-brand'),
+                fn (): View => view('magna::filament.topbar-mobile-brand'),
             )
             // Render any registered login-check widgets (captcha, …) beneath the
             // sign-in form. Each check names a Blade view; a check whose provider
@@ -226,17 +226,17 @@ class AdminPanelProvider extends PanelProvider
             // Cross-panel sidebar-state repair — see the view's own comment.
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn (): View => view('filament.magna.sidebar-restore'),
+                fn (): View => view('magna::filament.sidebar-restore'),
             )
             // Settings sub-nav smooth-scroll + scroll-spy — see the view.
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn (): View => view('filament.magna.settings-subnav'),
+                fn (): View => view('magna::filament.settings-subnav'),
             )
             // Copyright footer shown at the bottom of every admin page.
             ->renderHook(
                 PanelsRenderHook::FOOTER,
-                fn (): View => view('filament.magna.footer'),
+                fn (): View => view('magna::filament.footer'),
             );
     }
 
