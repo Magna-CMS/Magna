@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Magna\Auth\Http\Middleware;
 
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
 use Magna\Auth\ApiKeyService;
+use Magna\Auth\Http\Middleware\Concerns\RespondsToApiClients;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -23,6 +22,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ApiKeyMiddleware
 {
+    use RespondsToApiClients;
+
     public function __construct(private readonly ApiKeyService $service) {}
 
     /**
@@ -48,20 +49,10 @@ class ApiKeyMiddleware
             return $this->forbidden('A management-scope key is required for this endpoint.');
         }
 
-        $rateLimitKey = 'api_key:'.$apiKey->id;
-        $limit = $apiKey->effectiveRateLimit();
-
-        if (RateLimiter::tooManyAttempts($rateLimitKey, $limit)) {
-            $retryAfter = RateLimiter::availableIn($rateLimitKey);
-
-            return response()->json(
-                ['message' => 'Too many requests.'],
-                Response::HTTP_TOO_MANY_REQUESTS,
-                ['Retry-After' => $retryAfter],
-            );
+        $limited = $this->rateLimited('api_key:'.$apiKey->id, $apiKey->effectiveRateLimit());
+        if ($limited !== null) {
+            return $limited;
         }
-
-        RateLimiter::hit($rateLimitKey, 60);
 
         $apiKey->forceFill(['last_used_at' => now()])->save();
 
@@ -69,15 +60,5 @@ class ApiKeyMiddleware
         $request->attributes->set('magna_api_key', $apiKey);
 
         return $next($request);
-    }
-
-    private function unauthorized(string $message): JsonResponse
-    {
-        return response()->json(['message' => $message], Response::HTTP_UNAUTHORIZED);
-    }
-
-    private function forbidden(string $message): JsonResponse
-    {
-        return response()->json(['message' => $message], Response::HTTP_FORBIDDEN);
     }
 }
