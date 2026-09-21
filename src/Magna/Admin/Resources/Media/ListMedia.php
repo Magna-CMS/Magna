@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\On;
 use Magna\Admin\Resources\MediaResource;
 use Magna\Admin\Widgets\MediaStatsWidget;
@@ -177,8 +178,9 @@ class ListMedia extends ListRecords
         // MediaResource::canDelete() the way the table view's DeleteAction
         // correctly does — reachable via a direct Livewire call even
         // without the UI element, by anyone with media.view but not
-        // media.delete.
-        abort_unless(MediaResource::canDelete($media), 403);
+        // media.delete. Gate::authorize is the house idiom (the last
+        // abort_unless(...can...) site standing after the W4 sweep).
+        Gate::authorize('media.delete');
 
         $media->delete();
 

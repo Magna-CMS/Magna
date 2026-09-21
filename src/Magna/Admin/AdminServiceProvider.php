@@ -9,6 +9,7 @@ use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
 use Filament\Widgets\Widget;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Magna\Admin\Console\NotificationsPruneCommand;
 use Magna\Contracts\RegistersAdminNavigation;
@@ -117,7 +118,7 @@ class AdminServiceProvider extends ServiceProvider
 
             } catch (Throwable $e) {
                 // A buggy plugin must not prevent the admin panel from rendering.
-                logger()->error("Plugin [{$name}] skipped during panel wiring: {$e->getMessage()}");
+                Log::error("Plugin [{$name}] skipped during panel wiring: {$e->getMessage()}");
             }
         }
 

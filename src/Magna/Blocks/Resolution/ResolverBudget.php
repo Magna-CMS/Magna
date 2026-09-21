@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Blocks\Resolution;
 
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -173,7 +174,7 @@ final class ResolverBudget
     private function log(string $message): void
     {
         try {
-            logger()->warning($message);
+            Log::warning($message);
         } catch (Throwable) {
             // Nothing to do about it, and nothing worth breaking a page over.
         }

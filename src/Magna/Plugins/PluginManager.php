@@ -7,6 +7,7 @@ namespace Magna\Plugins;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Magna\Licensing\LicenseGate;
 use Magna\MagnaServiceProvider;
@@ -98,7 +99,7 @@ class PluginManager
                 $this->booted[$record->name] = $plugin;
             } catch (Throwable $e) {
                 $record->update(['enabled' => false, 'disabled_at' => now()]);
-                logger()->error("Plugin [{$record->name}] auto-disabled: class or files missing. {$e->getMessage()}");
+                Log::error("Plugin [{$record->name}] auto-disabled: class or files missing. {$e->getMessage()}");
 
                 // A cached Filament panel still advertises this plugin's pages
                 // and widgets, but its routes will never register now — every
@@ -118,7 +119,7 @@ class PluginManager
                 $this->routes->registerPermissions($plugin->getManifest());
             } catch (Throwable $e) {
                 unset($this->booted[$name]);
-                logger()->error("Plugin [{$name}] auto-disabled during boot: {$e->getMessage()}");
+                Log::error("Plugin [{$name}] auto-disabled during boot: {$e->getMessage()}");
 
                 // Same stale-cache hazard as the register() pass: the plugin's
                 // panel components may be cached but its routes are not
@@ -273,7 +274,7 @@ class PluginManager
                 // them), refusing here made uninstall() throw too — leaving
                 // the wreckage impossible to remove from the admin panel at
                 // all, the one place the error told people to use.
-                logger()->warning("Plugin [{$name}] disabled without running its disable() hook: {$e->getMessage()}");
+                Log::warning("Plugin [{$name}] disabled without running its disable() hook: {$e->getMessage()}");
             }
         }
 
@@ -495,7 +496,7 @@ class PluginManager
         try {
             $order = $this->dependencies->resolveBootOrder($manifests);
         } catch (DependencyException $e) {
-            logger()->error('Plugin dependency resolution failed; booting in name order. '.$e->getMessage());
+            Log::error('Plugin dependency resolution failed; booting in name order. '.$e->getMessage());
             $order = array_keys($manifests);
             sort($order);
         }
@@ -520,7 +521,6 @@ class PluginManager
     {
         $manifestObj = Manifest::fromArray($manifest);
         $class = $manifestObj->entryClass;
-
         if (! class_exists($class)) {
             throw new \RuntimeException(
                 "Plugin entry class [{$class}] does not exist. "
@@ -544,7 +544,7 @@ class PluginManager
             } catch (Throwable $e) {
                 // A plugin whose nav/schema registration threw must not block the panel.
                 unset($this->booted[$name]);
-                logger()->error("Plugin [{$name}] removed after contract dispatch failed: {$e->getMessage()}");
+                Log::error("Plugin [{$name}] removed after contract dispatch failed: {$e->getMessage()}");
             }
         }
     }

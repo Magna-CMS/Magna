@@ -44,7 +44,7 @@ class TwoFactorSetupController extends Controller
     }
 
     /** Confirms enrollment from the setup page's form (mirrors confirm(), but redirects instead of returning JSON). */
-    public function storeSetup(Request $request): RedirectResponse|View
+    public function storeSetup(Request $request): View|RedirectResponse
     {
         $request->validate(['code' => ['required', 'string']]);
 

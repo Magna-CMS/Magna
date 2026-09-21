@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Install;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Magna\MagnaServiceProvider;
 use RuntimeException;
 
@@ -42,7 +43,7 @@ final class Installer
         // Destroy the install token now that installation is complete.
         $tokenPath = self::tokenPath();
         if (is_file($tokenPath) && ! unlink($tokenPath)) {
-            logger()->warning('magna: could not remove install token file after installation.', ['path' => $tokenPath]);
+            Log::warning('magna: could not remove install token file after installation.', ['path' => $tokenPath]);
         }
     }
 

@@ -6,6 +6,7 @@ namespace Magna\Plugins;
 
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Magna\Contracts\RegistersCommands;
 use Throwable;
 
@@ -48,7 +49,7 @@ class PluginCommandRegistrar
             // A plugin whose commands cannot be registered is still enabled;
             // this costs the CLI surface only, and the next process picks
             // them up through the service provider anyway.
-            logger()->warning(
+            Log::warning(
                 'Could not register commands for plugin ['.$plugin->getManifest()->name."]: {$e->getMessage()}"
             );
         }

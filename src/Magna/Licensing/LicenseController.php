@@ -43,7 +43,7 @@ class LicenseController extends Controller
      */
     public function redeem(Request $request): RedirectResponse
     {
-        $this->authorize();
+        Gate::authorize('licensing.manage');
 
         $data = $request->validate([
             'key' => ['required', 'string', 'max:64'],
@@ -87,7 +87,7 @@ class LicenseController extends Controller
      */
     public function install(Request $request): RedirectResponse
     {
-        $this->authorize();
+        Gate::authorize('licensing.manage');
 
         $data = $request->validate([
             'license_id' => ['required', 'integer'],
@@ -106,7 +106,7 @@ class LicenseController extends Controller
     /** Start a product's free trial, into the connected account's wallet (§7). */
     public function startTrial(Request $request): RedirectResponse
     {
-        $this->authorize();
+        Gate::authorize('licensing.manage');
 
         $data = $request->validate([
             'product_slug' => ['required', 'string', 'max:255'],
@@ -122,7 +122,7 @@ class LicenseController extends Controller
     /** Pull and install the newest entitled version (W5). */
     public function update(Request $request): RedirectResponse
     {
-        $this->authorize();
+        Gate::authorize('licensing.manage');
 
         $data = $request->validate([
             'product_slug' => ['required', 'string', 'max:255'],
@@ -145,7 +145,7 @@ class LicenseController extends Controller
      */
     public function deactivate(Request $request, LicenseDeactivator $deactivator): RedirectResponse
     {
-        $this->authorize();
+        Gate::authorize('licensing.manage');
 
         $data = $request->validate([
             'product_slug' => ['required', 'string', 'max:255'],
@@ -164,7 +164,7 @@ class LicenseController extends Controller
      */
     public function verifyNow(LicenseEnforcer $enforcer): RedirectResponse
     {
-        $this->authorize();
+        Gate::authorize('licensing.manage');
 
         $count = $this->guard->refreshAll();
         $result = $enforcer->sync();
@@ -194,7 +194,7 @@ class LicenseController extends Controller
      */
     public function invoice(int $invoice): Response|RedirectResponse
     {
-        $this->authorize();
+        Gate::authorize('licensing.manage');
 
         $document = $this->client->invoiceDocument($invoice);
 
@@ -208,18 +208,16 @@ class LicenseController extends Controller
         ]);
     }
 
-    /**
-     * `licensing.manage`, not `settings.view` — these actions download and
-     * enable third-party code on this server, so a read-only settings role
-     * (support, auditor) must not reach them, and neither should a settings
-     * administrator who was never granted licensing explicitly. Invoice
-     * download rides the same permission: it streams the account's billing
-     * records, which are no less sensitive than the wallet itself.
+    /*
+     * `licensing.manage`, not `settings.view` — every action above downloads
+     * or enables third-party code on this server, so a read-only settings
+     * role (support, auditor) must not reach them, and neither should a
+     * settings administrator who was never granted licensing explicitly.
+     * Invoice download rides the same permission: it streams the account's
+     * billing records, no less sensitive than the wallet itself. The calls
+     * are inline per action (not a private wrapper) so the mechanical
+     * every-action-authorizes guard can see them.
      */
-    private function authorize(): void
-    {
-        Gate::authorize('licensing.manage');
-    }
 
     private function ok(string $message): RedirectResponse
     {
