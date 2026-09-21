@@ -433,6 +433,48 @@ it('authorizes every Livewire public method that touches data', function (): voi
 });
 
 /**
+ * Zip extraction happens only inside the vetted extractors.
+ *
+ * Every safe extraction needs the same pre-flight (entry-name traversal,
+ * symlink entries, an uncompressed-size ceiling — see Support\ZipEntryGuard),
+ * and a bare ZipArchive::extractTo() anywhere else is an extraction with
+ * none of it. RestoreService and PackageExtractor are the two vetted homes;
+ * new extraction goes through one of them, or becomes a third vetted
+ * extractor added here WITH the ZipEntryGuard checks.
+ */
+it('extracts archives only in the vetted extractors', function (): void {
+    $allowed = [
+        'Backup/RestoreService.php',
+        'Licensing/PackageExtractor.php',
+    ];
+
+    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || $file->getExtension() !== 'php') {
+            continue;
+        }
+
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($srcDir) + 1));
+        if (in_array($relative, $allowed, true)) {
+            continue;
+        }
+
+        if (str_contains((string) file_get_contents($file->getPathname()), '->extractTo(')) {
+            $offenders[] = $relative;
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
  * Error paths THROW; only success has a return type.
  *
  * A HELPER returning Response|SomethingElse forces every caller into an

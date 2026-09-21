@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Storage;
 use LogicException;
 use Magna\Backup\Exceptions\RestoreFailedException;
 use Magna\Settings\BackupSettings;
+use Magna\Support\ZipEntryGuard;
 use Symfony\Component\Process\Process;
 use ZipArchive;
 
@@ -113,12 +114,11 @@ class RestoreService
 
     /**
      * Defence in depth against zip-slip. A backup may be *imported* from an
-     * untrusted third party (Import accepts an externally-supplied archive), so
-     * reject any entry whose name could escape the extraction directory —
-     * traversal (`..`), an absolute path, or a null byte — before extractTo()
-     * touches disk. Mirrors the plugin installer's ZipSafeExtractor so the same
-     * class of operation is held to the same bar, rather than relying on the
-     * PHP/libzip version's own sanitisation.
+     * untrusted third party (Import accepts an externally-supplied archive),
+     * so reject any entry whose name could escape the extraction directory,
+     * and any symlink entry, before extractTo() touches disk. The checks
+     * themselves live in ZipEntryGuard, shared with PackageExtractor — the
+     * two copies had already drifted apart once.
      */
     private function guardAgainstUnsafePaths(ZipArchive $zip): void
     {
@@ -128,47 +128,9 @@ class RestoreService
                 throw RestoreFailedException::corruptArchive();
             }
 
-            if (
-                str_contains($name, '..')
-                || str_starts_with($name, '/')
-                || str_starts_with($name, '\\')
-                || preg_match('/^[a-zA-Z]:/', $name) === 1
-                || str_contains($name, "\0")
-            ) {
+            if (ZipEntryGuard::unsafeName($name) || ZipEntryGuard::isSymlinkEntry($zip, $i)) {
                 throw RestoreFailedException::unsafeArchivePath($name);
             }
-
-            $this->guardAgainstSymlinkEntry($zip, $i, $name);
-        }
-    }
-
-    /**
-     * A symlink entry's NAME can look perfectly safe while its TARGET points
-     * outside the extraction directory — a separate escape vector from path
-     * traversal in the name, and the one check this extractor was missing
-     * relative to PackageExtractor and the plugin installer despite being the
-     * only one of the three that takes archives from other environments.
-     */
-    private function guardAgainstSymlinkEntry(ZipArchive $zip, int $index, string $name): void
-    {
-        $opsys = 0;
-        $attr = 0;
-
-        if (! $zip->getExternalAttributesIndex($index, $opsys, $attr)) {
-            return;
-        }
-
-        // External attributes only encode a Unix mode when the archive was
-        // written on a Unix opsys — Windows-authored zips pack something else
-        // in these bits entirely.
-        if ($opsys !== ZipArchive::OPSYS_UNIX) {
-            return;
-        }
-
-        $mode = ($attr >> 16) & 0xFFFF;
-
-        if (($mode & 0xF000) === 0xA000) {
-            throw RestoreFailedException::unsafeArchivePath($name);
         }
     }
 

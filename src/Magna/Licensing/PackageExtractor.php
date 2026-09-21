@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Licensing;
 
+use Magna\Support\ZipEntryGuard;
 use RuntimeException;
 use ZipArchive;
 
@@ -26,11 +27,6 @@ class PackageExtractor
 {
     /** Uncompressed-size ceiling — blocks a small-compressed/huge-decompressed zip bomb. */
     private const MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024;
-
-    /** Unix S_IFLNK bit pattern in ZipArchive's packed external attributes (upper 16 bits = st_mode). */
-    private const S_IFLNK = 0120000;
-
-    private const S_IFMT = 0170000;
 
     /** @throws RuntimeException on an invalid, unsafe, or unreadable archive */
     public function extract(string $zipPath, string $targetDir): void
@@ -102,43 +98,18 @@ class PackageExtractor
         }
     }
 
+    // Both checks live in ZipEntryGuard, shared with RestoreService — the
+    // two copies had drifted apart once already. The messages stay local.
     private function assertSafeEntryName(string $name): void
     {
-        if (
-            str_contains($name, '..')
-            || str_starts_with($name, '/')
-            || str_starts_with($name, '\\')
-            || preg_match('/^[a-zA-Z]:/', $name) === 1
-            || str_contains($name, "\0")
-        ) {
+        if (ZipEntryGuard::unsafeName($name)) {
             throw new RuntimeException("Refusing to extract unsafe path in package: {$name}");
         }
     }
 
-    /**
-     * A symlink entry's NAME can look perfectly safe while its TARGET points
-     * outside the extraction directory — a separate escape vector from path
-     * traversal in the name itself.
-     */
     private function assertNotSymlink(ZipArchive $zip, int $index, string $name): void
     {
-        $opsys = 0;
-        $attr = 0;
-
-        if (! $zip->getExternalAttributesIndex($index, $opsys, $attr)) {
-            return;
-        }
-
-        // External attributes only encode a Unix mode when the archive was
-        // written on a Unix opsys — Windows-authored zips pack something else
-        // in these bits entirely.
-        if ($opsys !== ZipArchive::OPSYS_UNIX) {
-            return;
-        }
-
-        $mode = ($attr >> 16) & 0xFFFF;
-
-        if (($mode & self::S_IFMT) === self::S_IFLNK) {
+        if (ZipEntryGuard::isSymlinkEntry($zip, $index)) {
             throw new RuntimeException("Refusing to extract symlink entry in package: {$name}");
         }
     }
