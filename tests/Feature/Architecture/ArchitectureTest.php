@@ -159,6 +159,10 @@ it('gives every admin page and resource an access gate', function (): void {
     $offenders = [];
 
     foreach ($roots as $root) {
+        // plugins-dev is absent on CI (each plugin is its own repository),
+        // so the plugin half of this rule only runs on a dev checkout — the
+        // core half must run everywhere, which is why this tolerates the
+        // missing root instead of skipping the whole test loudly.
         if (! is_dir($root)) {
             continue;
         }

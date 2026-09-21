@@ -21,9 +21,17 @@
             <directory>plugins-dev/*/*/tests</directory>
         </testsuite>
     </testsuites>
+    <!--
+        Coverage measures the real codebase: app/ holds exactly two scaffold
+        files, while src/ carries the ~45k lines the suite actually tests.
+        Any coverage number produced from app/ alone was fiction. (Collecting
+        coverage stays opt-in — CI sets coverage: none — this only decides
+        what is measured when someone asks.)
+    -->
     <source>
         <include>
             <directory>app</directory>
+            <directory>src</directory>
         </include>
     </source>
     <php>
