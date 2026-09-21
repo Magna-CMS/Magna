@@ -12,6 +12,7 @@ use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseStore;
+use Magna\Licensing\SeatSummary;
 use Magna\Plugins\PluginRecord;
 use Magna\Updater\UpdateCheck;
 use Throwable;
@@ -240,6 +241,6 @@ class AccountCentrePage extends Page
      */
     private function licenses(): array
     {
-        return app(LicenseClient::class)->wallet() ?? [];
+        return SeatSummary::decorate(app(LicenseClient::class)->wallet() ?? []);
     }
 }

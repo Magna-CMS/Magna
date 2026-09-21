@@ -157,6 +157,45 @@ class LicenseController extends Controller
     }
 
     /**
+     * Release the seat held by any site on the licence, not only this one.
+     *
+     * A customer whose seats are full is usually looking at a domain they no
+     * longer run — a staging address, a site they migrated — and until now
+     * the only seat this page could free was the one belonging to the site
+     * they happened to be signed into, which is rarely the one in the way.
+     *
+     * Releasing THIS site's seat still goes through LicenseDeactivator, so
+     * the plugin is disabled locally too: a seat freed while the product
+     * kept running here is how one key ends up serving every domain it was
+     * ever released from.
+     */
+    public function releaseSite(Request $request, LicenseDeactivator $deactivator): RedirectResponse
+    {
+        Gate::authorize('licensing.manage');
+
+        $data = $request->validate([
+            'license_id' => ['required', 'integer'],
+            'activation_id' => ['required', 'string', 'max:64'],
+            'product_slug' => ['required', 'string', 'max:255'],
+            'domain' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($data['domain'] === SeatSummary::thisSiteDomain()) {
+            $result = $deactivator->deactivate($data['product_slug']);
+
+            return $result['ok'] ? $this->ok($result['message']) : $this->fail($result['message']);
+        }
+
+        // ok() drops the cached wallet, which matters here: a seat still
+        // listed after it was released reads as a release that failed.
+        $released = $this->client->deactivateSite((int) $data['license_id'], $data['activation_id']);
+
+        return $released
+            ? $this->ok('Seat released — '.$data['domain'].' no longer holds a seat on this licence.')
+            : $this->fail('That seat could not be released. The licence server may be unreachable; try again shortly.');
+    }
+
+    /**
      * Force the ~daily phone-home now, from the admin — and enforce what it
      * finds. This is the "stop waiting for the schedule" path: an operator
      * who has just cancelled a corporate licence can have the client's site

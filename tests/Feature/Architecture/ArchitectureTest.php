@@ -771,9 +771,11 @@ it('keeps every Blade view under the view ceiling', function (): void {
     // account-centre.blade.php exist, and the basename key silently handed
     // the 4-line wrapper the same 460-line licence its partial needed.
     $allowed = [
-        // Queued for the same partial-split treatment; shrinking is the
-        // only direction allowed in the meantime.
-        'Admin/Resources/views/admin/partials/account-centre.blade.php' => 460,
+        // Still over the ceiling after its licence table moved out to
+        // account-centre/licenses.blade.php (which is itself under it, as is
+        // the seats cell that split off next). Shrinking is the only
+        // direction allowed from here.
+        'Admin/Resources/views/admin/partials/account-centre.blade.php' => 278,
         'Admin/Resources/views/admin/media-list.blade.php' => 414,
     ];
 
@@ -827,7 +829,7 @@ it('lets the pinned big classes only shrink', function (): void {
         // Over the global ceiling and allowlisted there; the pin stops it
         // growing further while it waits for its remaining splits.
         'Admin/Pages/PluginsPage.php' => 707,
-        'Licensing/LicenseClient.php' => 589,
+        'Licensing/LicenseClient.php' => 580,
         'Blocks/Livewire/BlockEditor.php' => 586,
         'Plugins/PluginManager.php' => 551,
         'Admin/Pages/SystemInfoPage.php' => 540,

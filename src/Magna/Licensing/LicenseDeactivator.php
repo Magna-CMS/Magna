@@ -87,10 +87,9 @@ class LicenseDeactivator
      */
     private function releaseSeatThroughAccount(string $productSlug): bool
     {
-        $appUrl = config('app.url');
-        $host = is_string($appUrl) ? parse_url($appUrl, PHP_URL_HOST) : null;
+        $host = SeatSummary::thisSiteDomain();
 
-        if (! is_string($host) || $host === '') {
+        if ($host === null) {
             return false;
         }
 
