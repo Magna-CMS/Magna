@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Settings;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
 use Magna\Settings\Attributes\Secret;
 use ReflectionProperty;
@@ -23,7 +24,16 @@ class SettingValueCodec
     public function decode(ReflectionProperty $prop, mixed $rawValue): mixed
     {
         if ($this->isSecret($prop) && is_string($rawValue)) {
-            return json_decode(Crypt::decryptString($rawValue), true);
+            try {
+                return json_decode(Crypt::decryptString($rawValue), true);
+            } catch (DecryptException) {
+                // A stored value that cannot be decrypted — written before
+                // the property was tagged #[Secret], or under a rotated
+                // APP_KEY — must not take every read of the whole settings
+                // aggregate down with it. A secret is re-enterable:
+                // unreadable means unset, never a 500.
+                return null;
+            }
         }
 
         return $rawValue;
