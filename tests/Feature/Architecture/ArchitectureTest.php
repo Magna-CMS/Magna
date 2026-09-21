@@ -704,7 +704,7 @@ it('lets the pinned big classes only shrink', function (): void {
         'Admin/Pages/SystemInfoPage.php' => 545,
         'Content/EntryManager.php' => 510,
         'Admin/AdminPanelProvider.php' => 325,
-        'Admin/Pages/SettingsPage.php' => 495,
+        'Admin/Pages/SettingsPage.php' => 360,
     ];
 
     $srcDir = dirname(__DIR__, 3).'/src/Magna';

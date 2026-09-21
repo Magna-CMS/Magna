@@ -23,10 +23,10 @@ use Magna\Admin\Support\S3CredentialFields;
 use Magna\Plugins\PluginRecord;
 use Magna\Settings\ContentSettings;
 use Magna\Settings\GeneralSettings;
+use Magna\Settings\GeneralSettingsPersister;
 use Magna\Settings\LocalizationSettings;
 use Magna\Settings\MailConfigurator;
 use Magna\Settings\MailSettings;
-use Magna\Settings\MailTester;
 use Magna\Settings\MediaSettings;
 use Magna\Settings\PerformanceSettings;
 use Magna\Settings\SecuritySettings;
@@ -298,51 +298,9 @@ class SettingsPage extends Page implements HasForms
         /** @var array<string, mixed> $data */
         $data = $this->form->getState();
 
-        $str = static fn (mixed $v): string => is_string($v) ? $v : '';
-        $trim = static fn (mixed $v): string => rtrim(is_string($v) ? $v : '', '/');
-        $int = static fn (mixed $v): int => is_numeric($v) ? (int) $v : 0;
-        $strOrNull = static fn (mixed $v): ?string => is_string($v) && $v !== '' ? $v : null;
-        $strList = static function (mixed $values): array {
-            $strings = [];
-            foreach (is_array($values) ? $values : [] as $value) {
-                if (is_string($value)) {
-                    $strings[] = $value;
-                }
-            }
-
-            return $strings;
-        };
-
-        $general = GeneralSettings::get();
-        $general->registration_enabled = (bool) ($data['registration_enabled'] ?? false);
-        $general->timezone = $str($data['timezone'] ?? 'UTC');
-        $general->default_locale = $str($data['default_locale'] ?? 'en');
-        $general->date_format = $str($data['date_format'] ?? 'Y-m-d');
-        $general->time_format = $str($data['time_format'] ?? 'H:i');
-        $general->first_day_of_week = $int($data['first_day_of_week'] ?? 1);
-        $general->currency = $str($data['currency'] ?? '');
-        $general->save();
-
-        $localization = LocalizationSettings::get();
-        $localization->available_locales = $strList($data['available_locales'] ?? []);
-        $localization->fallback_locale = $str($data['fallback_locale'] ?? 'en');
-        $localization->rtl_locales = $strList($data['rtl_locales'] ?? []);
-        $localization->save();
-
-        $content = ContentSettings::get();
-        $content->default_status = $str($data['default_status'] ?? 'draft');
-        $content->revision_limit = $int($data['revision_limit'] ?? 50);
-        $content->autosave_interval = $int($data['autosave_interval'] ?? 60);
-        $content->save();
-
-        $media = MediaSettings::get();
-        $media->max_image_upload_bytes = $int($data['max_image_upload_bytes'] ?? 0);
-        $media->max_svg_upload_bytes = $int($data['max_svg_upload_bytes'] ?? 0);
-        $media->max_document_upload_bytes = $int($data['max_document_upload_bytes'] ?? 0);
-        $media->default_image_quality = $int($data['default_image_quality'] ?? 90);
-        $media->webp_enabled = (bool) ($data['webp_enabled'] ?? false);
-        $media->avif_enabled = (bool) ($data['avif_enabled'] ?? false);
-        $media->save();
+        // The non-mail aggregates have one writer, extracted from the 129
+        // lines that used to live here (the BackupPlanPersister treatment).
+        app(GeneralSettingsPersister::class)->persist($data, $this->magnaPagesInstalled());
 
         // One writer for both settings surfaces. This tab draws its fields
         // from MailSettingsPage::fields(), and a second copy of the write-back
@@ -356,67 +314,6 @@ class SettingsPage extends Page implements HasForms
         // notification raised by another setting on this very form — goes out
         // through the settings the administrator has just replaced.
         app(MailConfigurator::class)->apply();
-
-        $storage = StorageSettings::get();
-        $storage->disk = $str($data['disk'] ?? 'local');
-        $storage->s3_key = $strOrNull($data['s3_key'] ?? null);
-        $storage->s3_bucket = $strOrNull($data['s3_bucket'] ?? null);
-        $storage->s3_region = $strOrNull($data['s3_region'] ?? null);
-        $storage->s3_url = $strOrNull($data['s3_url'] ?? null);
-        if (filled($data['s3_secret'] ?? null)) {
-            $storage->s3_secret = $str($data['s3_secret']);
-        }
-        $storage->save();
-
-        $url = UrlSettings::get();
-        $url->cdn_url = $trim($data['cdn_url'] ?? null);
-        if ($this->magnaPagesInstalled()) {
-            $url->frontend_url = $trim($data['frontend_url'] ?? null);
-            $url->preview_base_url = $trim($data['preview_base_url'] ?? null);
-        }
-        $url->save();
-
-        $security = SecuritySettings::get();
-        $security->force_https = (bool) ($data['force_https'] ?? false);
-        $security->require_email_verification = (bool) ($data['require_email_verification'] ?? false);
-        $security->session_lifetime = $int($data['session_lifetime'] ?? 120);
-        $security->save();
-
-        $performance = PerformanceSettings::get();
-
-        // The selects only offer these values; anything else is tampered
-        // client state and must not reach the typed settings properties.
-        $cacheDriver = $data['cache_driver'] ?? null;
-        if (in_array($cacheDriver, ['database', 'file', 'redis'], true)) {
-            $performance->cache_driver = $cacheDriver;
-        }
-
-        $queueConnection = $data['queue_connection'] ?? null;
-        if (in_array($queueConnection, ['database', 'redis', 'sync'], true)) {
-            $performance->queue_connection = $queueConnection;
-        }
-        // Only written when actually present: these inputs are ->visible()
-        // behind a Redis driver being selected, and Filament omits hidden
-        // components from the state. Falling back to a default here would
-        // reset a configured Redis host to 127.0.0.1 every time someone saved
-        // this page while on the file/database drivers.
-        if (array_key_exists('redis_host', $data)) {
-            $performance->redis_host = $str($data['redis_host']) ?: '127.0.0.1';
-        }
-        if (array_key_exists('redis_port', $data)) {
-            $performance->redis_port = $int($data['redis_port']) ?: 6379;
-        }
-        if (array_key_exists('redis_database', $data)) {
-            $performance->redis_database = $int($data['redis_database']);
-        }
-        $octaneServer = $data['octane_server'] ?? null;
-        if (in_array($octaneServer, ['frankenphp', 'roadrunner', 'swoole'], true)) {
-            $performance->octane_server = $octaneServer;
-        }
-        if (filled($data['redis_password'] ?? null)) {
-            $performance->redis_password = $str($data['redis_password']);
-        }
-        $performance->save();
 
         // Refresh secret fields so they show blank again.
         $this->form->fill(array_merge($data, ['password' => null, 's3_secret' => null, 'redis_password' => null]));
@@ -433,36 +330,9 @@ class SettingsPage extends Page implements HasForms
      */
     public function sendTestEmail(): void
     {
-        /*
-         * Resolved here rather than type-hinted on the action's closure.
-         * Filament evaluates that closure with its own injection rules, and
-         * the parameter never arrived — the button ran, returned 200 and did
-         * nothing at all, which is worse than a button that fails, because
-         * the one thing it exists to report is whether mail works.
-         */
-        $tester = app(MailTester::class);
-
-        $address = auth()->user()?->getAttribute('email');
-
-        if (! is_string($address) || $address === '') {
-            Notification::make()
-                ->title('Your account has no email address to send a test to.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $result = $tester->send($address);
-
-        Notification::make()
-            ->title($result['ok'] ? 'Test email sent.' : 'The test email could not be sent.')
-            ->body($result['message'])
-            ->{$result['ok'] ? 'success' : 'danger'}()
-            // The transport's own error can be long, and it is the one thing
-            // worth reading here.
-            ->persistent()
-            ->send();
+        // One body behind both test buttons — this page's copy had drifted
+        // into a near-verbatim duplicate of the mail page's.
+        MailSettingsPage::sendTestToSignedInUser();
     }
 
     /** @return array<int, Action> */

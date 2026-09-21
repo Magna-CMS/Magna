@@ -13,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
+use Magna\Settings\FormStateCoercion;
 use Magna\Settings\MailConfigurator;
 use Magna\Settings\MailSettings;
 use Magna\Settings\MailTester;
@@ -242,7 +243,7 @@ class MailSettingsPage extends Page implements HasForms
          * the answer"; absent means "not this driver's business, leave it".
          */
         if (array_key_exists('host', $data)) {
-            $settings->host = self::stringFrom($data, 'host');
+            $settings->host = FormStateCoercion::string($data, 'host');
         }
 
         if (array_key_exists('port', $data)) {
@@ -250,32 +251,32 @@ class MailSettingsPage extends Page implements HasForms
         }
 
         if (array_key_exists('username', $data)) {
-            $settings->username = self::stringOrNullFrom($data, 'username');
+            $settings->username = FormStateCoercion::stringOrNull($data, 'username');
         }
 
-        $fromAddress = self::filledStringFrom($data, 'from_address');
+        $fromAddress = FormStateCoercion::filledString($data, 'from_address');
         if ($fromAddress !== null) {
             $settings->from_address = $fromAddress;
         }
 
         if (array_key_exists('from_name', $data)) {
-            $settings->from_name = self::stringFrom($data, 'from_name');
+            $settings->from_name = FormStateCoercion::string($data, 'from_name');
         }
 
         if (array_key_exists('ses_key', $data)) {
-            $settings->ses_key = self::stringOrNullFrom($data, 'ses_key');
+            $settings->ses_key = FormStateCoercion::stringOrNull($data, 'ses_key');
         }
 
         if (array_key_exists('ses_region', $data)) {
-            $settings->ses_region = self::stringFrom($data, 'ses_region', 'us-east-1');
+            $settings->ses_region = FormStateCoercion::string($data, 'ses_region', 'us-east-1');
         }
 
         if (array_key_exists('mailgun_domain', $data)) {
-            $settings->mailgun_domain = self::stringOrNullFrom($data, 'mailgun_domain');
+            $settings->mailgun_domain = FormStateCoercion::stringOrNull($data, 'mailgun_domain');
         }
 
         if (array_key_exists('mailgun_endpoint', $data)) {
-            $settings->mailgun_endpoint = self::stringFrom($data, 'mailgun_endpoint', 'api.mailgun.net');
+            $settings->mailgun_endpoint = FormStateCoercion::string($data, 'mailgun_endpoint', 'api.mailgun.net');
         }
 
         /*
@@ -285,48 +286,13 @@ class MailSettingsPage extends Page implements HasForms
          * typed now overwrites one.
          */
         foreach (['password', 'ses_secret', 'mailgun_secret', 'resend_key', 'postmark_token'] as $secret) {
-            $value = self::filledStringFrom($data, $secret);
+            $value = FormStateCoercion::filledString($data, $secret);
             if ($value !== null) {
                 $settings->{$secret} = $value;
             }
         }
 
         return $settings;
-    }
-
-    // ── Typed reads over the untyped form-state array ─────────────────────
-
-    /** @param array<string, mixed> $data */
-    private static function stringFrom(array $data, string $key, string $default = ''): string
-    {
-        $value = $data[$key] ?? null;
-
-        return is_string($value) ? $value : $default;
-    }
-
-    /**
-     * A non-empty string, or null — the "optional field left blank" read.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private static function stringOrNullFrom(array $data, string $key): ?string
-    {
-        $value = $data[$key] ?? null;
-
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    /**
-     * Like stringOrNullFrom(), but blank in Laravel's filled() sense — the
-     * secret-field read, where whitespace is not a new secret.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private static function filledStringFrom(array $data, string $key): ?string
-    {
-        $value = $data[$key] ?? null;
-
-        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     /**
@@ -382,6 +348,17 @@ class MailSettingsPage extends Page implements HasForms
      */
     public function sendTest(): void
     {
+        self::sendTestToSignedInUser();
+    }
+
+    /**
+     * Sends a test message to the signed-in administrator — the one body
+     * behind BOTH "Send test email" buttons (this page's and the unified
+     * settings page's), which had drifted into near-verbatim copies down to
+     * the same explanatory comment.
+     */
+    public static function sendTestToSignedInUser(): void
+    {
         /*
          * Resolved here rather than type-hinted on the action's closure.
          * Filament evaluates that closure with its own injection rules, and
@@ -391,8 +368,7 @@ class MailSettingsPage extends Page implements HasForms
          */
         $tester = app(MailTester::class);
 
-        $user = auth()->user();
-        $address = $user?->getAttribute('email');
+        $address = auth()->user()?->getAttribute('email');
 
         if (! is_string($address) || $address === '') {
             Notification::make()

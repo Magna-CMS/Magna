@@ -6,6 +6,7 @@ namespace Magna\Backup;
 
 use Cron\CronExpression;
 use Magna\Settings\BackupSettings;
+use Magna\Settings\FormStateCoercion;
 use Magna\Settings\StorageSettings;
 use Throwable;
 
@@ -52,31 +53,31 @@ class BackupPlanPersister
     private function hydrateDestinations(BackupSettings $settings, array $data): void
     {
         $settings->enabled = (bool) ($data['enabled'] ?? false);
-        $settings->disk = $this->stringOr($data, 'disk', 'local');
-        $settings->s3_key = $this->stringOrNull($data, 's3_key');
-        $settings->s3_bucket = $this->stringOrNull($data, 's3_bucket');
-        $settings->s3_region = $this->stringOrNull($data, 's3_region');
-        $settings->s3_url = $this->stringOrNull($data, 's3_url');
+        $settings->disk = FormStateCoercion::string($data, 'disk', 'local');
+        $settings->s3_key = FormStateCoercion::stringOrNull($data, 's3_key');
+        $settings->s3_bucket = FormStateCoercion::stringOrNull($data, 's3_bucket');
+        $settings->s3_region = FormStateCoercion::stringOrNull($data, 's3_region');
+        $settings->s3_url = FormStateCoercion::stringOrNull($data, 's3_url');
 
         // Secrets follow the leave-blank-to-keep convention: an empty field
         // means "unchanged", never "clear".
-        $secret = $this->filledString($data, 's3_secret');
+        $secret = FormStateCoercion::filledString($data, 's3_secret');
         if ($secret !== null) {
             $settings->s3_secret = $secret;
         }
 
-        $settings->secondary_disk = $this->stringOrNull($data, 'secondary_disk');
-        $settings->secondary_s3_key = $this->stringOrNull($data, 'secondary_s3_key');
-        $settings->secondary_s3_bucket = $this->stringOrNull($data, 'secondary_s3_bucket');
-        $settings->secondary_s3_region = $this->stringOrNull($data, 'secondary_s3_region');
-        $settings->secondary_s3_url = $this->stringOrNull($data, 'secondary_s3_url');
+        $settings->secondary_disk = FormStateCoercion::stringOrNull($data, 'secondary_disk');
+        $settings->secondary_s3_key = FormStateCoercion::stringOrNull($data, 'secondary_s3_key');
+        $settings->secondary_s3_bucket = FormStateCoercion::stringOrNull($data, 'secondary_s3_bucket');
+        $settings->secondary_s3_region = FormStateCoercion::stringOrNull($data, 'secondary_s3_region');
+        $settings->secondary_s3_url = FormStateCoercion::stringOrNull($data, 'secondary_s3_url');
 
-        $secondarySecret = $this->filledString($data, 'secondary_s3_secret');
+        $secondarySecret = FormStateCoercion::filledString($data, 'secondary_s3_secret');
         if ($secondarySecret !== null) {
             $settings->secondary_s3_secret = $secondarySecret;
         }
 
-        $encryptionPassword = $this->filledString($data, 'encryption_password');
+        $encryptionPassword = FormStateCoercion::filledString($data, 'encryption_password');
         if ($encryptionPassword !== null) {
             $settings->encryption_password = $encryptionPassword;
         }
@@ -121,8 +122,8 @@ class BackupPlanPersister
             return $this->rejected('A bucket-based destination (S3/S3-compatible) is configured without an encryption password. Set one before saving.');
         }
 
-        if ($this->stringOr($data, 'frequency', 'daily') === 'custom_cron') {
-            $cronExpression = $this->stringOrNull($data, 'cron_expression');
+        if (FormStateCoercion::string($data, 'frequency', 'daily') === 'custom_cron') {
+            $cronExpression = FormStateCoercion::stringOrNull($data, 'cron_expression');
 
             if ($cronExpression === null) {
                 return $this->rejected('A cron expression is required when frequency is set to "Custom cron expression".');
@@ -143,16 +144,16 @@ class BackupPlanPersister
      */
     private function hydrateSchedule(BackupSettings $settings, array $data): void
     {
-        $settings->frequency = $this->stringOr($data, 'frequency', 'daily');
-        $settings->cron_expression = $this->stringOrNull($data, 'cron_expression');
-        $settings->run_at = $this->stringOr($data, 'run_at', '02:00');
-        $settings->retention_count = $this->intOr($data, 'retention_count', 7);
-        $settings->retention_days = $this->intOr($data, 'retention_days', 30);
+        $settings->frequency = FormStateCoercion::string($data, 'frequency', 'daily');
+        $settings->cron_expression = FormStateCoercion::stringOrNull($data, 'cron_expression');
+        $settings->run_at = FormStateCoercion::string($data, 'run_at', '02:00');
+        $settings->retention_count = FormStateCoercion::int($data, 'retention_count', 7);
+        $settings->retention_days = FormStateCoercion::int($data, 'retention_days', 30);
         $settings->include_database = (bool) ($data['include_database'] ?? true);
         $settings->include_files = (bool) ($data['include_files'] ?? true);
         $settings->include_config = (bool) ($data['include_config'] ?? true);
-        $settings->excluded_tables = $this->stringList($data, 'excluded_tables');
-        $settings->notify_emails = $this->stringList($data, 'notify_emails');
+        $settings->excluded_tables = FormStateCoercion::stringList($data, 'excluded_tables');
+        $settings->notify_emails = FormStateCoercion::stringList($data, 'notify_emails');
     }
 
     /**
@@ -161,70 +162,5 @@ class BackupPlanPersister
     private function rejected(string $message, string $title = 'Backup settings not saved'): array
     {
         return ['ok' => false, 'title' => $title, 'message' => $message];
-    }
-
-    // ── Typed reads over the untyped form-state array ─────────────────────
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function stringOr(array $data, string $key, string $default): string
-    {
-        $value = $data[$key] ?? null;
-
-        return is_string($value) ? $value : $default;
-    }
-
-    /**
-     * A non-empty string, or null — the "optional field left blank" read.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function stringOrNull(array $data, string $key): ?string
-    {
-        $value = $data[$key] ?? null;
-
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    /**
-     * Like stringOrNull(), but blank in Laravel's filled() sense — the
-     * secret-field read, where whitespace is not a new secret.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function filledString(array $data, string $key): ?string
-    {
-        $value = $data[$key] ?? null;
-
-        return is_string($value) && trim($value) !== '' ? $value : null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function intOr(array $data, string $key, int $default): int
-    {
-        $value = $data[$key] ?? null;
-
-        return is_numeric($value) ? (int) $value : $default;
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return list<string>
-     */
-    private function stringList(array $data, string $key): array
-    {
-        $values = $data[$key] ?? [];
-        $strings = [];
-
-        foreach (is_array($values) ? $values : [] as $value) {
-            if (is_string($value)) {
-                $strings[] = $value;
-            }
-        }
-
-        return $strings;
     }
 }
