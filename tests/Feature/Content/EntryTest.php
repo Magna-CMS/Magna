@@ -23,6 +23,7 @@ use Magna\Content\FieldTypeRegistry;
 use Magna\Content\Models\Revision;
 use Magna\Content\SchemaRegistry;
 use Magna\Content\SchemaSyncer;
+use Magna\Content\SchemaValidator;
 use Magna\Users\User;
 use Tests\TestCase;
 
@@ -72,6 +73,42 @@ it('Entry::type() hydrates casts correctly', function (): void {
     $found = Entry::type('article')->first();
 
     expect($found->status)->toBe(EntryStatus::Draft);
+});
+
+// ── Mass-assignment fence ─────────────────────────────────────────────────────
+
+/*
+ * Entry declares $guarded = [] and is load-bearing about it: create()/
+ * update() only ever fill what SchemaValidator::validate() returned, which
+ * is Laravel's $validator->validated() — rule-covered keys only, with
+ * status/author_id/published_at set explicitly afterwards. These two tests
+ * pin both halves, so a refactor to `return $data` (or a fill from the raw
+ * payload) cannot silently open every non-schema column to mass assignment.
+ */
+it('validate() returns only rule-covered keys', function (): void {
+    $type = app(SchemaRegistry::class)->get('article');
+    assert($type !== null);
+
+    $validated = app(SchemaValidator::class)->validate($type, [
+        'title' => 'Hello',
+        'author_id' => 'attacker',
+        'status' => 'published',
+    ]);
+
+    expect(array_keys($validated))->not->toContain('author_id')
+        ->and(array_keys($validated))->not->toContain('status')
+        ->and($validated['title'])->toBe('Hello');
+});
+
+it('create() ignores non-schema columns smuggled into the payload', function (): void {
+    $entry = app(EntryManager::class)->create('article', [
+        'title' => 'Hello',
+        'author_id' => 'attacker',
+        'status' => 'published',
+    ]);
+
+    expect($entry->author_id)->not->toBe('attacker')
+        ->and($entry->status)->toBe(EntryStatus::Draft);
 });
 
 // ── Create ────────────────────────────────────────────────────────────────────

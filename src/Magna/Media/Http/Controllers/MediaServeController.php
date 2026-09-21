@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Magna\Media\Media;
 use Magna\Media\MediaTypePolicy;
 use Magna\Media\MediaUrlResolver;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -107,8 +108,20 @@ class MediaServeController extends Controller
         $headers = ['X-Content-Type-Options' => 'nosniff'];
 
         if (! MediaTypePolicy::inlineSafe((string) $media->mime_type)) {
+            // Symfony's builder, not string concatenation: original_filename
+            // is user-supplied, and addslashes() left CR/LF intact — PHP's
+            // header() blocks those, but Octane's runtimes do not go through
+            // header(). makeDisposition percent-encodes the real name and
+            // sends an ASCII fallback alongside it.
             $filename = $media->original_filename ?? basename($media->path);
-            $headers['Content-Disposition'] = 'attachment; filename="'.addslashes($filename).'"';
+            $fallback = preg_replace('/[^\x20-\x7e]/', '_', $filename) ?? 'download';
+            $fallback = str_replace(['%', '/', '\\', '"'], '_', $fallback);
+
+            $headers['Content-Disposition'] = HeaderUtils::makeDisposition(
+                HeaderUtils::DISPOSITION_ATTACHMENT,
+                $filename,
+                $fallback === '' ? 'download' : $fallback,
+            );
         }
 
         return $headers;

@@ -12,6 +12,7 @@ use Magna\Marketplace\Marketplace;
 use Magna\Plugins\Manifest;
 use Magna\Plugins\PluginDiscovery;
 use Magna\Plugins\PluginManager;
+use Magna\Plugins\PluginPackageName;
 use Magna\Plugins\PluginRecord;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
@@ -281,6 +282,11 @@ class LicenseInstaller
                 throw new RuntimeException("\"{$manifest->name}\" is not compatible with this version of Magna.");
             }
 
+            // The name is about to be joined onto the install root — validate
+            // before the join, exactly as PluginZipInstaller and PluginSource
+            // do. Containment must not rest on the slug-equality check alone.
+            PluginPackageName::assertValid($manifest->name);
+
             [$vendor, $package] = explode('/', $manifest->name, 2);
             $targetDir = $this->pluginsDevRoot()."/{$vendor}/{$package}";
             $isUpdate = is_dir($targetDir);
@@ -401,6 +407,10 @@ class LicenseInstaller
         if (! $manifest->isCompatibleWith(MagnaServiceProvider::VERSION)) {
             throw new RuntimeException("\"{$manifest->displayName}\" is not compatible with this version of Magna.");
         }
+
+        // Theme names share the vendor/name shape; validate before pathFor()
+        // joins the name onto the themes root.
+        PluginPackageName::assertValid($manifest->name);
 
         $targetDir = $this->themes->pathFor($manifest->name);
         $isUpdate = is_dir($targetDir);

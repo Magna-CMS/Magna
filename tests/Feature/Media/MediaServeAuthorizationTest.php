@@ -96,6 +96,27 @@ it('serves a verbatim-stored type as an attachment on the unsigned route', funct
     'HEIC photo' => ['image/heic', 'media/photo.heic', 'photo.heic', 'heic-bytes'],
 ]);
 
+it('keeps a hostile original filename on one header line', function (): void {
+    // original_filename is user-supplied. addslashes() left CR/LF intact —
+    // PHP's header() blocks those, but Octane's runtimes do not go through
+    // header(), so the disposition is now built by Symfony's HeaderUtils,
+    // which percent-encodes the real name and quotes an ASCII fallback.
+    Storage::disk('public')->put('media/notes.txt', 'plain');
+
+    $media = mediaRow([
+        'mime_type' => 'text/plain',
+        'path' => 'media/notes.txt',
+        'original_filename' => "evil\r\nX-Injected: 1.txt",
+    ]);
+
+    $response = $this->get(route('magna.media.serve.public', ['media' => $media->id]));
+    $disposition = (string) $response->headers->get('Content-Disposition');
+
+    expect($disposition)->toContain('attachment')
+        ->and($disposition)->not->toContain("\r")
+        ->and($disposition)->not->toContain("\n");
+});
+
 it('resolves a public URL through the serve controller for non-inline-safe types only', function (): void {
     $text = mediaRow([
         'mime_type' => 'text/plain',
