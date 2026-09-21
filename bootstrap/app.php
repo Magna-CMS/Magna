@@ -20,6 +20,9 @@ use Magna\Auth\Http\Middleware\SecurityHeadersMiddleware;
 use Magna\Content\Exceptions\SchemaException;
 use Magna\Content\Http\Middleware\RefreshDatabaseContentTypes;
 use Magna\Install\Http\Middleware\RedirectIfNotInstalled;
+use Magna\Install\Installer;
+use Symfony\Component\HttpFoundation\Exception\SuspiciousOperationException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 // Before anything resolves a Magna class: a core update replaces src/Magna but
 // never vendor/, so classes added by a release are missing from the classmap
@@ -65,6 +68,20 @@ return Application::configure(basePath: dirname(__DIR__))
         // the TrustHosts middleware, when config is loaded — the same
         // reason the proxy list lives in a config file (see above).
         $middleware->trustHosts(at: static function (): array {
+            // A site that is not installed yet has no APP_URL to trust. The
+            // operator supplies the canonical URL on the installer's Site step
+            // (InstallController::storeSite writes it), so until then app.url
+            // is config's `http://localhost` fallback — and enforcing the list
+            // against that refuses the very request that would run the
+            // installer. A fresh unzip therefore answered a bare Symfony 400
+            // on every hostname except localhost, with no way forward short of
+            // hand-editing .env. Trusting any host here costs nothing: nothing
+            // pre-install builds a link or sends mail from the Host header,
+            // and the lock file this checks needs no database.
+            if (! Installer::isInstalled()) {
+                return ['^.+$'];
+            }
+
             $extra = config('magna.security.trusted_hosts');
 
             return array_values(array_filter(
@@ -192,6 +209,36 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return null;
+        });
+
+        // An untrusted Host is a configuration fault far more often than an
+        // attack, and Symfony's stock renderer says only "400 Bad Request" —
+        // which names neither the header it refused nor the setting that would
+        // accept it. An operator who moves a site to a second domain, or puts
+        // it behind a proxy that rewrites Host, gets a page with nothing to act
+        // on. Say what was rejected and what to change; the refusal itself is
+        // unchanged, and the host is echoed escaped because it is attacker-
+        // controlled by definition.
+        //
+        // Typed on BadRequestHttpException rather than the Symfony exception
+        // itself: Handler::render() runs prepareException() BEFORE the render
+        // callbacks, and that converts every RequestExceptionInterface into a
+        // BadRequestHttpException — a callback typed on the original would
+        // never fire. The untrusted-host case is identified by the preserved
+        // previous exception, and anything else falls through to the default.
+        $exceptions->render(function (BadRequestHttpException $e, Request $request) {
+            if (! $e->getPrevious() instanceof SuspiciousOperationException) {
+                return null;
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Bad hostname provided.'], 400);
+            }
+
+            return response()->view('magna-install::untrusted-host', [
+                'host' => (string) $request->headers->get('host', ''),
+                'configuredUrl' => (string) config('app.url', ''),
+            ], 400);
         });
 
         // Reporting must never be the thing that kills the request.
