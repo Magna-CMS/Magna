@@ -28,7 +28,12 @@ Route::middleware('guest')->group(function (): void {
     // only redirects there so old links/bookmarks never hit a second login.
     Route::get('/login', fn () => redirect()->route(AdminPanelProvider::loginRoute()))->name('auth.login');
 
-    Route::get('/register', [RegisterController::class, 'showForm'])->name('auth.register');
+    // There is no first-party registration form — themes submit the POST
+    // below from their own markup, and the old GET handler threw a 404 in
+    // BOTH states of the toggle (the view it claimed to render never
+    // existed anywhere). Same treatment as /login above: send the browser
+    // to the panel, keep the name for anything that links it.
+    Route::get('/register', fn () => redirect()->route('auth.login'))->name('auth.register');
     // Stage 3 (C3-01): every sibling auth-mutation route already has a
     // throttle — registration was the one gap, leaving it open to mass
     // account creation and email-enumeration-via-unique-validation-error.

@@ -18,16 +18,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class RegisterController extends Controller
 {
-    public function showForm(): never
-    {
-        $this->guardEnabled();
-
-        // Blade view rendered by routes; this method is never reachable
-        // because guardEnabled() always throws when registration is off.
-        // The route handler calls showForm() only when enabled.
-        throw new NotFoundHttpException;
-    }
-
     public function store(Request $request): RedirectResponse
     {
         $this->guardEnabled();

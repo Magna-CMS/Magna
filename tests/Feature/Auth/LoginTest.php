@@ -9,6 +9,8 @@ use Livewire\Livewire;
 use Magna\Auth\Filament\Login;
 use Magna\Auth\LoginThrottle;
 use Magna\Auth\Role;
+use Magna\Settings\GeneralSettings;
+use Magna\Settings\SettingsRepository;
 use Magna\Users\User;
 
 beforeEach(function (): void {
@@ -92,4 +94,26 @@ it('returns 404 for registration when disabled', function (): void {
         'password' => 'password',
         'password_confirmation' => 'password',
     ])->assertNotFound();
+});
+
+/*
+ * Regression: GET /register used to call a showForm() that threw a 404
+ * unconditionally — after checking the toggle, so the route was a dead end
+ * in BOTH states, while POST /register worked. No first-party register view
+ * has ever existed; the route now redirects to the login screen the same
+ * way the legacy /login route redirects to the panel.
+ */
+it('redirects GET /register to the login screen in both toggle states', function (): void {
+    Cache::flush();
+
+    // Disabled (the default).
+    $this->get(route('auth.register'))->assertRedirect(route('auth.login'));
+
+    // Enabled.
+    $settings = GeneralSettings::get();
+    $settings->registration_enabled = true;
+    app(SettingsRepository::class)->persist($settings);
+    Cache::flush();
+
+    $this->get(route('auth.register'))->assertRedirect(route('auth.login'));
 });
