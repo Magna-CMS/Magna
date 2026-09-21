@@ -33,9 +33,21 @@ class ThemeManager
             : base_path('themes');
     }
 
+    /**
+     * @throws InvalidThemeException when the name could not have come from a
+     *                               valid manifest — this joins it onto the themes root, and remove()
+     *                               hands the result to a recursive delete.
+     */
     public function pathFor(string $name): string
     {
-        [$vendor, $package] = array_pad(explode('/', $name, 2), 2, '');
+        // Every caller today passes a manifest-validated name (fromArray
+        // enforces the same rule), so this is the second layer of one fence
+        // — it keeps the join safe even if a new caller bypasses manifests.
+        if (! ThemeManifest::isValidName($name)) {
+            throw new InvalidThemeException('"'.$name.'" is not a valid theme name (expected vendor/name, lowercase).');
+        }
+
+        [$vendor, $package] = explode('/', $name, 2);
 
         return $this->directory().'/'.$vendor.'/'.$package;
     }

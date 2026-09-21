@@ -59,6 +59,17 @@ final class ThemeManifest
     public const FILENAME = 'theme.json';
 
     /**
+     * The one rule for a theme name's shape: lowercase vendor/name, exactly
+     * one slash, no dots — so a name can never traverse when joined onto the
+     * themes root. ThemeManager::pathFor() asserts the same rule before
+     * building a path (and remove() hands that path to a recursive delete).
+     */
+    public static function isValidName(string $name): bool
+    {
+        return preg_match('#^[a-z0-9]([a-z0-9_-]*[a-z0-9])?/[a-z0-9]([a-z0-9_-]*[a-z0-9])?$#', $name) === 1;
+    }
+
+    /**
      * @param  array<array-key, mixed>  $data  decoded theme.json
      *
      * @throws InvalidThemeException
@@ -67,7 +78,7 @@ final class ThemeManifest
     {
         $name = $data['name'] ?? null;
 
-        if (! is_string($name) || preg_match('#^[a-z0-9]([a-z0-9_-]*[a-z0-9])?/[a-z0-9]([a-z0-9_-]*[a-z0-9])?$#', $name) !== 1) {
+        if (! is_string($name) || ! self::isValidName($name)) {
             throw new InvalidThemeException('A theme needs a "name" in vendor/name form.');
         }
 

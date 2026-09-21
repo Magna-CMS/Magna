@@ -396,10 +396,9 @@ class LicenseInstaller
             throw new RuntimeException("\"{$manifest->displayName}\" is not compatible with this version of Magna.");
         }
 
-        // Theme names share the vendor/name shape; validate before pathFor()
-        // joins the name onto the themes root.
-        PluginPackageName::assertValid($manifest->name);
-
+        // pathFor() asserts the theme-name shape itself before joining it
+        // onto the themes root (ThemeManifest::isValidName — the same rule
+        // fromArray enforced when this manifest was parsed).
         $targetDir = $this->themes->pathFor($manifest->name);
         $isUpdate = is_dir($targetDir);
 
