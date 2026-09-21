@@ -15,6 +15,7 @@ use Magna\Content\SchemaRegistry;
 use Magna\Delivery\DeliveryRequestContext;
 use Magna\Delivery\EntryTransformer;
 use Magna\Delivery\ETagService;
+use Magna\Delivery\ResponseCacheService;
 use Magna\Delivery\SurrogateKeyCollector;
 use Magna\Media\Media;
 use Magna\Settings\ApiSettings;
@@ -167,5 +168,45 @@ abstract class DeliveryController extends Controller
     protected function cachedResponse(string $body, SurrogateKeyCollector $keys): Response
     {
         return $this->deliveryResponse($body, '"'.hash('sha256', $body).'"', $keys, 'HIT');
+    }
+
+    /**
+     * The cached-body fast path plus stampede-protected rebuild both
+     * delivery endpoints share: serve the cached body when present,
+     * otherwise race for the rebuild lock, serve stale on losing it, and
+     * release the lock on every exit path of the build — 400 throws,
+     * DeliveryException, serialization 500 and success alike. The two
+     * controllers had duplicated this dance line for line.
+     *
+     * @param  callable(): Response  $build
+     */
+    protected function rebuildWithStampedeProtection(
+        ResponseCacheService $responseCache,
+        string $bodyCacheKey,
+        string $typeHandle,
+        SurrogateKeyCollector $keys,
+        callable $build,
+    ): Response {
+        $cachedBody = $responseCache->get($bodyCacheKey, $typeHandle);
+        if ($cachedBody !== null) {
+            return $this->cachedResponse($cachedBody, $keys);
+        }
+
+        $wonLock = $responseCache->tryLock($bodyCacheKey);
+        if (! $wonLock) {
+            $stale = $responseCache->getStale($bodyCacheKey);
+            if ($stale !== null) {
+                return $this->cachedResponse($stale, $keys);
+            }
+            // No stale copy — fall through to a fresh build.
+        }
+
+        try {
+            return $build();
+        } finally {
+            if ($wonLock) {
+                $responseCache->releaseLock($bodyCacheKey);
+            }
+        }
     }
 }

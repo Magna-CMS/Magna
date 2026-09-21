@@ -53,32 +53,18 @@ final class ContentSingleController extends DeliveryController
             isPublic: ! $preview || $previewToken === '',
         );
 
-        $wonLock = false;
-        if ($lookup->isPublic) {
-            $cachedBody = $this->responseCache->get($lookup->bodyCacheKey, $lookup->contentType->handle);
-            if ($cachedBody !== null) {
-                return $this->cachedResponse($cachedBody, $lookup->keys);
-            }
-
-            $wonLock = $this->responseCache->tryLock($lookup->bodyCacheKey);
-            if (! $wonLock) {
-                $stale = $this->responseCache->getStale($lookup->bodyCacheKey);
-                if ($stale !== null) {
-                    return $this->cachedResponse($stale, $lookup->keys);
-                }
-            }
-        }
-
-        // try/finally guarantees the rebuild lock is released on every exit
-        // path below — the 404/403 throws inside findEntry(), a
-        // serialization 500, and success alike.
-        try {
+        // Preview requests never touch the body cache — no lock to take.
+        if (! $lookup->isPublic) {
             return $this->resolveEntryResponse($request, $lookup);
-        } finally {
-            if ($wonLock) {
-                $this->responseCache->releaseLock($lookup->bodyCacheKey);
-            }
         }
+
+        return $this->rebuildWithStampedeProtection(
+            $this->responseCache,
+            $lookup->bodyCacheKey,
+            $lookup->contentType->handle,
+            $lookup->keys,
+            fn (): Response => $this->resolveEntryResponse($request, $lookup),
+        );
     }
 
     /**

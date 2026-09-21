@@ -39,31 +39,14 @@ final class ContentListController extends DeliveryController
         [$contentType, $keys, $cacheKey] = [$context->contentType, $context->keys, $context->cacheKey];
 
         $bodyCacheKey = $this->responseCache->cacheKey($request);
-        $cachedBody = $this->responseCache->get($bodyCacheKey, $contentType->handle);
-        if ($cachedBody !== null) {
-            return $this->cachedResponse($cachedBody, $keys);
-        }
 
-        // Stampede protection: if we can't win the rebuild lock, serve stale.
-        $wonLock = $this->responseCache->tryLock($bodyCacheKey);
-        if (! $wonLock) {
-            $stale = $this->responseCache->getStale($bodyCacheKey);
-            if ($stale !== null) {
-                return $this->cachedResponse($stale, $keys);
-            }
-            // No stale copy — fall through to a fresh DB query.
-        }
-
-        // try/finally guarantees the rebuild lock is released on every exit
-        // path below (early-return 400s, DeliveryException, serialization 500,
-        // and the success path) — not only after a successful put().
-        try {
-            return $this->buildFreshResponse($request, $contentType, $type, $keys, $cacheKey, $bodyCacheKey);
-        } finally {
-            if ($wonLock) {
-                $this->responseCache->releaseLock($bodyCacheKey);
-            }
-        }
+        return $this->rebuildWithStampedeProtection(
+            $this->responseCache,
+            $bodyCacheKey,
+            $contentType->handle,
+            $keys,
+            fn (): Response => $this->buildFreshResponse($request, $contentType, $type, $keys, $cacheKey, $bodyCacheKey),
+        );
     }
 
     /**
