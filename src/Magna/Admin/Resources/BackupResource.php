@@ -21,6 +21,7 @@ use Illuminate\Support\HtmlString;
 use Magna\Admin\Resources\BackupRun\ListBackupRuns;
 use Magna\Backup\BackupRun;
 use Magna\Backup\Jobs\RestoreBackupJob;
+use Magna\Support\Bytes;
 use Magna\Users\User;
 
 class BackupResource extends Resource
@@ -100,7 +101,7 @@ class BackupResource extends Resource
 
                 TextColumn::make('size_bytes')
                     ->label('Size')
-                    ->formatStateUsing(fn (?int $state): string => self::formatBytes($state))
+                    ->formatStateUsing(fn (?int $state): string => $state === null ? '—' : Bytes::human($state))
                     ->placeholder('—'),
 
                 TextColumn::make('duration')
@@ -209,20 +210,6 @@ class BackupResource extends Resource
                     }),
             ])
             ->defaultSort('started_at', 'desc');
-    }
-
-    private static function formatBytes(?int $bytes): string
-    {
-        if ($bytes === null) {
-            return '—';
-        }
-
-        return match (true) {
-            $bytes >= 1_073_741_824 => number_format($bytes / 1_073_741_824, 2).' GB',
-            $bytes >= 1_048_576 => number_format($bytes / 1_048_576, 1).' MB',
-            $bytes >= 1_024 => number_format($bytes / 1_024, 0).' KB',
-            default => number_format($bytes).' B',
-        };
     }
 
     /** @return array<string, PageRegistration> */

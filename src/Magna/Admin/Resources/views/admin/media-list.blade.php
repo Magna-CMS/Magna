@@ -203,9 +203,7 @@
                 $isVid = str_starts_with($item->mime_type, 'video/');
                 $isPdf = $item->mime_type === 'application/pdf';
                 $isAud = str_starts_with($item->mime_type, 'audio/');
-                $sizeFmt = $item->size >= 1_048_576
-                    ? number_format($item->size / 1_048_576, 2) . ' MB'
-                    : number_format($item->size / 1_024, 1) . ' KB';
+                $sizeFmt = \Magna\Support\Bytes::human($item->size);
                 // Prefer the title given at upload; fall back to the file name.
                 $displayName = filled($item->title) ? $item->title : $item->original_filename;
             @endphp

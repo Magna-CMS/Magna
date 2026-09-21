@@ -30,6 +30,7 @@ use Magna\Admin\Resources\Media\TrashMedia;
 use Magna\Media\Media;
 use Magna\Media\MediaFolder;
 use Magna\Media\MediaUrlResolver;
+use Magna\Support\Bytes;
 use Magna\Users\User;
 
 class MediaResource extends \Filament\Resources\Resource
@@ -154,13 +155,7 @@ class MediaResource extends \Filament\Resources\Resource
                 TextColumn::make('size')
                     ->label('Size')
                     ->sortable()
-                    ->formatStateUsing(static function (int $state): string {
-                        if ($state >= 1_048_576) {
-                            return number_format($state / 1_048_576, 2).' MB';
-                        }
-
-                        return number_format($state / 1_024, 1).' KB';
-                    }),
+                    ->formatStateUsing(static fn (int $state): string => Bytes::human($state)),
 
                 TextColumn::make('folder.name')
                     ->label('Folder')

@@ -20,6 +20,7 @@ use Magna\Backup\Notifications\BackupFailedNotification;
 use Magna\Backup\Notifications\BackupSizeWarningNotification;
 use Magna\Backup\Notifications\BackupSucceededNotification;
 use Magna\Settings\BackupSettings;
+use Magna\Support\Bytes;
 use Throwable;
 
 /**
@@ -83,7 +84,7 @@ class RunBackupJob implements ShouldQueue
                 $this->notifySizeWarning($settings, $run);
                 NotificationRecipients::notifyDashboard(
                     title: 'Backup completed',
-                    body: ucfirst($run->type)." backup completed successfully ({$this->humanBytes($result->sizeBytes)}).",
+                    body: ucfirst($run->type).' backup completed successfully ('.Bytes::human($result->sizeBytes).').',
                     status: 'success',
                 );
             } catch (Throwable $e) {
@@ -147,16 +148,6 @@ class RunBackupJob implements ShouldQueue
         }
 
         NotificationFacade::send(NotificationRecipients::superAdmins(), new BackupFailedNotification($run));
-    }
-
-    private function humanBytes(int $bytes): string
-    {
-        return match (true) {
-            $bytes >= 1_073_741_824 => number_format($bytes / 1_073_741_824, 2).' GB',
-            $bytes >= 1_048_576 => number_format($bytes / 1_048_576, 1).' MB',
-            $bytes >= 1_024 => number_format($bytes / 1_024, 0).' KB',
-            default => number_format($bytes).' B',
-        };
     }
 
     protected static function progressKey(): string

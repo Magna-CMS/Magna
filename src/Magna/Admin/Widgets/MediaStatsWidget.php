@@ -6,6 +6,7 @@ namespace Magna\Admin\Widgets;
 
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
+use Magna\Support\Bytes;
 
 class MediaStatsWidget extends Widget
 {
@@ -73,7 +74,7 @@ class MediaStatsWidget extends Widget
         // Percentage of used space per bucket, normalised to sum to 100%.
         foreach ($categories as $key => $cat) {
             $categories[$key]['pct'] = $totalBytes > 0 ? (int) round($cat['bytes'] / $totalBytes * 100) : 0;
-            $categories[$key]['sizeText'] = self::formatBytes($cat['bytes']);
+            $categories[$key]['sizeText'] = Bytes::human($cat['bytes']);
         }
 
         $sumPct = (int) array_sum(array_column($categories, 'pct'));
@@ -95,22 +96,12 @@ class MediaStatsWidget extends Widget
         return [
             'categories' => $categories,
             'activeCategory' => $this->activeCategory,
-            'totalUsedText' => self::formatBytes($totalBytes),
+            'totalUsedText' => Bytes::human($totalBytes),
             'totalCount' => $totalCount,
             'hasDisk' => $hasDisk,
-            'capacityText' => $hasDisk ? self::formatBytes($diskTotal) : null,
-            'availableText' => $hasDisk ? self::formatBytes($diskFree) : null,
+            'capacityText' => $hasDisk ? Bytes::human($diskTotal) : null,
+            'availableText' => $hasDisk ? Bytes::human($diskFree) : null,
             'utilizationPct' => $hasDisk ? number_format($totalBytes / $diskTotal * 100, 2) : null,
         ];
-    }
-
-    private static function formatBytes(int|float $bytes): string
-    {
-        return match (true) {
-            $bytes >= 1_073_741_824 => number_format($bytes / 1_073_741_824, 2).' GB',
-            $bytes >= 1_048_576 => number_format($bytes / 1_048_576, 1).' MB',
-            $bytes >= 1_024 => number_format($bytes / 1_024, 0).' KB',
-            default => number_format($bytes).' B',
-        };
     }
 }

@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Config;
 use Magna\Backup\BackupRun;
 use Magna\Backup\Notifications\Concerns\ResolvesHistoryUrl;
+use Magna\Support\Bytes;
 
 /**
  * Sent only when BackupSettings.notify_emails is non-empty — success alerts
@@ -33,24 +34,10 @@ class BackupSucceededNotification extends Notification
             ->success()
             ->line('A '.$this->run->type.' backup run completed successfully.')
             ->line('Started: '.($this->run->started_at?->toDayDateTimeString() ?? 'unknown'))
-            ->line('Size: '.$this->formatBytes($this->run->size_bytes));
+            ->line('Size: '.($this->run->size_bytes === null ? 'unknown' : Bytes::human($this->run->size_bytes)));
 
         $url = $this->historyUrl();
 
         return $url !== null ? $message->action('View backup history', $url) : $message;
-    }
-
-    private function formatBytes(?int $bytes): string
-    {
-        if ($bytes === null) {
-            return 'unknown';
-        }
-
-        return match (true) {
-            $bytes >= 1_073_741_824 => number_format($bytes / 1_073_741_824, 2).' GB',
-            $bytes >= 1_048_576 => number_format($bytes / 1_048_576, 1).' MB',
-            $bytes >= 1_024 => number_format($bytes / 1_024, 0).' KB',
-            default => number_format($bytes).' B',
-        };
     }
 }
