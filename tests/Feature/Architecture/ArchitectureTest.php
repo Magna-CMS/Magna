@@ -314,6 +314,73 @@ it('renders raw Blade output only in the allowlisted views', function (): void {
         }
     }
 
+    // resources/views gets the rule with no allowlist at all — nothing
+    // there has earned a raw echo.
+    foreach (glob(dirname(__DIR__, 3).'/resources/views/{*,*/*,*/*/*}.blade.php', GLOB_BRACE) ?: [] as $path) {
+        if (str_contains((string) file_get_contents($path), '{!!')) {
+            $offenders[] = basename($path);
+        }
+    }
+
+    expect($offenders)->toBe([]);
+});
+
+/**
+ * Theme views raw-echo only what their own allowlist justifies.
+ *
+ * themes/ is first-party design work in a gitignored tree, so the rule
+ * above never sees it — and its layout shells raw-echo composed page HTML
+ * by design. This test SKIPS LOUDLY where the tree is absent (CI) instead
+ * of passing silently, and where present holds every theme view to a
+ * commented allowlist, exactly like the core rule.
+ */
+it('renders raw output in theme views only where the layout contract needs it', function (): void {
+    $themesDir = dirname(__DIR__, 3).'/themes';
+
+    if (! is_dir($themesDir)) {
+        $this->markTestSkipped('themes/ is not part of this checkout — the rule can only run on a design workstation.');
+    }
+
+    // Layout shells compose already-rendered page HTML and the token <style>
+    // block; both are produced server-side (ThemeTokens::valueIsSafe guards
+    // the tokens). Theme text blocks mirror the core text view: raw output
+    // only via the resolver-sanitized _resolved.body, e() otherwise.
+    // Anything NEW must be argued into this list.
+    $allowedSuffixes = [
+        '/views/system/layout.blade.php',
+        '/views/page.blade.php',
+        '/views/blocks/text.blade.php',
+    ];
+
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($themesDir, FilesystemIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+    foreach ($iterator as $file) {
+        if (! $file instanceof SplFileInfo || ! str_ends_with($file->getFilename(), '.blade.php')) {
+            continue;
+        }
+
+        if (! str_contains((string) file_get_contents($file->getPathname()), '{!!')) {
+            continue;
+        }
+
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($themesDir) + 1));
+
+        $allowed = false;
+        foreach ($allowedSuffixes as $suffix) {
+            if (str_ends_with('/'.$relative, $suffix)) {
+                $allowed = true;
+                break;
+            }
+        }
+
+        if (! $allowed) {
+            $offenders[] = $relative;
+        }
+    }
+
     expect($offenders)->toBe([]);
 });
 
@@ -502,8 +569,11 @@ it('never declares a Response union on a controller helper', function (): void {
             continue;
         }
 
-        $path = str_replace(DIRECTORY_SEPARATOR, '/', $file->getPathname());
-        if (! str_contains($path, '/Controllers/')) {
+        // By class-name suffix, not directory: four controllers
+        // (AccountCentre, Install, License, PluginIcon) live outside any
+        // /Controllers/ directory and were invisible to this rule when it
+        // keyed off the path.
+        if (! str_ends_with($file->getFilename(), 'Controller.php')) {
             continue;
         }
 
@@ -693,11 +763,14 @@ it('writes no PHP source line wider than the ceiling', function (): void {
  */
 it('keeps every Blade view under the view ceiling', function (): void {
     $ceiling = 300;
+    // Keyed by relative path, not basename: two files named
+    // account-centre.blade.php exist, and the basename key silently handed
+    // the 4-line wrapper the same 460-line licence its partial needed.
     $allowed = [
-        // Queued for the same partial-split treatment; both shrank is the
+        // Queued for the same partial-split treatment; shrinking is the
         // only direction allowed in the meantime.
-        'account-centre.blade.php' => 460,
-        'media-list.blade.php' => 420,
+        'Admin/Resources/views/admin/partials/account-centre.blade.php' => 460,
+        'Admin/Resources/views/admin/media-list.blade.php' => 414,
     ];
 
     $srcDir = dirname(__DIR__, 3).'/src/Magna';
@@ -713,11 +786,21 @@ it('keeps every Blade view under the view ceiling', function (): void {
             continue;
         }
 
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($srcDir) + 1));
         $lines = count(file($file->getPathname()) ?: []);
-        $limit = $allowed[$file->getFilename()] ?? $ceiling;
+        $limit = $allowed[$relative] ?? $ceiling;
 
         if ($lines > $limit) {
-            $offenders[] = $file->getFilename().' ('.$lines.' lines)';
+            $offenders[] = $relative.' ('.$lines.' lines)';
+        }
+    }
+
+    // resources/views is held to the same ceiling — it sat outside every
+    // blade rule while carrying real page markup.
+    foreach (glob(dirname(__DIR__, 3).'/resources/views/{*,*/*,*/*/*}.blade.php', GLOB_BRACE) ?: [] as $file) {
+        $lines = count(file($file) ?: []);
+        if ($lines > $ceiling) {
+            $offenders[] = basename($file).' ('.$lines.' lines)';
         }
     }
 
@@ -739,12 +822,12 @@ it('lets the pinned big classes only shrink', function (): void {
     $pins = [
         // Over the global ceiling and allowlisted there; the pin stops it
         // growing further while it waits for its remaining splits.
-        'Admin/Pages/PluginsPage.php' => 710,
-        'Licensing/LicenseClient.php' => 592,
-        'Blocks/Livewire/BlockEditor.php' => 590,
-        'Plugins/PluginManager.php' => 555,
-        'Admin/Pages/SystemInfoPage.php' => 545,
-        'Content/EntryManager.php' => 510,
+        'Admin/Pages/PluginsPage.php' => 707,
+        'Licensing/LicenseClient.php' => 589,
+        'Blocks/Livewire/BlockEditor.php' => 586,
+        'Plugins/PluginManager.php' => 551,
+        'Admin/Pages/SystemInfoPage.php' => 540,
+        'Content/EntryManager.php' => 505,
         // The next-largest classes get pinned as they crest the pack — the
         // ratchet covers the top of the size distribution, not a fixed list.
         'Media/MediaIngestor.php' => 490,
@@ -866,18 +949,7 @@ it('never grows the number of app() call sites', function (): void {
 });
 
 /**
- * Views render; they do not fetch.
- *
- * A Blade file that calls app() or Model::query() is a controller hiding
- * in a template: it cannot be unit-tested, it re-runs its queries on every
- * Livewire re-render, and nothing about a view file invites the reviewer
- * scrutiny a service-location or persistence call deserves.
- * content-type-builder.blade.php ran an Eloquent query in its @php block
- * and the block editor service-located three registries inline — all four
- * now live on their page/component class, where the view reaches them as
- * $this->method(). The allowlist names the two block views that have no
- * backing class at all (they are rendered by the block renderer from data
- * arrays) and is shrink-only.
+ * The phpstan exclusion list is a ratchet, not a policy.
  */
 it('only ever shrinks the phpstan exclusion list', function (): void {
     // Every entry here is analysed-at-level-9 debt being paid down (W4-1).
@@ -901,6 +973,20 @@ it('only ever shrinks the phpstan exclusion list', function (): void {
     expect(array_diff($current, $allowed))->toBe([]);
 });
 
+/**
+ * Views render; they do not fetch.
+ *
+ * A Blade file that calls app() or Model::query() is a controller hiding
+ * in a template: it cannot be unit-tested, it re-runs its queries on every
+ * Livewire re-render, and nothing about a view file invites the reviewer
+ * scrutiny a service-location or persistence call deserves.
+ * content-type-builder.blade.php ran an Eloquent query in its @php block
+ * and the block editor service-located three registries inline — all four
+ * now live on their page/component class, where the view reaches them as
+ * $this->method(). The allowlist names the two block views that have no
+ * backing class at all (they are rendered by the block renderer from data
+ * arrays) and is shrink-only. resources/views is held to the same rule.
+ */
 it('service-locates and queries nothing from inside a Blade view', function (): void {
     $allowed = [
         // Block views rendered straight from the renderer with a data array
@@ -909,25 +995,38 @@ it('service-locates and queries nothing from inside a Blade view', function (): 
         'Blocks/resources/views/blocks/scheme-toggle.blade.php',
     ];
 
-    $srcDir = dirname(__DIR__, 3).'/src/Magna';
+    $root = dirname(__DIR__, 3);
+    $srcDir = $root.'/src/Magna';
 
     $iterator = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($srcDir, FilesystemIterator::SKIP_DOTS)
     );
 
+    $files = [];
+    foreach ($iterator as $file) {
+        if ($file instanceof SplFileInfo && str_ends_with($file->getFilename(), '.blade.php')) {
+            $files[] = $file->getPathname();
+        }
+    }
+
+    // resources/views was outside this rule while carrying real page markup
+    // (the deleted welcome.blade.php called app() twice, measured by nothing).
+    foreach (glob($root.'/resources/views/{*,*/*,*/*/*}.blade.php', GLOB_BRACE) ?: [] as $path) {
+        $files[] = $path;
+    }
+
     $offenders = [];
 
-    foreach ($iterator as $file) {
-        if (! $file instanceof SplFileInfo || ! str_ends_with($file->getFilename(), '.blade.php')) {
-            continue;
-        }
+    foreach ($files as $path) {
+        $relative = str_replace(DIRECTORY_SEPARATOR, '/', str_starts_with($path, $srcDir)
+            ? substr($path, strlen($srcDir) + 1)
+            : substr($path, strlen($root) + 1));
 
-        $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($srcDir) + 1));
         if (in_array($relative, $allowed, true)) {
             continue;
         }
 
-        foreach (file($file->getPathname()) ?: [] as $number => $line) {
+        foreach (file($path) ?: [] as $number => $line) {
             if (preg_match('/\bapp\(|::query\(/', $line) === 1) {
                 $offenders[] = $relative.':'.($number + 1);
             }

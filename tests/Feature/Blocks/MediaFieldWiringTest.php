@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Magna\Auth\Role;
 use Magna\Blocks\Livewire\BlockEditor;
 use Magna\Media\Livewire\MediaPickerModal;
 use Magna\Media\Media;
@@ -97,7 +98,14 @@ it('resolves thumbnail and label helpers by media id', function (): void {
 it('picker confirm dispatches the media id alongside path and disk', function (): void {
     $media = Media::factory()->create();
 
-    Livewire::actingAs(User::factory()->create())
+    // confirm() now authorizes media.view like every other picker read —
+    // see MediaPickerAuthorizationTest for the refusal side.
+    $role = Role::factory()->create();
+    $role->grant('media.view');
+    $user = User::factory()->create();
+    $user->assignRole($role);
+
+    Livewire::actingAs($user)
         ->test(MediaPickerModal::class)
         ->call('confirm', $media->path, $media->disk)
         ->assertDispatched('magna:media-selected', id: $media->id, path: $media->path, disk: $media->disk);
