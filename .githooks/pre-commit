@@ -3,8 +3,8 @@
 #
 # Runs the two fast checks on every commit so a style or type error is
 # caught before it reaches CI:
-#   1. pint --test --dirty  — style, only on files this commit touches
-#   2. phpstan              — level 9 on the staged PHP source files
+#   1. pint --test on the staged PHP files
+#   2. phpstan     — level 9 on the staged PHP source files
 #
 # The full test suite stays a CI/pre-push concern — it is far too slow for
 # a commit hook. Bypassing with --no-verify is possible but the same
@@ -24,7 +24,9 @@ if [ -z "$PHP" ] && command -v php >/dev/null 2>&1; then
 fi
 
 if [ -z "$PHP" ]; then
-    for candidate in "$HOME"/.config/herd/bin/php*/php.exe; do
+    # Newest install first: the glob sorts ascending, so walk it in reverse
+    # rather than settling for php83 when php84 sits right next to it.
+    for candidate in $(ls -r "$HOME"/.config/herd/bin/php*/php.exe 2>/dev/null); do
         if [ -x "$candidate" ]; then
             PHP="$candidate"
             break
@@ -50,8 +52,12 @@ if [ -z "$staged_any_php" ]; then
     exit 0
 fi
 
-echo "pre-commit: pint --test --dirty"
-"$PHP" vendor/bin/pint --test --dirty
+# The staged LIST, not --dirty: --dirty resolves files against the
+# worktree, so it misses a partially-staged file's staged content and
+# fails the commit over unrelated dirty files.
+echo "pre-commit: pint --test (staged files)"
+# shellcheck disable=SC2086
+"$PHP" vendor/bin/pint --test $staged_any_php
 
 if [ -n "$staged_php" ]; then
     echo "pre-commit: phpstan (staged source files)"
