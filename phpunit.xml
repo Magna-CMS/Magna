@@ -60,6 +60,11 @@
         <env name="ARGON_TIME" value="1"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
+        <!-- The settings snapshot lives in its own store (see
+             config/magna.php), which defaults to `file`. Left at that default
+             the suite would write real cache files and carry one test's
+             settings into the next; the array store keeps it per-test. -->
+        <env name="MAGNA_SETTINGS_CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>

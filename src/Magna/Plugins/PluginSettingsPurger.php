@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Magna\Plugins;
 
-use Illuminate\Support\Facades\Cache;
 use Magna\Settings\Setting;
+use Magna\Settings\SettingsCache;
 
 /**
  * Deletes the settings rows a plugin owns when it is uninstalled with --purge.
@@ -21,6 +21,10 @@ use Magna\Settings\Setting;
  */
 final class PluginSettingsPurger
 {
+    public function __construct(
+        private readonly SettingsCache $cache,
+    ) {}
+
     /**
      * Group slugs owned by core Settings classes (Settings::group() =
      * snake_case of the class basename minus "Settings"). A plugin manifest may
@@ -58,7 +62,7 @@ final class PluginSettingsPurger
             }
 
             Setting::query()->where('group', $group)->delete();
-            Cache::forget("magna-settings:{$group}");
+            $this->cache->forget($group);
         }
     }
 }

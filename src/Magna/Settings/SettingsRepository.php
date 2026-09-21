@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Magna\Settings;
 
-use Illuminate\Support\Facades\Cache;
 use ReflectionClass;
 use ReflectionProperty;
 
@@ -13,6 +12,7 @@ class SettingsRepository
     public function __construct(
         private readonly SettingValueCodec $codec,
         private readonly SettingsChangeLogger $changeLogger,
+        private readonly SettingsCache $cache,
     ) {}
 
     public function hydrate(Settings $instance): void
@@ -49,7 +49,7 @@ class SettingsRepository
             );
         }
 
-        Cache::forget("magna-settings:{$group}");
+        $this->cache->forget($group);
 
         $after = $this->auditSnapshot($group, $ref);
         $this->changeLogger->log($group, $before, $after);
@@ -58,10 +58,8 @@ class SettingsRepository
     /** @return array<string, mixed> */
     private function storedValues(string $group): array
     {
-        /** @var array<string, mixed> */
-        return Cache::remember(
-            "magna-settings:{$group}",
-            now()->addHour(),
+        return $this->cache->remember(
+            $group,
             fn (): array => Setting::query()
                 ->where('group', $group)
                 ->get()

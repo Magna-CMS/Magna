@@ -20,6 +20,7 @@ use Magna\Plugins\Commands\PluginListCommand;
 use Magna\Plugins\Commands\PluginMakeCommand;
 use Magna\Plugins\Commands\PluginUninstallCommand;
 use Magna\Plugins\Commands\PluginValidateCommand;
+use Magna\Settings\SettingsCache;
 use Magna\Updater\CoreUpdater;
 
 class PluginsServiceProvider extends ServiceProvider
@@ -53,7 +54,7 @@ class PluginsServiceProvider extends ServiceProvider
                 new PluginMigrator,
                 new PluginRegistry($this->app->make(PluginDiscovery::class)),
                 new PluginContractWirer($this->app),
-                new PluginSettingsPurger,
+                new PluginSettingsPurger(new SettingsCache),
                 new PluginCacheInvalidator($this->app),
             );
         });

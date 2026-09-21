@@ -23,6 +23,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Settings Storage
+    |--------------------------------------------------------------------------
+    |
+    | Which cache store holds the settings snapshot. Deliberately NOT
+    | `cache.default`: the cache driver is itself an admin-editable setting,
+    | so reading the settings through the store they control is circular.
+    |
+    | PerformanceServiceProvider has to read the settings to learn which
+    | driver to switch to, which means the read happens on the OLD store and
+    | the later save busts the NEW one. A driver change then sat stale until
+    | the hour-long snapshot expired — visible as Performance Settings
+    | reporting Redis while System Insights still reported the database.
+    |
+    | `file` needs neither a database nor Redis, so it also works before the
+    | installer has run. Point this at `database` or `redis` on a multi-node
+    | deployment, where a per-node file cache would let one node keep serving
+    | a stale snapshot after another node saved.
+    |
+    */
+
+    'settings' => [
+        'cache_store' => env('MAGNA_SETTINGS_CACHE_STORE', 'file'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | User Registration
     |--------------------------------------------------------------------------
     | Disabled by default per security-spec §1. Enable only when self-service
