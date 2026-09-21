@@ -524,6 +524,9 @@ function verify_release(string $zipPath): void
     $required = [
         'index.php', '.htaccess', 'artisan', '.env.example',
         'public/index.php', 'public/.htaccess', 'public/build/manifest.json',
+        // public/index.php requires this before the autoloader; shipping the
+        // guard without its page turns the too-old-PHP path into a fatal.
+        'bootstrap/unsupported-php.php',
         'vendor/autoload.php', 'vendor/composer/autoload_real.php',
         'vendor/symfony/deprecation-contracts/function.php',
     ];
