@@ -398,6 +398,10 @@ class LicenseClient
      * token plus a download grant, in one signed response.
      *
      * @return array<string, mixed>|null verified payload
+     *
+     * @throws \RuntimeException when the server refused and explained why —
+     *                           a full licence names the domains holding its
+     *                           seats, and that belongs in front of the admin
      */
     public function install(int $licenseId): ?array
     {
@@ -406,7 +410,7 @@ class LicenseClient
             ['core_version' => MagnaServiceProvider::VERSION],
         );
 
-        return $this->signed($response);
+        return SignedResponse::open($response);
     }
 
     /**
@@ -418,7 +422,7 @@ class LicenseClient
     {
         $domain = config('app.url');
 
-        return $this->signed($this->post('/license/activate', [
+        return SignedResponse::open($this->post('/license/activate', [
             'key' => $key,
             'domain' => is_string($domain) ? $domain : '',
             'fingerprint' => InstallFingerprint::derive(),
@@ -560,19 +564,6 @@ class LicenseClient
         } catch (Throwable) {
             return null;
         }
-    }
-
-    /**
-     * Open a signed envelope. A failed signature is indistinguishable from
-     * an outage on purpose — see the class docblock.
-     *
-     * @return array<string, mixed>|null
-     */
-    private function signed(?Response $response): ?array
-    {
-        $json = $this->json($response);
-
-        return $json === [] ? null : SignedPayload::open($json);
     }
 
     /** @return array<string, mixed> */
