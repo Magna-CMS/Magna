@@ -600,9 +600,9 @@ it('reads the raw process environment only where the process is the subject', fu
 it('writes no PHP source line wider than the ceiling', function (): void {
     $ceiling = 400;
     $allowed = [
-        // Shrink-only: both are Admin files queued for the W4 phpstan-debt
-        // pass; their wide lines retire with that rewrite.
-        'AdminPanelProvider.php',
+        // Shrink-only: queued for a rewrite that retires its wide lines.
+        // (AdminPanelProvider earned its removal when its inline JS/HTML
+        // hooks moved to Blade views.)
         'PerformanceSettingsPage.php',
     ];
 
@@ -703,7 +703,7 @@ it('lets the pinned big classes only shrink', function (): void {
         'Plugins/PluginManager.php' => 555,
         'Admin/Pages/SystemInfoPage.php' => 545,
         'Content/EntryManager.php' => 510,
-        'Admin/AdminPanelProvider.php' => 500,
+        'Admin/AdminPanelProvider.php' => 325,
         'Admin/Pages/SettingsPage.php' => 495,
     ];
 
