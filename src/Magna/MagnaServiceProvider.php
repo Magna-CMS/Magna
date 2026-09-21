@@ -14,6 +14,7 @@ use Magna\Backup\BackupServiceProvider;
 use Magna\Blocks\BlocksServiceProvider;
 use Magna\Content\ContentServiceProvider;
 use Magna\Delivery\DeliveryServiceProvider;
+use Magna\Install\EnvWriter;
 use Magna\Install\InstallServiceProvider;
 use Magna\Licensing\LicensingServiceProvider;
 use Magna\Management\ManagementServiceProvider;
@@ -23,6 +24,7 @@ use Magna\Plugins\PluginsServiceProvider;
 use Magna\Privacy\PrivacyServiceProvider;
 use Magna\Settings\PerformanceServiceProvider;
 use Magna\Settings\SettingsServiceProvider;
+use Magna\Support\DebugWindow;
 use Magna\Updater\UpdaterServiceProvider;
 use Magna\Webhooks\WebhookServiceProvider;
 
@@ -38,6 +40,13 @@ class MagnaServiceProvider extends ServiceProvider
 
     public function register(): void
     {
+        $this->app->singleton(DebugWindow::class, function (): DebugWindow {
+            return new DebugWindow(
+                new EnvWriter(config()->string('magna.install.env_path', base_path('.env'))),
+                config()->string('magna.debug_window.stamp_path', storage_path('app/magna-debug-window.json')),
+            );
+        });
+
         $this->app->register(SettingsServiceProvider::class);
         $this->app->register(PerformanceServiceProvider::class);
         $this->app->register(AuthServiceProvider::class);
@@ -64,6 +73,14 @@ class MagnaServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Close a panel-opened debug window that has run out. Costs one stat
+        // call on a site where nobody opened one, and needs neither cron nor a
+        // queue worker: whoever asks for the next page closes it. A flag an
+        // operator set by hand at the shell has no stamp and is left alone.
+        if (! $this->app->runningUnitTests()) {
+            $this->app->make(DebugWindow::class)->enforce();
+        }
+
         // Shared hosts rarely run a supervised queue worker, but they do run
         // cron — the same cron that already drives this scheduler. Drain the
         // queue from it: once a minute, consume everything pending and exit.

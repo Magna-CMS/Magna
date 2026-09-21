@@ -23,11 +23,10 @@ beforeEach(function (): void {
  * render the component whether or not the button that calls them was
  * rendered for them, so page access alone must not authorize it.
  *
- * The page also used to expose toggleDebugMode(), which wrote APP_DEBUG to
- * .env from the browser — stack traces, SQL and environment dumps for every
- * visitor, one compromised admin session away. Removed outright: that flag
- * is a server-operator decision made at the shell. The test below pins the
- * removal.
+ * Debug mode is the sharpest control on the page, so it is deliberately NOT
+ * a Livewire method at all: it lives behind a route with its own gate, it is
+ * super-admin only, and it opens a window that closes itself. The test below
+ * pins that no method here can reach APP_DEBUG again.
  */
 function systemInfoViewer(): User
 {
@@ -49,13 +48,14 @@ function systemInfoAdmin(): User
     return $user;
 }
 
-it('offers no panel method that writes APP_DEBUG, for anyone', function (): void {
-    // Regression pin on the removal: no Livewire method on this page may
-    // toggle debug mode again — not even behind settings.manage.
+it('offers no Livewire method that writes APP_DEBUG, for anyone', function (): void {
+    // A Livewire method is callable by anyone who can render the component,
+    // so the one control that can expose the whole site must not be one —
+    // not even behind settings.manage. It is a routed, super-admin action.
     expect(method_exists(SystemInfoPage::class, 'toggleDebugMode'))->toBeFalse();
 
     $source = (string) file_get_contents((new ReflectionClass(SystemInfoPage::class))->getFileName());
-    expect($source)->not->toContain("preg_replace('/^APP_DEBUG");
+    expect($source)->not->toContain('APP_DEBUG');
 });
 
 it('refuses clearCache for a settings.view-only user', function (): void {

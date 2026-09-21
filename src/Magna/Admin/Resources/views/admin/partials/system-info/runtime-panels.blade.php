@@ -188,7 +188,10 @@
                 <span class="text-[10px] uppercase font-bold text-amber-500 tracking-wider block font-mono">App Environment</span>
                 <h4 class="text-md font-extrabold text-slate-900 dark:text-white mt-1">Environment Flag & Debug</h4>
 
-                {{-- Debug status (read-only: APP_DEBUG is changed in .env on the server, never from the panel) --}}
+                {{-- Debug status. The control opens a BOUNDED window and is
+                     super-admin only: the hazard in APP_DEBUG is not switching
+                     it on to chase a fault, it is forgetting to switch it off,
+                     so the window closes itself (Magna\Support\DebugWindow). --}}
                 <div class="mt-5 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">
                     <div class="flex items-center gap-3">
                         <div class="w-2.5 h-2.5 rounded-full {{ $debug_mode ? 'pulse-amber' : '' }}" style="background:{{ $debug_mode ? '#f59e0b' : '#94a3b8' }}"></div>
@@ -197,9 +200,22 @@
                             <span class="text-[11px] font-mono font-semibold uppercase {{ $debug_mode ? 'text-amber-500' : 'text-slate-400' }}">{{ $debug_mode ? 'ENABLED' : 'DISABLED' }}</span>
                         </div>
                     </div>
-                    <p class="text-[11px] text-slate-400 mt-3 leading-normal">
-                        Set <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">APP_DEBUG</code> in the server's <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">.env</code> file.
-                    </p>
+                    @if (auth()->user()?->isSuperAdmin())
+                        <form method="POST" action="{{ route('magna.admin.debug-mode') }}" class="mt-3"
+                              onsubmit="return {{ $debug_mode ? 'true' : "confirm('Turn debug mode on? Until it expires, stack traces, SQL and environment values are shown to EVERY visitor of this site, not just to you.')" }};">
+                            @csrf
+                            <button type="submit" class="text-[11px] font-semibold {{ $debug_mode ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400' : 'text-amber-600 hover:text-amber-700 dark:text-amber-400' }}">
+                                {{ $debug_mode ? 'Turn debug mode off now' : 'Turn on for 30 minutes' }}
+                            </button>
+                        </form>
+                        <p class="text-[11px] text-slate-400 mt-2 leading-normal">
+                            A window opened here closes itself. Set <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">APP_DEBUG</code> in the server's <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">.env</code> to hold it open indefinitely.
+                        </p>
+                    @else
+                        <p class="text-[11px] text-slate-400 mt-3 leading-normal">
+                            Set <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">APP_DEBUG</code> in the server's <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">.env</code> file.
+                        </p>
+                    @endif
                 </div>
 
                 {{-- Env details --}}

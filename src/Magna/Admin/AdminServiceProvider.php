@@ -33,6 +33,7 @@ class AdminServiceProvider extends ServiceProvider
         // silently fails on case-sensitive (Linux) hosts while working on
         // case-insensitive Windows/macOS.
         $this->loadViewsFrom(__DIR__.'/Resources/views', 'magna');
+        $this->loadRoutesFrom(__DIR__.'/routes/web.php');
 
         // Wire plugin contracts after all providers have booted.
         $this->app->booted(function (): void {

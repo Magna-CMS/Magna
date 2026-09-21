@@ -23,6 +23,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Debug Window
+    |--------------------------------------------------------------------------
+    |
+    | Where the expiry of a panel-opened debug session is stamped. APP_DEBUG
+    | shows stack traces, SQL and environment dumps to every visitor, so the
+    | panel may only turn it on for a bounded window; the next request after
+    | the stamp expires turns it back off. Deleting this file by hand simply
+    | means the flag stays wherever .env leaves it.
+    |
+    */
+
+    'debug_window' => [
+        'stamp_path' => storage_path('app/magna-debug-window.json'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Settings Storage
     |--------------------------------------------------------------------------
     |

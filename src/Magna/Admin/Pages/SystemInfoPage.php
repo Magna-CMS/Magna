@@ -412,14 +412,9 @@ class SystemInfoPage extends Page
      * render the component, regardless of whether the button that calls them
      * was rendered, so the check has to live in the method.
      *
-     * The page used to offer a toggleDebugMode() here that wrote
-     * APP_DEBUG=true into .env from the browser. It is gone deliberately:
-     * turning stack traces, SQL and environment dumps on for every visitor
-     * of a production site is a server-operator decision made at the shell,
-     * not a panel button — a compromised or over-permissioned admin session
-     * must not be able to switch the whole site into disclosure mode. The
-     * panel still SHOWS the flag's state; changing it means editing .env on
-     * the server.
+     * Debug mode is deliberately not here at all: it is the one control that
+     * can expose the whole site, so it lives behind its own route and gate
+     * (Magna\Admin\Http\DebugModeController).
      */
     private function authorizeSettingsManage(): void
     {
