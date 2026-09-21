@@ -745,6 +745,10 @@ it('lets the pinned big classes only shrink', function (): void {
         'Plugins/PluginManager.php' => 555,
         'Admin/Pages/SystemInfoPage.php' => 545,
         'Content/EntryManager.php' => 510,
+        // The next-largest classes get pinned as they crest the pack — the
+        // ratchet covers the top of the size distribution, not a fixed list.
+        'Media/MediaIngestor.php' => 490,
+        'Delivery/OpenApi/ManagementPaths.php' => 455,
         'Admin/AdminPanelProvider.php' => 325,
         'Admin/Pages/SettingsPage.php' => 360,
     ];

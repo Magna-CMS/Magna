@@ -17,72 +17,65 @@ use Magna\Settings\MediaSettings;
 class MediaIngestor
 {
     /**
-     * Content-sniffed MIME types that are allowed through the upload pipeline.
-     * Never trust file extensions — only trust what finfo reports.
+     * THE allowlist: every content-sniffed MIME type the pipeline accepts,
+     * mapped to the canonical extension it is stored under. Never trust file
+     * extensions — only trust what finfo reports; the stored extension comes
+     * from this map, never from the upload. One map on purpose: this and a
+     * separate allowed-types list were hand-maintained in parallel (41
+     * entries each), where an entry added to one and not the other only
+     * surfaced as an undefined-key warning at store time.
      *
-     * @var list<string>
+     * What a working document library is asked to hold: rasters, SVG, PDF,
+     * audio/video, office and OpenDocument formats, text, archives. What is
+     * deliberately absent is anything a browser or a host can execute —
+     * .exe, .msi, .sh, .bat, PHP and JavaScript source, HTML. Those travel
+     * inside a zip, which is allowed, rather than being served back as
+     * themselves. Types outside IMAGE_MIMES are stored verbatim (metadata
+     * stripped when Imagick is present) and served as attachments via
+     * MediaTypePolicy.
      */
-    private const ALLOWED_MIMES = [
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-        'image/avif',
-        'image/svg+xml',
-        'application/pdf',
-        // Media & document types for the Blog plugin's video / audio / file blocks.
-        // These are stored verbatim (not re-encoded); only rasters and SVG are
-        // processed for safety.
-        'video/mp4',
-        'video/webm',
-        'video/ogg',
-        'audio/mpeg',
-        'audio/ogg',
-        'audio/wav',
-        'audio/webm',
-        'application/zip',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        /*
-         * The rest of what a working document library is asked to hold.
-         *
-         * Added because a staff collection that refuses a phone photo, a slide
-         * deck or a CSV is not a library. The allowlist stays an allowlist: it
-         * is still content-sniffed rather than trusted from the extension, and
-         * what is deliberately absent is anything a browser or a host can
-         * execute — .exe, .msi, .sh, .bat, PHP and JavaScript source, HTML.
-         * Those travel inside a zip, which is allowed, rather than being served
-         * back as themselves.
-         *
-         * Images here that are not in IMAGE_MIMES below are stored verbatim,
-         * because no driver on a stock install can decode them to re-encode
-         * them. They are served as attachments, so bytes that turn out to be
-         * something other than a picture are downloaded rather than rendered.
-         */
-        'image/heic',
-        'image/heif',
-        'image/tiff',
-        'image/bmp',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.oasis.opendocument.text',
-        'application/vnd.oasis.opendocument.spreadsheet',
-        'application/vnd.oasis.opendocument.presentation',
-        'application/rtf',
-        'text/csv',
-        'text/plain',
-        'application/x-7z-compressed',
-        'application/vnd.rar',
-        'application/gzip',
-        'application/x-tar',
-        'video/quicktime',
-        'video/x-msvideo',
-        'video/x-matroska',
-        'audio/mp4',
-        'audio/flac',
-        'audio/aac',
+    private const MIME_EXTENSIONS = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+        'image/avif' => 'avif',
+        'image/svg+xml' => 'svg',
+        'application/pdf' => 'pdf',
+        'video/mp4' => 'mp4',
+        'video/webm' => 'webm',
+        'video/ogg' => 'ogv',
+        'audio/mpeg' => 'mp3',
+        'audio/ogg' => 'oga',
+        'audio/wav' => 'wav',
+        'audio/webm' => 'weba',
+        'application/zip' => 'zip',
+        'application/msword' => 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.ms-excel' => 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'image/heic' => 'heic',
+        'image/heif' => 'heif',
+        'image/tiff' => 'tif',
+        'image/bmp' => 'bmp',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
+        'application/vnd.ms-powerpoint' => 'ppt',
+        'application/vnd.oasis.opendocument.text' => 'odt',
+        'application/vnd.oasis.opendocument.spreadsheet' => 'ods',
+        'application/vnd.oasis.opendocument.presentation' => 'odp',
+        'application/rtf' => 'rtf',
+        'text/csv' => 'csv',
+        'text/plain' => 'txt',
+        'application/x-7z-compressed' => '7z',
+        'application/vnd.rar' => 'rar',
+        'application/gzip' => 'gz',
+        'application/x-tar' => 'tar',
+        'video/quicktime' => 'mov',
+        'video/x-msvideo' => 'avi',
+        'video/x-matroska' => 'mkv',
+        'audio/mp4' => 'm4a',
+        'audio/flac' => 'flac',
+        'audio/aac' => 'aac',
     ];
 
     /**
@@ -164,51 +157,6 @@ class MediaIngestor
         return $key !== null && ($gd[$key] ?? false) === true;
     }
 
-    /** Canonical extensions, keyed by MIME type. */
-    private const MIME_EXTENSIONS = [
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/gif' => 'gif',
-        'image/webp' => 'webp',
-        'image/avif' => 'avif',
-        'image/svg+xml' => 'svg',
-        'application/pdf' => 'pdf',
-        'video/mp4' => 'mp4',
-        'video/webm' => 'webm',
-        'video/ogg' => 'ogv',
-        'audio/mpeg' => 'mp3',
-        'audio/ogg' => 'oga',
-        'audio/wav' => 'wav',
-        'audio/webm' => 'weba',
-        'application/zip' => 'zip',
-        'application/msword' => 'doc',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-        'application/vnd.ms-excel' => 'xls',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
-        'image/heic' => 'heic',
-        'image/heif' => 'heif',
-        'image/tiff' => 'tif',
-        'image/bmp' => 'bmp',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
-        'application/vnd.ms-powerpoint' => 'ppt',
-        'application/vnd.oasis.opendocument.text' => 'odt',
-        'application/vnd.oasis.opendocument.spreadsheet' => 'ods',
-        'application/vnd.oasis.opendocument.presentation' => 'odp',
-        'application/rtf' => 'rtf',
-        'text/csv' => 'csv',
-        'text/plain' => 'txt',
-        'application/x-7z-compressed' => '7z',
-        'application/vnd.rar' => 'rar',
-        'application/gzip' => 'gz',
-        'application/x-tar' => 'tar',
-        'video/quicktime' => 'mov',
-        'video/x-msvideo' => 'avi',
-        'video/x-matroska' => 'mkv',
-        'audio/mp4' => 'm4a',
-        'audio/flac' => 'flac',
-        'audio/aac' => 'aac',
-    ];
-
     public function __construct(
         private readonly ConversionPresetRegistry $presets,
         private readonly string $defaultDisk = 'public',
@@ -242,7 +190,7 @@ class MediaIngestor
         $mime = $this->sniffMimeType($sourcePath);
 
         // 2. Allowlist
-        if (! in_array($mime, self::ALLOWED_MIMES, true)) {
+        if (! array_key_exists($mime, self::MIME_EXTENSIONS)) {
             throw new MimeTypeNotAllowedException($mime, $originalFilename);
         }
 
