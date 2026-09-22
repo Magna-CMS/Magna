@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\File;
+use Magna\Install\DatabaseInstaller;
+use Magna\Install\EnvWriter;
 use Magna\Users\User;
 
 beforeEach(function (): void {
@@ -64,6 +66,33 @@ it('rejects unreachable database servers with a friendly error', function (): vo
         ])
         ->assertRedirect('/install/database')
         ->assertSessionHasErrors('connection');
+});
+
+it('names the missing PHP extension when PDO has no driver for the chosen type', function (): void {
+    // A PostgreSQL install on a host without php-pgsql threw
+    // "could not find driver", which fell through to the catch-all
+    // "check the server settings" — pointing at the host, port and password
+    // when the credentials were fine and only the PHP extension was absent.
+    $this->instance(DatabaseInstaller::class, new class(app(EnvWriter::class)) extends DatabaseInstaller
+    {
+        public function probe(array $connection): void
+        {
+            throw new PDOException('could not find driver');
+        }
+    });
+
+    $this->withSession(['magna_install_verified' => true])
+        ->from('/install/database')
+        ->post('/install/database', [
+            'driver' => 'pgsql',
+            'host' => '127.0.0.1',
+            'port' => 5432,
+            'database' => 'magna',
+            'username' => 'magna',
+            'password' => 'secret',
+        ])
+        ->assertRedirect('/install/database')
+        ->assertSessionHasErrors(['connection' => 'PHP has no driver for that database type. Install the matching extension (php-pgsql, php-mysql) and try again.']);
 });
 
 it('completes the full installation happy path', function (): void {

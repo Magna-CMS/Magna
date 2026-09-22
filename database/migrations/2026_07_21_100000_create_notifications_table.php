@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('type');
             // ulidMorphs: notifiables are ULID-keyed models (see the token table).
             $table->ulidMorphs('notifiable');
-            $table->text('data');
+            $table->json('data');
             $table->timestamp('read_at')->nullable();
             $table->timestamps();
         });

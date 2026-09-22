@@ -298,6 +298,7 @@ class InstallController extends Controller
         $message = $e->getMessage();
 
         return match (true) {
+            str_contains($message, 'could not find driver') => 'PHP has no driver for that database type. Install the matching extension (php-pgsql, php-mysql) and try again.',
             str_contains($message, 'Access denied') || str_contains($message, 'password authentication failed') => 'The database rejected those credentials. Double-check the username and password.',
             str_contains($message, 'Unknown database') || str_contains($message, 'does not exist') => 'That database does not exist yet. Create it on your server first, then try again.',
             str_contains($message, 'Connection refused') || str_contains($message, 'getaddrinfo') || str_contains($message, 'No such host') || str_contains($message, 'timed out') => 'Could not reach the database server. Check the host and port, and that the server is running.',
