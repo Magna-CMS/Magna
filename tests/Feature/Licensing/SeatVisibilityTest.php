@@ -104,7 +104,7 @@ it('shows the seat count and the domains holding them', function (): void {
         ->assertSee('2 of 2')
         ->assertSee('example.com')
         ->assertSee('magna-cms.test')
-        ->assertSee('Release a site to install elsewhere.')
+        ->assertSee('Buy another licence')
         ->assertSee('this site');
 });
 
@@ -118,7 +118,7 @@ it('says nothing about releasing when the licence still has room', function (): 
 
     Livewire::test(AccountCentrePage::class)
         ->assertSee('2 of 5')
-        ->assertDontSee('Release a site to install elsewhere.');
+        ->assertDontSee('Buy another licence');
 });
 
 it('releases another site seat through the account endpoint', function (): void {
@@ -153,4 +153,18 @@ it('refuses to release a seat without licensing.manage', function (): void {
             'product_slug' => 'magna/blog',
             'domain' => 'magna-cms.test',
         ])->assertForbidden();
+});
+
+it('points a full licence at the product it is sold on', function (): void {
+    // Adding a site and moving one are different problems; the storefront
+    // link is the answer to the commoner one.
+    $decorated = SeatSummary::decorate([seatWallet()]);
+
+    expect($decorated[0]['store_url'])->toBe('https://managemagna.jrstudios.dev/magna/blog');
+});
+
+it('offers no product link for a slug it cannot place', function (): void {
+    $decorated = SeatSummary::decorate([seatWallet(['product_slug' => 'not-a-package'])]);
+
+    expect($decorated[0]['store_url'])->toBeNull();
 });

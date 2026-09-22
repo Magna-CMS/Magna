@@ -17,7 +17,17 @@
             'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' => ! $seatsFull,
         ])>{{ $seatsUsed }} of {{ $seatLimit }}</span>
         @if ($seatsFull)
-            <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-300">Release a site to install elsewhere.</p>
+            {{-- Adding a site and moving one are different problems. Lead with
+                 the purchase, because that is the commoner of the two, and keep
+                 release within reach so a migration is not a support ticket. --}}
+            <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
+                @if (($license['store_url'] ?? null) !== null)
+                    <a href="{{ $license['store_url'] }}" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Buy another licence</a>
+                    to add a site, or release one below to move it.
+                @else
+                    Buy another licence to add a site, or release one below to move it.
+                @endif
+            </p>
         @endif
     @endif
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Magna\Licensing;
 
+use Magna\Marketplace\Marketplace;
+
 /**
  * Turns the wallet's raw activation rows into something a licence row can
  * render: how many seats are in use, and which sites are holding them.
@@ -32,6 +34,7 @@ final class SeatSummary
             static function (array $license) use ($thisSite): array {
                 $license['seats'] = self::seats($license, $thisSite);
                 $license['seats_used'] = count($license['seats']);
+                $license['store_url'] = self::storeUrl($license);
 
                 return $license;
             },
@@ -54,6 +57,27 @@ final class SeatSummary
         $host = is_string($appUrl) ? parse_url($appUrl, PHP_URL_HOST) : null;
 
         return is_string($host) && $host !== '' ? $host : null;
+    }
+
+    /**
+     * Where this product is sold, so a licence with no room left can offer the
+     * obvious way forward rather than only the awkward one.
+     *
+     * Someone whose seats are full is usually adding a site, not moving one —
+     * and being told only to release a site turns a sale into a support
+     * conversation. The storefront serves a product at /{vendor}/{package}.
+     *
+     * @param  array<string, mixed>  $license
+     */
+    private static function storeUrl(array $license): ?string
+    {
+        $slug = $license['product_slug'] ?? null;
+
+        if (! is_string($slug) || ! str_contains($slug, '/')) {
+            return null;
+        }
+
+        return Marketplace::WEB_BASE.'/'.$slug;
     }
 
     /**
