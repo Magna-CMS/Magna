@@ -101,6 +101,11 @@ it('refuses to apply an update when core files are not writable', function (): v
     chmod($sample, 0444);
     clearstatcache(true, $sample);
 
+    // This test is about the writability refusal, and the fixture's checksum
+    // carries no signature - which is now refused first, before anything is
+    // written. Open the hatch so the failure under test is the one reached.
+    config(['magna.updater.allow_unsigned_checksum' => true]);
+
     try {
         $state = $updater->apply(
             '9.9.9',

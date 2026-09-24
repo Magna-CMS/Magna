@@ -52,6 +52,27 @@ class CoreUpdater
         'bootstrap',
         'routes',
         'database/migrations',
+        /*
+         * Core's own config defaults — and note it is the SUBDIRECTORY, never
+         * `config` itself, which holds the files a site edits and must survive
+         * an update untouched.
+         *
+         * The distinction cost two security controls. `config/` is excluded,
+         * correctly, but core kept adding keys to `config/magna.php` and
+         * reading them from `src/Magna` — so the code arrived on an update and
+         * the key never did, leaving `config()` answering null on every site
+         * that updated rather than installed fresh. `magna.security.trusted_hosts`
+         * silently stopped honouring MAGNA_TRUSTED_HOSTS, and
+         * `require_signed_checksum` left core updates accepting an unsigned
+         * checksum, while a fresh install of the identical release did both
+         * correctly. Both were found in the wild before this line existed.
+         *
+         * Nothing in here is a site's to edit — `config/magna.php` is the file
+         * they own and it hands to this one — so mirroring it with `delete`
+         * takes nothing from anybody. Keeping the defaults inside `config/`
+         * also keeps their `env()` calls where `env()` legitimately belongs.
+         */
+        'config/defaults',
         // The panel's compiled assets and the fonts they name. Code arrived on
         // an update and these did not, which breaks in the least obvious way
         // available: a Blade partial referencing a font this release added

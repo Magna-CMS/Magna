@@ -56,18 +56,40 @@ class ReleaseArchive
      * the public key baked into this build — the same control licensed plugin
      * downloads already use (Magna\Licensing\LicenseInstaller).
      *
-     * A present-but-invalid signature is always fatal. A *missing* one is
-     * fatal only when `magna.updater.require_signed_checksum` is on, because
-     * Update Manager has to publish `zip_sha256_signature` for every release
-     * before that can be enforced without bricking updates. Flip the flag as
-     * soon as it does — until then this is checksum-only against a hostile
-     * update server.
+     * A present-but-invalid signature is always fatal. A *missing* one is fatal
+     * unless `magna.updater.allow_unsigned_checksum` is explicitly on.
+     *
+     * That key is new, and the rename is the fix rather than a tidy-up. It was
+     * `require_signed_checksum`, shipped false before 1.4.0 and true after — but
+     * a core update never replaces `config/`, so every site that UPDATED kept
+     * the old false and went on accepting unsigned releases, while a fresh
+     * install of the same version refused them. Nobody could see it: the panel
+     * reported the control as configured. Changing the default could not reach
+     * those sites either, because the key was *present* in their file and a
+     * present key is the site's own word. A new name is absent everywhere, so
+     * the safe value arrives on the update that carries it.
+     *
+     * Inverted on purpose as well: the unsafe choice now has to be typed out.
+     * Update Manager signs every release — verified against a live check-in —
+     * so a site only needs the hatch to talk to an update server that does not.
      *
      * @return string|null a refusal message, or null when acceptable
      */
     public function checkChecksumSignature(string $expectedSha256, ?string $signature): ?string
     {
-        $required = (bool) config('magna.updater.require_signed_checksum', false);
+        $required = ! (bool) config('magna.updater.allow_unsigned_checksum', false);
+
+        /*
+         * Said out loud, once, where somebody can act on it.
+         *
+         * An operator who genuinely wanted enforcement off set the old key and
+         * would otherwise watch updates start being refused with nothing
+         * naming the reason. The old key is NOT honoured - honouring it would
+         * restore the ambiguity the rename exists to remove.
+         */
+        if ($required && config('magna.updater.require_signed_checksum') === false) {
+            Log::notice('magna.updater.require_signed_checksum has been replaced by magna.updater.allow_unsigned_checksum and is no longer read. Signed checksums are now required; set MAGNA_UPDATER_ALLOW_UNSIGNED_CHECKSUM=true to opt out.');
+        }
 
         if ($signature === null || $signature === '') {
             if ($required) {

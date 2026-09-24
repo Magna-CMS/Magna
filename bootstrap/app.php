@@ -82,7 +82,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ['^.+$'];
             }
 
-            $extra = config('magna.security.trusted_hosts');
+            // Defaulted, not merely read. The backfill in MagnaServiceProvider
+            // supplies this key on a site whose config predates it, but a
+            // security control should not be one provider's ordering away from
+            // trusting nothing — which is what this was on every site that
+            // updated into 1.4.0 or 1.4.1.
+            $extra = config('magna.security.trusted_hosts', '');
 
             return array_values(array_filter(
                 array_map(trim(...), explode(',', is_string($extra) ? $extra : '')),

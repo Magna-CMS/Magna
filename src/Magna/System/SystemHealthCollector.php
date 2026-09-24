@@ -233,7 +233,7 @@ final class SystemHealthCollector
             ];
         }
 
-        if (config('app.trusted_proxies') === '*') {
+        if (config('trustedproxy.proxies') === '*') {
             $warnings[] = [
                 'label' => 'All proxies are trusted (TRUSTED_PROXIES=*)',
                 'help' => 'X-Forwarded-For is accepted from any client, so the IP recorded in the audit log and used for login brute-force throttling can be set by the attacker. Correct for a single trusted reverse proxy that strips inbound forwarding headers; replace with an explicit CIDR list otherwise.',

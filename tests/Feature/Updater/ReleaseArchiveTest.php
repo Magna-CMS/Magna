@@ -74,31 +74,42 @@ it('accepts an archive whose checksum matches', function (): void {
     @unlink($zipPath);
 });
 
-it('tolerates a missing signature only while the flag is off', function (): void {
+it('tolerates a missing signature only while the hatch is open', function (): void {
     $archive = app(ReleaseArchive::class);
     $sha = str_repeat('b', 64);
 
-    config(['magna.updater.require_signed_checksum' => false]);
+    config(['magna.updater.allow_unsigned_checksum' => true]);
     expect($archive->checkChecksumSignature($sha, null))->toBeNull();
 
-    config(['magna.updater.require_signed_checksum' => true]);
+    config(['magna.updater.allow_unsigned_checksum' => false]);
     expect($archive->checkChecksumSignature($sha, null))
         ->toContain('without a signed checksum');
 });
 
 it('always refuses a signature that fails verification', function (): void {
-    // Present-but-invalid is fatal regardless of the flag.
-    config(['magna.updater.require_signed_checksum' => false]);
+    // Present-but-invalid is fatal regardless of the hatch.
+    config(['magna.updater.allow_unsigned_checksum' => true]);
 
     expect(app(ReleaseArchive::class)->checkChecksumSignature(str_repeat('c', 64), base64_encode('garbage')))
         ->toContain('failed signature verification');
 });
 
 it('requires a signed checksum by default (W1-5)', function (): void {
-    // The flip to secure-by-default: Update Manager publishes an Ed25519
-    // signature for every core release, so an unsigned /updates response is
-    // refused unless an operator explicitly opts out with
-    // MAGNA_UPDATER_REQUIRE_SIGNED_CHECKSUM=false. This pin stops the
-    // default quietly sliding back to permissive.
-    expect(config('magna.updater.require_signed_checksum'))->toBeTrue();
+    /*
+     * The flip to secure-by-default: Update Manager publishes an Ed25519
+     * signature for every core release, so an unsigned /updates response is
+     * refused unless an operator explicitly opts out with
+     * MAGNA_UPDATER_ALLOW_UNSIGNED_CHECKSUM=true. This pin stops the default
+     * quietly sliding back to permissive.
+     *
+     * The key was `require_signed_checksum` and had to be renamed to land.
+     * It shipped false before 1.4.0 and true after, but a core update never
+     * replaces `config/` - so every site that UPDATED kept the old false and
+     * went on accepting unsigned releases, while a fresh install of the same
+     * version refused them. Changing the default could not reach them either:
+     * the key was present in their file, and a present key is the site's own
+     * word. A new name is absent everywhere, which is what let the safe value
+     * arrive. See tests/Feature/Updater/CoreConfigDefaultsTest.php.
+     */
+    expect(config('magna.updater.allow_unsigned_checksum'))->toBeFalse();
 });
