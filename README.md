@@ -118,7 +118,7 @@ Everything else is a plugin — blog, SEO, forms, e-commerce, documentation, AI.
 
 ## 🚀 Why Magna is Different
 
-The headless CMS space is crowded. Here is exactly what Magna does that others don't — every claim is specified in this repo and enforced in CI:
+The headless CMS space is crowded. Here is exactly what Magna does that others don't
 
 ### 🐘 1. Laravel-Native, PHP-Hosting-Friendly
 
