@@ -132,7 +132,7 @@ Headless purity has a famous cost: install it and you see an API. Magna's answer
 
 ### 🔐 3. Security as a Process with Proof
 
-Target: **OWASP ASVS Level 2**, verified by a third-party audit before 1.0, results published. Security is on by default — not documented as "recommended hardening":
+Target: **OWASP ASVS Level 2**
 
 - Argon2id password hashing
 - Per-role **enforceable** TOTP 2FA with recovery codes
