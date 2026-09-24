@@ -24,4 +24,14 @@ declare(strict_types=1);
 | See Magna\Support\ConfigDefaults.
 */
 
-return require __DIR__.'/defaults/magna.php';
+/*
+ * Guarded rather than a bare require. A core file that has gone missing -
+ * a half-finished upload, an extraction that stopped - is a broken install
+ * either way, but a fatal here happens inside the config bootstrapper,
+ * before the error handler exists: the operator gets a blank page and no
+ * panel to fix it from. Empty leaves every magna.* key null, which is bad
+ * and visible, and the site still boots to say so.
+ */
+return is_file(__DIR__.'/defaults/magna.php')
+    ? require __DIR__.'/defaults/magna.php'
+    : [];

@@ -154,18 +154,50 @@ final class CoreWritability
 
     /**
      * Absolute path of the first entry PHP cannot write under $absolute, or null
-     * when every entry is writable. A path that does not exist is not a blocker:
-     * the overlay creates it.
+     * when every entry is writable.
+
+     * A path that does not exist is not itself a blocker - the overlay creates
+     * it - but whatever has to CONTAIN it is, and that used to go unasked. It
+     * started mattering when `config/defaults` joined the list: it is absent on
+     * every install predating it, so the walk returned null, the pre-flight
+     * reported no blockers, and a `config/` the web user cannot write into only
+     * announced itself when mirror() threw partway through. The rollback caught
+     * that, but "established before anything is written" is the guarantee this
+     * class exists to give. So a missing path is answered by its nearest
+     * existing parent.
      *
      * Every file is examined, not a sample. Sampling was tried first and missed a
      * single read-only file past the cut-off — worthless, because one such file
      * is enough to break an overlay halfway through. The core-owned tree is ~500
      * files, walked once per installer screen or update.
      */
+    /**
+     * The nearest existing ancestor of a path that is not there yet, when that
+     * ancestor cannot be written into.
+     *
+     * Stops at the install root: anything above it is the host's business and
+     * refusing an update over it would be this class overreaching.
+     */
+    private function firstUnwritableParent(string $absolute): ?string
+    {
+        $root = rtrim($this->basePath, DIRECTORY_SEPARATOR.'/');
+        $parent = dirname($absolute);
+
+        while ($parent !== $root && str_starts_with($parent, $root) && ! file_exists($parent)) {
+            $parent = dirname($parent);
+        }
+
+        if (! is_dir($parent)) {
+            return null;
+        }
+
+        return is_writable($parent) ? null : $parent;
+    }
+
     private function firstUnwritable(string $absolute): ?string
     {
         if (! file_exists($absolute)) {
-            return null;
+            return $this->firstUnwritableParent($absolute);
         }
 
         if (is_file($absolute)) {

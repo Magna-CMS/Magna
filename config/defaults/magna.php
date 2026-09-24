@@ -213,13 +213,15 @@ return [
     |   override is honoured ONLY outside production, where it exists for the
     |   test suite and for a pre-release marketplace running its own keypair.
     |
-    | require_signed_checksum: refuse a core update whose sha256 arrives without
-    |   a valid Ed25519 signature. The checksum alone only defeats an attacker
-    |   who can swap the archive but not the /updates response; the signature
-    |   also defeats one who can forge both. ON by default since Update
-    |   Manager publishes the signature for every core release (verified in
-    |   live check-in data); MAGNA_UPDATER_REQUIRE_SIGNED_CHECKSUM=false is
-    |   the escape hatch for an install talking to a hub that does not sign.
+    | allow_unsigned_checksum: accept a core update whose sha256 arrives with no
+    |   Ed25519 signature. The checksum alone only defeats an attacker who can
+    |   swap the archive but not the /updates response; the signature also
+    |   defeats one who can forge both, so signatures are required by default -
+    |   Update Manager publishes one for every core release. Set
+    |   MAGNA_UPDATER_ALLOW_UNSIGNED_CHECKSUM=true only for an install talking
+    |   to a hub that does not sign. Named the opposite way round from the key
+    |   it replaces, so the unsafe choice has to be typed out; see the note
+    |   beside it below for why renaming was the only way to fix it.
     */
     /*
     |--------------------------------------------------------------------------
@@ -265,7 +267,18 @@ return [
     | choice now has to be typed out.
     */
     'updater' => [
-        'allow_unsigned_checksum' => (bool) env('MAGNA_UPDATER_ALLOW_UNSIGNED_CHECKSUM', false),
+        /*
+         * `=== true`, not a cast.
+         *
+         * env() maps only 'true'/'false'/'(true)'/'(false)'/'null'/'empty';
+         * every other string comes through as itself, and (bool) 'no' is
+         * TRUE. Under the old key that typo failed closed - it read as
+         * 'require signatures'. Inverting the polarity without tightening
+         * the cast would have made MAGNA_UPDATER_ALLOW_UNSIGNED_CHECKSUM=no
+         * open the hatch, on a variable .env.example now puts in front of
+         * every new operator. Only a real boolean true opens it.
+         */
+        'allow_unsigned_checksum' => env('MAGNA_UPDATER_ALLOW_UNSIGNED_CHECKSUM') === true,
 
         /*
          * Retired, and left here on purpose.

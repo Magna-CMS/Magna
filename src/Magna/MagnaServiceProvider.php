@@ -87,13 +87,24 @@ class MagnaServiceProvider extends ServiceProvider
     /**
      * Core's own config, for the keys a site's file has never heard of.
      *
-     * `magna` alone. The rest of `config/` is Laravel's, where the framework
-     * already answers for anything absent and a shadow copy here would put
-     * Magna in the business of tracking framework defaults forever — a shadow
-     * that fell behind would be this same bug with a wider blast radius.
-     * `cors.php` is every-value-a-list, which is exactly what the backfill must
-     * not touch, and `trustedproxy.php` has one key that already defaults to
-     * null. Neither gains anything today; both are one line away if they do.
+     * The two files Magna authors and ships. The rest of `config/` is
+     * Laravel's, where the framework already answers for anything absent and a
+     * shadow copy here would put Magna in the business of tracking framework
+     * defaults forever — a shadow that fell behind would be this same bug with
+     * a wider blast radius.
+     *
+     * `trustedproxy` is here for a reason worth stating: the file was ADDED in
+     * 1.4.1, so a site that updated from 1.4.0 or earlier has no such file at
+     * all. `config('trustedproxy.proxies')` is null there, TrustProxies trusts
+     * nothing, and TRUSTED_PROXIES does nothing — the real client IP is lost
+     * from the audit log and from login throttling, and isSecure() reads false
+     * behind a proxy. Same delivery hole, same release, third instance. A
+     * namespace backfill reaches it precisely because it does not need the
+     * file to exist.
+     *
+     * `cors.php` is not here: it has shipped since the first release, so no
+     * install is missing it, and every value in it is a list — the one shape
+     * the backfill deliberately never touches.
      *
      * The defaults live in `config/defaults`, which CoreUpdater DOES overlay -
      * see the note beside it there. That is also why their `env()` calls sit
@@ -110,10 +121,21 @@ class MagnaServiceProvider extends ServiceProvider
         /** @var Repository $config */
         $config = $this->app->make('config');
 
-        /** @var array<string, mixed> $defaults */
-        $defaults = require config_path('defaults/magna.php');
+        foreach (['magna', 'trustedproxy'] as $file) {
+            $path = config_path('defaults/'.$file.'.php');
 
-        ConfigDefaults::backfill($config, 'magna', $defaults);
+            // Never fatal on a missing core file: see config/magna.php. A site
+            // that boots wrong can be fixed from its own panel; one that does
+            // not boot cannot.
+            if (! is_file($path)) {
+                continue;
+            }
+
+            /** @var array<string, mixed> $defaults */
+            $defaults = require $path;
+
+            ConfigDefaults::backfill($config, $file, $defaults);
+        }
     }
 
     public function boot(): void

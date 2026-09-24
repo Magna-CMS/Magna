@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Config\Repository;
 use Illuminate\Support\Arr;
+use Magna\MagnaServiceProvider;
 use Magna\Support\ConfigDefaults;
 use Magna\Updater\CoreUpdater;
 use Tests\TestCase;
@@ -67,7 +68,23 @@ it('defines every magna config key core reads', function (): void {
 
             $source = (string) file_get_contents($file->getPathname());
 
-            if (preg_match_all("/config\(\s*'magna\.([a-z0-9_.]+)'/i", $source, $matches, PREG_OFFSET_CAPTURE) === 0) {
+            /*
+             * Both spellings. `config('magna.x')` is the common one, and
+             * `config()->string('magna.x', …)` is the typed read core uses
+             * wherever the value feeds something that insists on a type —
+             * MagnaServiceProvider and the installer both do. The first cut of
+             * this guard matched only the former and would have missed them.
+             *
+             * What it still cannot see: a key built at runtime
+             * (`config('magna.'.$name)`), a typed wrapper taking a variable
+             * (DeliveryServiceProvider::configString), and anything outside
+             * these four directories. Those are why the backfill is
+             * absent-only rather than clever — an unseen key still resolves,
+             * it just resolves to core's default.
+             */
+            $pattern = "/config\(\s*\)?\s*(?:->\s*(?:string|integer|boolean|float|array)\s*\(\s*)?'magna\.([a-z0-9_.]+)'/i";
+
+            if (preg_match_all($pattern, $source, $matches, PREG_OFFSET_CAPTURE) === 0) {
                 continue;
             }
 
@@ -176,6 +193,38 @@ it('takes a shortened list exactly as the site left it', function (): void {
     expect($config->get('magna.proxies'))->toBe(['10.0.0.1']);
 });
 
+/*
+ * An emptied section is a section, not a list.
+ *
+ * This is the case the first cut of the merge got wrong, and it got it wrong
+ * silently: `array_is_list([])` is true, so classifying by what the SITE holds
+ * read `'security' => []` as a list, skipped it, and left trusted_hosts null —
+ * the original bug, intact, for that one shape of config file. Core knows what
+ * it meant the value to be; the site's copy does not.
+ */
+it('fills a section the site has emptied', function (): void {
+    $config = backfilled(
+        ['security' => []],
+        ['security' => ['trusted_hosts' => 'filled']],
+    );
+
+    expect($config->get('magna.security.trusted_hosts'))->toBe('filled');
+});
+
+/*
+ * The other side of asking the default: core expects names, the site has
+ * positions. Odd, but it is their file, and writing string keys into a list
+ * would leave them with neither shape.
+ */
+it('leaves a populated list alone where core expects a section', function (): void {
+    $config = backfilled(
+        ['edge_cache' => ['first', 'second']],
+        ['edge_cache' => ['driver' => 'null']],
+    );
+
+    expect($config->get('magna.edge_cache'))->toBe(['first', 'second']);
+});
+
 it('leaves keys core has never heard of alone', function (): void {
     $config = backfilled(['a_site_invented_this' => 'keep me'], ['security' => ['trusted_hosts' => '']]);
 
@@ -226,4 +275,50 @@ it('cannot repair a stale value, which is what the rename is for', function (): 
     $config = backfilled($stale, ['updater' => ['require_signed_checksum' => true]]);
 
     expect($config->get('magna.updater.require_signed_checksum'))->toBeFalse();
+});
+
+/*
+|--------------------------------------------------------------------------
+| The half that actually repairs an install
+|--------------------------------------------------------------------------
+|
+| Everything above tests ConfigDefaults in isolation. None of it notices if
+| nobody calls it: delete the backfill from MagnaServiceProvider and every
+| other test here still passes, because the repository they build by hand is
+| not the one the application boots with. These run against the booted app.
+*/
+
+it('wires the backfill into the application it is supposed to repair', function (): void {
+    // Emptied on the live repository, the way a stale config file leaves it,
+    // then the provider re-registered: the key must come back.
+    config(['magna' => []]);
+
+    (new MagnaServiceProvider(app()))->register();
+
+    expect(config('magna.security.trusted_hosts'))->toBeString()
+        ->and(config('magna.media.disk'))->toBe('public')
+        ->and(config('magna.updater.allow_unsigned_checksum'))->toBeFalse();
+});
+
+/*
+ * config/trustedproxy.php was ADDED in 1.4.1, so a site that updated from
+ * 1.4.0 or earlier has no such file: TRUSTED_PROXIES does nothing, the real
+ * client IP is lost from the audit log and from login throttling, and
+ * isSecure() reads false behind a proxy. Third instance of the same delivery
+ * hole. The backfill reaches it because it works on the namespace, not the
+ * file — which is exactly what this asserts.
+ */
+it('supplies a whole namespace whose config file the site never received', function (): void {
+    config(['trustedproxy' => []]);
+
+    (new MagnaServiceProvider(app()))->register();
+
+    expect(config()->has('trustedproxy.proxies'))->toBeTrue();
+});
+
+// A core file that has gone missing must leave a site that still boots and can
+// say so, not a blank page from inside the config bootstrapper.
+it('does not fatal when a defaults file is not there', function (): void {
+    expect(require dirname(__DIR__, 3).'/config/magna.php')->toBeArray()
+        ->and(require dirname(__DIR__, 3).'/config/trustedproxy.php')->toBeArray();
 });

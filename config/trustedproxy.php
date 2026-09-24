@@ -4,48 +4,21 @@ declare(strict_types=1);
 
 /*
 |--------------------------------------------------------------------------
-| Trusted Proxies
+| Trusted proxies
 |--------------------------------------------------------------------------
 |
-| Behind a reverse proxy, load balancer or CDN the real client IP arrives in
-| X-Forwarded-For and the original scheme in X-Forwarded-Proto. Without a
-| trusted-proxy list Laravel ignores both, so request()->ip() is the proxy —
-| which is what the audit log records and what login throttling counts — and
-| request()->isSecure() is false on a site that is plainly https to its users.
+| Yours to edit. Replace this line with an array and it becomes the file that
+| decides; core fills in only what you leave out.
 |
-| Trust nothing by default: X-Forwarded-* is client-supplied and spoofable, so
-| trusting the wrong thing lets any visitor choose the IP that gets throttled
-| and logged. Name the proxy explicitly per deployment via TRUSTED_PROXIES —
-| a comma-separated list of addresses or CIDR ranges. Always prefer the
-| explicit list: '*' trusts every inbound hop, including X-Forwarded-Host,
-| which then lets any client rewrite the host that password-reset links and
-| other absolute URLs are built from. Reserve '*' for the one topology where
-| it is sound — a single trusted reverse proxy that strips inbound
-| forwarding headers before adding its own — and treat it as a last resort
-| even there.
+| As shipped it hands to core's own copy in `config/defaults`, which a core
+| update replaces - unlike this file, which is left alone. This file did not
+| exist before 1.4.1, so on a site that updated into 1.4.x it may still not:
+| the backfill covers that, because it works on the namespace rather than on
+| the file.
 |
-| This file exists rather than a trustProxies() call in bootstrap/app.php
-| because the middleware configuration callback there runs when the HTTP
-| kernel is resolved, which is BEFORE the config repository is bound — so any
-| config() lookup in it silently returns null and the list is never applied.
-| Illuminate\Http\Middleware\TrustProxies falls back to reading
-| trustedproxy.proxies when it handles a request, by which point config is
-| loaded (and cached), so the value set here is the one that actually takes
-| effect.
-|
+| See Magna\Support\ConfigDefaults.
 */
 
-$trustedProxies = env('TRUSTED_PROXIES');
-
-return [
-
-    'proxies' => match (true) {
-        $trustedProxies === '*' => '*',
-        is_string($trustedProxies) && trim($trustedProxies) !== '' => array_values(array_filter(
-            array_map(trim(...), explode(',', $trustedProxies)),
-            static fn (string $proxy): bool => $proxy !== '',
-        )),
-        default => null,
-    },
-
-];
+return is_file(__DIR__.'/defaults/trustedproxy.php')
+    ? require __DIR__.'/defaults/trustedproxy.php'
+    : [];

@@ -84,19 +84,12 @@ final class ConfigDefaults
              * because it was never asked.
              */
             if (array_key_exists($name, $existing)) {
-                if (is_array($default) && is_array($existing[$name]) && ! array_is_list($existing[$name])) {
+                if (self::isSection($default) && self::acceptsSection($existing[$name])) {
                     // A section, so look inside it: this is what reaches a new
                     // key added under a section the site's file already has.
                     $existing[$name] = self::fill($existing[$name], $default);
                 }
 
-                /*
-                 * A list is one value, never a set of them.
-                 *
-                 * `trustedproxy.proxies` is the case that matters: merging it
-                 * element-wise would re-add proxies an operator had removed,
-                 * which is a security control quietly widening itself.
-                 */
                 continue;
             }
 
@@ -104,5 +97,41 @@ final class ConfigDefaults
         }
 
         return $existing;
+    }
+
+    /**
+     * Whether core means this value to hold named settings.
+     *
+     * Asked of the DEFAULT, never of the site's copy, and that is the whole
+     * subtlety. `array_is_list([])` is true, so classifying by what the site
+     * happens to have meant a section they had emptied — `'security' => []` —
+     * read as a list and was skipped, leaving `trusted_hosts` null: the
+     * original bug, still there, for that one shape of file. Core knows what it
+     * intended the value to be; the site's copy does not.
+     *
+     * @param  mixed  $default
+     *
+     * @phpstan-assert-if-true array<array-key, mixed> $default
+     */
+    private static function isSection($default): bool
+    {
+        return is_array($default) && $default !== [] && ! array_is_list($default);
+    }
+
+    /**
+     * Whether the site's value can take one.
+     *
+     * An empty array can: it is a section with nothing in it yet. A populated
+     * list cannot — core expects names and the site has positions, which is
+     * odd, but it is their file and writing string keys into it would leave
+     * them with neither. Theirs stands.
+     *
+     * @param  mixed  $existing
+     *
+     * @phpstan-assert-if-true array<array-key, mixed> $existing
+     */
+    private static function acceptsSection($existing): bool
+    {
+        return is_array($existing) && ($existing === [] || ! array_is_list($existing));
     }
 }
