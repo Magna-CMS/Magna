@@ -74,8 +74,11 @@
             "@php vendor/bin/pint --test",
             "@php vendor/bin/phpstan analyse --memory-limit=1G",
             "@php artisan config:clear --ansi",
-            "@php artisan test"
+            "@php artisan test",
+            "@php vendor/bin/psalm --taint-analysis",
+            "@composer audit"
         ],
+        "plugin-check": "@php bin/plugin-gates.php",
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
