@@ -22,7 +22,7 @@ declare(strict_types=1);
  * storefront markup — and is deliberately not pinned yet; the rule here
  * covers Blade under src/, which is clean and must stay clean.)
  */
-function pluginRoots(): array
+function pluginArchRoots(): array
 {
     $base = str_replace('\\', '/', dirname(__DIR__, 3));
     $roots = [];
@@ -44,11 +44,11 @@ function pluginRoots(): array
     return $roots;
 }
 
-function pluginSourceFiles(): array
+function pluginArchSourceFiles(): array
 {
     $files = [];
 
-    foreach (pluginRoots() as $plugin => $dir) {
+    foreach (pluginArchRoots() as $plugin => $dir) {
         if (! is_dir($dir.'/src')) {
             continue;
         }
@@ -69,9 +69,9 @@ function pluginSourceFiles(): array
     return $files;
 }
 
-function skipWithoutPlugins(): bool
+function skipWithoutPluginArchSubjects(): bool
 {
-    if (pluginRoots() !== []) {
+    if (pluginArchRoots() !== []) {
         return false;
     }
 
@@ -79,11 +79,11 @@ function skipWithoutPlugins(): bool
 }
 
 it('holds every plugin source file to strict types', function (): void {
-    skipWithoutPlugins();
+    skipWithoutPluginArchSubjects();
 
     $offenders = [];
 
-    foreach (pluginSourceFiles() as $relative => $path) {
+    foreach (pluginArchSourceFiles() as $relative => $path) {
         if (str_ends_with($relative, '.blade.php')) {
             continue;
         }
@@ -97,11 +97,11 @@ it('holds every plugin source file to strict types', function (): void {
 });
 
 it('lets no debug output ship from a plugin', function (): void {
-    skipWithoutPlugins();
+    skipWithoutPluginArchSubjects();
 
     $offenders = [];
 
-    foreach (pluginSourceFiles() as $relative => $path) {
+    foreach (pluginArchSourceFiles() as $relative => $path) {
         if (preg_match('/\b(?:dd|ray|var_dump|print_r|var_export)\s*\(/', (string) file_get_contents($path)) === 1) {
             $offenders[] = $relative;
         }
@@ -111,7 +111,7 @@ it('lets no debug output ship from a plugin', function (): void {
 });
 
 it('keeps plugin classes under the god-class ceiling', function (): void {
-    skipWithoutPlugins();
+    skipWithoutPluginArchSubjects();
 
     // Pinned at their current size, shrink-only: each may only come down.
     // Splitting one is the same treatment PluginManager got in core.
@@ -131,7 +131,7 @@ it('keeps plugin classes under the god-class ceiling', function (): void {
     $ceiling = 600;
     $offenders = [];
 
-    foreach (pluginSourceFiles() as $relative => $path) {
+    foreach (pluginArchSourceFiles() as $relative => $path) {
         if (str_ends_with($relative, '.blade.php')) {
             continue;
         }
@@ -148,7 +148,7 @@ it('keeps plugin classes under the god-class ceiling', function (): void {
 });
 
 it('keeps plugin source lines readable', function (): void {
-    skipWithoutPlugins();
+    skipWithoutPluginArchSubjects();
 
     // Same 400-character ceiling as core; the allowlist is shrink-only.
     $allowed = [
@@ -159,7 +159,7 @@ it('keeps plugin source lines readable', function (): void {
 
     $offenders = [];
 
-    foreach (pluginSourceFiles() as $relative => $path) {
+    foreach (pluginArchSourceFiles() as $relative => $path) {
         if (in_array($relative, $allowed, true)) {
             continue;
         }
@@ -176,11 +176,11 @@ it('keeps plugin source lines readable', function (): void {
 });
 
 it('allows no raw Blade output inside plugin src', function (): void {
-    skipWithoutPlugins();
+    skipWithoutPluginArchSubjects();
 
     $offenders = [];
 
-    foreach (pluginSourceFiles() as $relative => $path) {
+    foreach (pluginArchSourceFiles() as $relative => $path) {
         if (! str_ends_with($relative, '.blade.php')) {
             continue;
         }
@@ -194,7 +194,7 @@ it('allows no raw Blade output inside plugin src', function (): void {
 });
 
 it('keeps every adopted quality kit whole, and its analysis level a one-way ratchet', function (): void {
-    skipWithoutPlugins();
+    skipWithoutPluginArchSubjects();
 
     // A plugin that adopted the kit (marked by its pre-commit hook) must
     // keep all four pieces, hold its phpstan level at or above the pinned
@@ -221,7 +221,7 @@ it('keeps every adopted quality kit whole, and its analysis level a one-way ratc
     $problems = [];
     $unadopted = [];
 
-    foreach (pluginRoots() as $plugin => $dir) {
+    foreach (pluginArchRoots() as $plugin => $dir) {
         if (! is_file($dir.'/.githooks/pre-commit')) {
             $unadopted[] = $plugin;
 
