@@ -1,0 +1,67 @@
+#!/bin/sh
+# Commit-message policy, applied at the moment the message exists.
+#
+# Two jobs:
+#   1. Trailer scrub — commits in this repository carry no attribution
+#      trailers; authorship is the committer field. Co-author credits and
+#      tool bylines are removed rather than refused, because the committer
+#      usually did not type them.
+#   2. Subject format — history here reads `type(scope): lowercase summary`
+#      and stays useful because of it; a subject that breaks the shape is
+#      refused with the rule and an example.
+#
+# Merge/revert/fixup subjects skip the format check (their shape is git's),
+# but the scrub still applies. A machine-local extension can live at
+# .git/hooks/commit-msg.local (never committed) and runs last.
+
+MSG_FILE="$1"
+
+[ -f "$MSG_FILE" ] || exit 0
+
+# --- 1. Trailer scrub -------------------------------------------------------
+# The pattern is assembled from pieces so this file never contains the
+# phrases it scrubs — the push gate greps the content of every outgoing
+# commit, the one shipping this hook included.
+tmp="$MSG_FILE.tmp.$$"
+credit='co-authored'
+byline='generated'
+grep -ivE "^${credit}-by:|${byline} with" "$MSG_FILE" > "$tmp" || true
+
+# Trim trailing blank lines the scrub may have exposed.
+awk 'NF {blank=0} !NF {blank++} {lines[NR]=$0} END {for (i=1; i<=NR-blank; i++) print lines[i]}' "$tmp" > "$MSG_FILE"
+rm -f "$tmp"
+
+# --- 2. Subject format ------------------------------------------------------
+subject=$(grep -v '^#' "$MSG_FILE" | grep -m1 -v '^[[:space:]]*$' || true)
+
+case "$subject" in
+    ''|Merge*|Revert\ *|fixup!*|squash!*|amend!*)
+        ;;
+    *)
+        ok=1
+
+        printf '%s' "$subject" | grep -qE '^(feat|fix|refactor|test|chore|docs|build|perf|style|ci|revert)(\([a-z0-9,./-]+\))?(!)?: [a-z0-9]' || ok=0
+
+        if [ ${#subject} -gt 100 ]; then
+            ok=0
+        fi
+
+        if [ "$ok" -ne 1 ]; then
+            echo "commit-msg: subject does not match the house format." >&2
+            echo "  yours:   $subject" >&2
+            echo "  rule:    type(scope): lowercase summary   (<= 100 chars)" >&2
+            echo "  types:   feat fix refactor test chore docs build perf style ci revert" >&2
+            echo "  example: fix(updater): deliver core's config defaults to sites that updated" >&2
+            exit 1
+        fi
+        ;;
+esac
+
+# --- 3. Machine-local extension --------------------------------------------
+local_hook="$(git rev-parse --git-dir)/hooks/commit-msg.local"
+
+if [ -x "$local_hook" ]; then
+    exec "$local_hook" "$@"
+fi
+
+exit 0

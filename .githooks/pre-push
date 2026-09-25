@@ -1,0 +1,78 @@
+#!/bin/sh
+# Push-time definition-of-done gate.
+#
+# A commit only proves the staged files were clean; a push publishes the
+# whole branch, so it gets the whole-project checks the commit hook is too
+# slow for: pint across the analysed paths, phpstan on its full
+# configuration, and the architecture suite — the ratchets and guardrails
+# that keep structure from rotting. The full test suite stays a CI and
+# release concern (it runs 10+ minutes; a push should not).
+#
+# A machine-local extension can live at .git/hooks/pre-push.local (never
+# committed); it receives the same stdin git gave this hook and runs last.
+#
+# Activate with:  composer setup-hooks   (or automatically on composer install)
+
+set -e
+
+# Git hands pre-push the pushed refs on stdin. Buffer them: we need to
+# inspect them here AND forward them to the local extension afterwards.
+STDIN=$(cat)
+
+# Nothing but deletions (local sha all zeros) needs no gate.
+deleting_only=1
+while IFS=' ' read -r _local_ref local_sha _remote_ref _remote_sha; do
+    [ -z "$local_sha" ] && continue
+    case "$local_sha" in
+        0000000000000000000000000000000000000000) ;;
+        *) deleting_only=0 ;;
+    esac
+done <<EOF
+$STDIN
+EOF
+
+if [ "$deleting_only" -eq 1 ]; then
+    exit 0
+fi
+
+# Same php resolution as pre-commit: explicit config, then PATH, then the
+# newest Herd install.
+PHP="$(git config hooks.php || true)"
+
+if [ -z "$PHP" ] && command -v php >/dev/null 2>&1; then
+    PHP=php
+fi
+
+if [ -z "$PHP" ]; then
+    for candidate in $(ls -r "$HOME"/.config/herd/bin/php*/php.exe 2>/dev/null); do
+        if [ -x "$candidate" ]; then
+            PHP="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PHP" ]; then
+    echo "pre-push: php not found. Point the hooks at one with:" >&2
+    echo "  git config hooks.php /path/to/php" >&2
+    exit 1
+fi
+
+echo "pre-push: pint --test"
+"$PHP" vendor/bin/pint --test src app config tests database routes bootstrap/app.php bootstrap/providers.php
+
+echo "pre-push: phpstan"
+"$PHP" vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+echo "pre-push: architecture suite"
+"$PHP" artisan config:clear --ansi >/dev/null
+"$PHP" vendor/bin/pest tests/Feature/Architecture
+
+# Machine-local extension, with the buffered refs replayed on its stdin.
+local_hook="$(git rev-parse --git-dir)/hooks/pre-push.local"
+
+if [ -x "$local_hook" ]; then
+    printf '%s\n' "$STDIN" | "$local_hook" "$@"
+fi
+
+exit 0
