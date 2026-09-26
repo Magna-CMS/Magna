@@ -50,6 +50,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // lock file, so it needs no session.
         $middleware->prepend(RedirectIfNotInstalled::class);
 
+        // The maintenance bypass the core updater issues to the admin who
+        // starts an update is read by PreventRequestsDuringMaintenance, a
+        // global middleware that runs before EncryptCookies could decrypt it.
+        // Laravel's own `down --secret` hands the cookie out from inside that
+        // middleware, unencrypted; a cookie queued from the application goes
+        // through EncryptCookies, and an encrypted bypass is no bypass — the
+        // admin's progress poll answered 503 the moment the site went down.
+        $middleware->encryptCookies(except: ['laravel_maintenance']);
+
         // Trusted proxies are configured in config/trustedproxy.php, not here.
         //
         // This callback runs when the HTTP kernel is resolved, which happens

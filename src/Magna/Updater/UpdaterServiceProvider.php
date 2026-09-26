@@ -12,6 +12,7 @@ use Magna\Updater\Console\CoreRepairCommand;
 use Magna\Updater\Console\CoreResumeCommand;
 use Magna\Updater\Console\CoreRollbackCommand;
 use Magna\Updater\Console\CoreStatusCommand;
+use Magna\Updater\Run\FirstRequestFinalizer;
 use Magna\Updater\Run\UpdateJournal;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -74,11 +75,22 @@ class UpdaterServiceProvider extends ServiceProvider
 
             // A switched update waits for a process on the new code. On a host
             // with cron and no worker, this is that process: every minute while
-            // a run is pending, nothing otherwise.
+            // a run is pending, nothing otherwise. The site is in maintenance
+            // mode for exactly that window, and the scheduler skips every
+            // event while the site is down unless told otherwise — told here,
+            // because down is the only time this event has work to do.
             $schedule->command('magna:core:resume')
                 ->everyMinute()
                 ->withoutOverlapping()
+                ->evenInMaintenanceMode()
                 ->when(fn (): bool => UpdateJournal::latestPending($this->app->make(UpdatePaths::class)) !== null);
         });
+
+        // The first request that boots the new release finishes a switched
+        // update, whoever sent it — see FirstRequestFinalizer. Never from the
+        // console: the commands there say explicitly what happens to a run.
+        if (! $this->app->runningInConsole()) {
+            $this->app->make(FirstRequestFinalizer::class)->run();
+        }
     }
 }

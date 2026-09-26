@@ -203,9 +203,14 @@ class MagnaServiceProvider extends ServiceProvider
                 return;
             }
 
+            // Even while the site is down: the job that finishes a switched
+            // core update is queued at the very moment maintenance mode
+            // begins, and the scheduler would otherwise skip the tick that
+            // drains it until the site is up — which is what the job is for.
             $schedule->command('queue:work', ['--stop-when-empty', '--max-time=55', '--tries=3'])
                 ->everyMinute()
                 ->withoutOverlapping()
+                ->evenInMaintenanceMode()
                 ->runInBackground();
         });
     }

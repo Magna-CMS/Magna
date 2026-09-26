@@ -75,12 +75,12 @@ const RELEASE_ENGINE_PATH = 'bootstrap/update/engine.php';
  * an archive that leaves vendor/ alone beyond the SDK, as every release
  * before 1.4.4 did.
  *
- * 1.4.5 ships `keep`: the kernel 1.4.4 installed runs the vendor step with a
- * `composer require` flag Composer 2 rejects, so a site on 1.4.4 with a
- * Marketplace package would roll every `replace` hop back until its kernel
- * is replaced — which is what this hop does. Restore `replace` for 1.4.6.
+ * 1.4.5 shipped `keep`: the kernel 1.4.4 installed ran the vendor step with
+ * a `composer require` flag Composer 2 rejects, so a site on 1.4.4 with a
+ * Marketplace package would have rolled every `replace` hop back until its
+ * kernel was replaced — which is what that hop did.
  */
-const RELEASE_VENDOR_STRATEGY = 'keep';
+const RELEASE_VENDOR_STRATEGY = 'replace';
 
 /**
  * The engine block for a staged archive: which API the engine speaks and the
