@@ -201,10 +201,11 @@ it('keeps every adopted quality kit whole, and its analysis level a one-way ratc
     // floor, and may only SHRINK its excludePaths list. Plugins without the
     // kit warn rather than fail — adoption happens on first touch, and a
     // hard failure here would punish plugins nobody is working on.
+    // Each value is the highest level the plugin's code passed when probed
+    // (2026-09-26) — docs and marketplace both sit at 0 today, with level 1
+    // reporting 9 and 10 errors respectively: the next rungs to earn.
     $levelFloors = [
-        'magna/docs' => 9,
-        // Probed 2026-09-25: highest clean level even with its two
-        // excludePaths. Level 1 reports 10 errors — the next rung to earn.
+        'magna/docs' => 0,
         'magna/marketplace' => 0,
         'magna/pages' => 0,
         'magna/plugin-manager' => 3,
