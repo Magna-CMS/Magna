@@ -11,6 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Magna\MagnaServiceProvider;
+use ReflectionProperty;
 
 /**
  * Queued wrapper around {@see CoreUpdater} so applying an update runs in the
@@ -52,6 +53,32 @@ class CoreUpdateJob implements ShouldQueue
         );
     }
 
+    /**
+     * `mode`, surviving a payload from before the property existed.
+     *
+     * A queued job is unserialized into whatever the class looks like when
+     * the worker picks it up, and unserialization does not apply constructor
+     * defaults: a property the payload lacks stays UNINITIALIZED. The job
+     * that performs an update is queued by the OLD release and can be
+     * retried by a worker already on the new one — the first live hop of a
+     * 1.4.1 site did exactly that, and every retry died on
+     * "Typed property CoreUpdateJob::$mode must not be accessed before
+     * initialization" instead of noticing the update was already done.
+     */
+    private function modeValue(): string
+    {
+        // Reflection rather than isset(): the analyser proves the constructor
+        // always initializes the property, and it is right about every path
+        // except unserialize — the one this exists for.
+        return (new ReflectionProperty($this, 'mode'))->isInitialized($this) ? $this->mode : UpdateMode::Update->value;
+    }
+
+    /** Same vintage, same reason as {@see modeValue()}. */
+    private function maintenanceSecretValue(): ?string
+    {
+        return (new ReflectionProperty($this, 'maintenanceSecret'))->isInitialized($this) ? $this->maintenanceSecret : null;
+    }
+
     public function handle(CoreUpdater $updater): void
     {
         $target = ltrim($this->targetVersion, 'vV');
@@ -60,14 +87,14 @@ class CoreUpdateJob implements ShouldQueue
         // moves forward and nothing else. Skipped quietly, without a progress
         // entry: apply() has the same guard (UpdatePreflight) for every other
         // caller, but there it is a refusal the admin is shown.
-        if ($this->mode === UpdateMode::Repair->value) {
+        if ($this->modeValue() === UpdateMode::Repair->value) {
             if (version_compare(MagnaServiceProvider::VERSION, $target, '!=')) {
                 Log::info('Skipping core repair job: it names v'.$target.' and this site runs v'.MagnaServiceProvider::VERSION.'.');
 
                 return;
             }
 
-            $state = $updater->repairFromHub($this->zipUrl, $this->expectedSha256, $this->checksumSignature, $this->maintenanceSecret);
+            $state = $updater->repairFromHub($this->zipUrl, $this->expectedSha256, $this->checksumSignature, $this->maintenanceSecretValue());
         } else {
             // The install is already at (or past) this version, so someone else
             // applied it: either CoreUpdateStarter's stalled-update fallback ran it
@@ -88,7 +115,7 @@ class CoreUpdateJob implements ShouldQueue
                 $this->expectedSha256,
                 $this->force,
                 $this->checksumSignature,
-                $this->maintenanceSecret,
+                $this->maintenanceSecretValue(),
             );
         }
 
