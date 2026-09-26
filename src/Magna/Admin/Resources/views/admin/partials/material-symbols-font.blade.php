@@ -18,15 +18,22 @@
 
         ICONS=$(grep -rho 'msri[^>]*>[^<]*' src/Magna/Admin/Resources/views/admin/ \
           | grep -oP "(?:>\s*|')\K[a-z_]{3,}" | sort -u | paste -sd,)
-        CSS=$(curl -s -A 'Mozilla/5.0 Chrome/140.0' \
+        UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+        CSS=$(curl -s -A "$UA" \
           "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=$ICONS")
-        curl -s -A 'Mozilla/5.0 Chrome/140.0' \
+        curl -s -A "$UA" \
           -o public/fonts/material-symbols/material-symbols-rounded-subset.woff2 \
-          "$(echo "$CSS" | grep -oP 'url\(\K[^)]+')"
+          "$(echo "$CSS" | grep -oP 'url\(\K[^)]+' | head -1)"
+        echo "$ICONS" | tr ',' '\n' > public/fonts/material-symbols/material-symbols-rounded-subset.txt
 
-    The user agent matters: without a woff2-capable one an older format comes
-    back. tests/Feature/Admin/AdminIconFontIsSelfHostedTest.php fails if a
-    remote font URL returns to an admin view.
+    The .txt beside the font lists the names it was built from, and
+    tests/Feature/Admin/AdminIconFontIsSelfHostedTest.php fails when a view
+    uses a ligature that list lacks — the icon that rendered as
+    "system_update_alt" in plain text on a live System Info page is the
+    incident that test exists to stop repeating. The user agent matters: a
+    FULL browser UA, or Google serves raw TTF instead of woff2 and the
+    signature check fails. The same test fails if a remote font URL returns
+    to an admin view.
 
     Self-hosting also means the panel's icons survive an install with no route
     to the public internet, which a CMS deployed on a client's own hardware

@@ -67,6 +67,47 @@ it('declares the icon font against a file that ships with the installation', fun
     expect(file_get_contents($font, false, null, 0, 4))->toBe('wOF2');
 });
 
+/*
+ * The subset only contains the glyphs it was built from, so a ligature added
+ * to a view without rebuilding it renders as its own name in plain text —
+ * "system_update_alt" sat beside a live System Info warning heading exactly
+ * that way. The .txt beside the font records what the subset was built from;
+ * the rebuild command in the partial's comment writes both.
+ */
+it('has a glyph in the subset for every ligature the views use', function (): void {
+    $manifest = __DIR__.'/../../../public/fonts/material-symbols/material-symbols-rounded-subset.txt';
+
+    expect($manifest)->toBeReadableFile();
+
+    $built = array_filter(array_map(trim(...), explode("\n", (string) file_get_contents($manifest))));
+
+    $used = [];
+
+    foreach (adminBladeViews() as [$view]) {
+        // Line-bounded, exactly like the rebuild command's grep — unanchored
+        // dot-alls would wander into the .msri CSS rule and read the font
+        // axis names ('wght', 'opsz') as ligatures.
+        preg_match_all('/msri[^>\n]*>[^<\n]*/', (string) file_get_contents($view), $spans);
+
+        foreach ($spans[0] as $span) {
+            // A literal ligature follows the tag's closing ">"; the arms of a
+            // ternary inside it are quoted — the same two shapes the rebuild
+            // command's grep collects.
+            preg_match_all("/(?:>\s*|')([a-z_]{3,})/", $span, $names);
+
+            foreach ($names[1] as $name) {
+                $used[$name] = true;
+            }
+        }
+    }
+
+    expect($used)->not->toBe([]);
+
+    $missing = array_values(array_diff(array_keys($used), $built));
+
+    expect($missing)->toBe([], 'Icons used in views but absent from the subset font: '.implode(', ', $missing).'. Rebuild it — the command is in material-symbols-font.blade.php.');
+});
+
 it('renders the icons in the views that use them through that partial', function (string $view): void {
     expect(file_get_contents($view))->toContain("@include('magna::admin.partials.material-symbols-font')");
 })->with([
