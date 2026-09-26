@@ -73,6 +73,44 @@ it('removes stale downloads and extractions and leaves fresh ones', function ():
     }
 });
 
+/*
+ * A rolled-back run sets the release's copies aside as `.name.failed-<run>`
+ * siblings for a look afterwards. A failed vendor/ alone is a hundred
+ * megabytes, so the next run takes them away — for finished runs only.
+ */
+it('removes the release copies a finished run set aside, and leaves a live run alone', function (): void {
+    $paths = housekeepingPaths();
+
+    foreach (['20260101_000000_a' => 'rolled_back', '20260102_000000_b' => 'swapped'] as $runId => $state) {
+        mkdir($paths->runsDir().'/'.$runId, 0777, true);
+        file_put_contents($paths->runsDir().'/'.$runId.'/journal.json', (string) json_encode([
+            'state' => $state,
+            'paths' => ['src/Magna' => ['state' => 'unswapped'], 'vendor' => ['state' => 'unswapped']],
+        ]));
+
+        foreach (['src/.Magna.failed-'.$runId, '.vendor.failed-'.$runId] as $failed) {
+            mkdir($paths->base($failed), 0777, true);
+            file_put_contents($paths->base($failed.'/copy.php'), '<?php // release copy');
+        }
+    }
+
+    mkdir($paths->base('src/Magna'), 0777, true);
+    file_put_contents($paths->base('src/Magna/Live.php'), '<?php // live');
+
+    try {
+        $removed = (new UpdateHousekeeping(new Filesystem, $paths))->pruneFailedCopies();
+
+        expect($removed)->toHaveCount(2)
+            ->and(is_dir($paths->base('src/.Magna.failed-20260101_000000_a')))->toBeFalse()
+            ->and(is_dir($paths->base('.vendor.failed-20260101_000000_a')))->toBeFalse()
+            ->and(is_dir($paths->base('src/.Magna.failed-20260102_000000_b')))->toBeTrue()
+            ->and(is_dir($paths->base('.vendor.failed-20260102_000000_b')))->toBeTrue()
+            ->and(is_file($paths->base('src/Magna/Live.php')))->toBeTrue();
+    } finally {
+        removeHousekeepingPaths($paths);
+    }
+});
+
 it('keeps the newest finished runs and never touches one still in progress', function (): void {
     $paths = housekeepingPaths();
 

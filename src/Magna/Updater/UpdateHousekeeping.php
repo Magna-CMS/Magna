@@ -102,6 +102,51 @@ final class UpdateHousekeeping
     /** Run directories kept after a success, newest first; the rest go with their logs. */
     public const KEEP_RUNS = 5;
 
+    /** Journal states in which a run is over and nothing of it is still in flight. */
+    private const FINISHED_STATES = ['completed', 'failed', 'rolled_back', 'needs_attention', 'rolled_back_by_boot_guard'];
+
+    /**
+     * Removes the release copies a rolled-back run set aside as
+     * `.<name>.failed-<run>` siblings. They are kept when the rollback
+     * happens so the run can be looked at; by the next run they have been
+     * looked at, and a failed vendor/ alone is a hundred megabytes. Only runs
+     * whose journal is over are considered, so nothing mid-switch is touched.
+     *
+     * @return list<string> the copies removed
+     */
+    public function pruneFailedCopies(): array
+    {
+        $directory = $this->paths->runsDir();
+
+        if (! is_dir($directory)) {
+            return [];
+        }
+
+        $removed = [];
+
+        foreach (scandir($directory) ?: [] as $runId) {
+            if ($runId === '.' || $runId === '..') {
+                continue;
+            }
+
+            $journal = json_decode((string) @file_get_contents($directory.'/'.$runId.'/journal.json'), true);
+
+            if (! is_array($journal) || ! in_array($journal['state'] ?? null, self::FINISHED_STATES, true)) {
+                continue;
+            }
+
+            foreach (array_keys(is_array($journal['paths'] ?? null) ? $journal['paths'] : []) as $relative) {
+                $failed = Engine\StagedSwap::failedPath($this->paths->base((string) $relative), $runId);
+
+                if ((is_dir($failed) || is_file($failed)) && $this->remove($failed)) {
+                    $removed[] = $failed;
+                }
+            }
+        }
+
+        return $removed;
+    }
+
     /**
      * Removes all but the newest $keep run directories whose journal is over.
      * A run still in progress is never touched, whatever its age.
@@ -129,7 +174,7 @@ final class UpdateHousekeeping
             $journal = json_decode((string) @file_get_contents($directory.'/'.$name.'/journal.json'), true);
             $state = is_array($journal) && is_string($journal['state'] ?? null) ? $journal['state'] : 'completed';
 
-            if (! in_array($state, ['completed', 'failed', 'rolled_back', 'needs_attention', 'rolled_back_by_boot_guard'], true)) {
+            if (! in_array($state, self::FINISHED_STATES, true)) {
                 continue;
             }
 

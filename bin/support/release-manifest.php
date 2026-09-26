@@ -74,8 +74,13 @@ const RELEASE_ENGINE_PATH = 'bootstrap/update/engine.php';
  * stale classmap entries stop accumulating. `--vendor-strategy=keep` builds
  * an archive that leaves vendor/ alone beyond the SDK, as every release
  * before 1.4.4 did.
+ *
+ * 1.4.5 ships `keep`: the kernel 1.4.4 installed runs the vendor step with a
+ * `composer require` flag Composer 2 rejects, so a site on 1.4.4 with a
+ * Marketplace package would roll every `replace` hop back until its kernel
+ * is replaced — which is what this hop does. Restore `replace` for 1.4.6.
  */
-const RELEASE_VENDOR_STRATEGY = 'replace';
+const RELEASE_VENDOR_STRATEGY = 'keep';
 
 /**
  * The engine block for a staged archive: which API the engine speaks and the

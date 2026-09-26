@@ -40,6 +40,19 @@ final class EngineContext
 {
     public const API = 1;
 
+    /**
+     * How the site's own packages are put back after the release's vendor/
+     * is in: pinned, without scripts (the finalizer rediscovers packages
+     * itself), without the advisory audit, with the optimised map. Every
+     * option here must be one Composer 2 accepts — a 1.x-only flag made
+     * Composer print its usage and the whole switch roll back, on a live
+     * site, and tests/Feature/Updater/ComposerRequireArgumentsTest.php now
+     * checks the list against the installed Composer.
+     *
+     * @var list<string>
+     */
+    public const COMPOSER_REQUIRE_ARGUMENTS = ['require', '--no-scripts', '--no-progress', '--no-audit', '--optimize-autoloader'];
+
     private bool $switching = false;
 
     /**
@@ -301,7 +314,7 @@ final class EngineContext
             throw new RuntimeException('Composer is not available on this server, so the site\'s own packages cannot be put back after the switch.');
         }
 
-        $arguments = ['require', '--no-update-with-dependencies', '--no-scripts', '--no-progress', '--optimize-autoloader'];
+        $arguments = [...self::COMPOSER_REQUIRE_ARGUMENTS];
 
         foreach ($packages as $name => $version) {
             $arguments[] = $version === '*' ? $name : $name.':'.$version;

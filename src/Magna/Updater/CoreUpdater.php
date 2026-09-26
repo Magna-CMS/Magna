@@ -282,6 +282,7 @@ class CoreUpdater
 
         try {
             $this->housekeeping->pruneTemp();
+            $this->housekeeping->pruneFailedCopies();
 
             $incompatible = $mode === UpdateMode::Update ? $this->checkCompatibility($target) : [];
             if ($incompatible !== [] && ! $force) {

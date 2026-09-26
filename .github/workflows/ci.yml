@@ -189,9 +189,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # previous patch, previous minor, the floor the private plugins
-        # target, and the last archive built --classmap-authoritative.
-        from: [v1.4.3, v1.3.25, v1.3.16, v1.3.7]
+        # the first release with the kernel (the hop that runs the engine
+        # hand-off), the last legacy updater, previous minor, the floor the
+        # private plugins target, and the last archive built
+        # --classmap-authoritative.
+        from: [v1.4.4, v1.4.3, v1.3.25, v1.3.16, v1.3.7]
 
     steps:
       - uses: actions/checkout@v4
