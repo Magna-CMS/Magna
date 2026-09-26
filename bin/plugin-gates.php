@@ -62,6 +62,20 @@ function gate_plugins(string $root): array
             continue;
         }
 
+        // A symlinked plugin is an external product's checkout riding along
+        // for development (lekha/core points at its own repository elsewhere
+        // on disk). It carries its own toolchain and CI; analysing it through
+        // core's stack reports the other product's debt as ours. is_link()
+        // misses Windows directory links, so compare resolved paths instead.
+        $resolved = str_replace('\\', '/', (string) realpath($dir));
+        $expected = str_replace('\\', '/', (string) realpath($root.'/plugins-dev')).'/'.basename(dirname($dir)).'/'.basename($dir);
+
+        if ($resolved !== '' && $resolved !== $expected) {
+            gate_say(basename(dirname($dir)).'/'.basename($dir).': external checkout (symlink) — gated by its own repository, skipped', GATE_YELLOW);
+
+            continue;
+        }
+
         $plugins[] = basename(dirname($dir)).'/'.basename($dir);
     }
 

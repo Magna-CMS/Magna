@@ -36,6 +36,14 @@ function pluginArchRoots(): array
             continue;
         }
 
+        // A symlinked directory is an external product's checkout (lekha/core
+        // lives in its own repository elsewhere on disk) — it is gated by its
+        // own toolchain, not core's. is_link() misses Windows directory
+        // links, so compare resolved paths instead.
+        if (str_replace('\\', '/', (string) realpath($dir)) !== $dir) {
+            continue;
+        }
+
         $roots[basename(dirname($dir)).'/'.basename($dir)] = $dir;
     }
 
