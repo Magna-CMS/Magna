@@ -146,3 +146,35 @@ it('stays blind to duplicated literal data tables, deliberately', function (): v
 
     expect($noise)->toBe([]);
 });
+
+it('reports every pair of a clone family, each with a file-set independent fingerprint', function (): void {
+    $scanner = new CloneScanner;
+
+    $family = $scanner->scanSources([
+        'a.php' => cloneSource('Alpha', 'total'),
+        'b.php' => cloneSource('Beta', 'sum'),
+        'c.php' => cloneSource('Gamma', 'count'),
+    ]);
+
+    $pairs = array_map(fn (array $region): string => $region['a']['file'].'|'.$region['b']['file'], $family);
+    sort($pairs);
+
+    // Three copies are three decisions: a<->b, a<->c, b<->c.
+    expect($pairs)->toBe(['a.php|b.php', 'a.php|c.php', 'b.php|c.php']);
+
+    // The a<->b region must be the same clone — same fingerprint — whether
+    // or not the third copy is in the corpus. CI scans core without
+    // plugins-dev, so a fingerprint that shifts with the file set would make
+    // the allowlist unsatisfiable on one side or the other.
+    $pairOnly = $scanner->scanSources([
+        'a.php' => cloneSource('Alpha', 'total'),
+        'b.php' => cloneSource('Beta', 'sum'),
+    ]);
+
+    $ab = array_values(array_filter($family, fn (array $region): bool => $region['b']['file'] === 'b.php'));
+
+    expect($pairOnly)->toHaveCount(1)
+        ->and($ab)->toHaveCount(1)
+        ->and($ab[0]['fingerprint'])->toBe($pairOnly[0]['fingerprint'])
+        ->and($ab[0]['tokens'])->toBe($pairOnly[0]['tokens']);
+});

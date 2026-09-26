@@ -127,7 +127,7 @@ final class CloneScanner
             }
         }
 
-        /** @var array<string, int> $seen window hash -> first global offset */
+        /** @var array<string, list<int>> $seen window hash -> every prior global offset */
         $seen = [];
 
         /** @var array<string, list<int>> $matches "fileA|fileB|delta" -> list of first-copy offsets */
@@ -161,23 +161,25 @@ final class CloneScanner
 
             $hash = hash('xxh3', substr($packed, $offset * 4, $bytesPerWindow), true);
 
-            $first = $seen[$hash] ?? null;
+            // Pair with EVERY earlier sighting, not only the first. A clone
+            // family of three files must report all three pairs in full;
+            // first-copy-only pairing let a third file claim part of the
+            // overlap, so a pair's region — and its fingerprint — changed
+            // with which OTHER files were in the corpus. CI (no plugins-dev)
+            // and a local scan then disagreed about the same two files.
+            foreach ($seen[$hash] ?? [] as $first) {
+                $fileA = $fileOf[$first];
+                $fileB = $fileOf[$offset];
 
-            if ($first === null) {
-                $seen[$hash] = $offset;
+                // Overlapping self-match of a repetitive run, not a clone.
+                if ($fileA === $fileB && ($offset - $first) < self::WINDOW) {
+                    continue;
+                }
 
-                continue;
+                $matches[$fileA.'|'.$fileB.'|'.($offset - $first)][] = $first;
             }
 
-            $fileA = $fileOf[$first];
-            $fileB = $fileOf[$offset];
-
-            // Overlapping self-match of a repetitive run, not a clone.
-            if ($fileA === $fileB && ($offset - $first) < self::WINDOW) {
-                continue;
-            }
-
-            $matches[$fileA.'|'.$fileB.'|'.($offset - $first)][] = $first;
+            $seen[$hash][] = $offset;
         }
 
         unset($seen, $counts, $packed);
