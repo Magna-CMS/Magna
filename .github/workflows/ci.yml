@@ -133,6 +133,177 @@ jobs:
             exit 1
           fi
 
+  # The archive every site downloads, built the way release.yml builds it, so
+  # the upgrade matrix below applies exactly what a customer would receive.
+  build-archive:
+    name: Build release archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The manifest's removed-classes diff reaches back to v1.2.0.
+          fetch-depth: 0
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, zip, gd, pdo_sqlite, sodium
+          coverage: none
+
+      - name: Create the environment file
+        run: cp .env.example .env
+
+      - name: Install production dependencies
+        run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --no-scripts
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the archive (manifest + engine, self-verified)
+        run: php bin/build-release.php
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-archive
+          path: downloads/magna-cms-v*.zip
+          if-no-files-found: error
+          retention-days: 3
+
+  # The hop that shipped 1.4.3 to sites that could not receive it, proven on
+  # every push: install a PREVIOUS release, let ITS updater apply the current
+  # build, then assert under the new code that everything the release owns is
+  # on disk, every config key resolves, and the site serves.
+  upgrade-matrix:
+    name: Upgrade from ${{ matrix.from }}
+    runs-on: ubuntu-latest
+    needs: build-archive
+    strategy:
+      fail-fast: false
+      matrix:
+        # previous patch, previous minor, the floor the private plugins
+        # target, and the last archive built --classmap-authoritative.
+        from: [v1.4.3, v1.3.25, v1.3.16, v1.3.7]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, zip, gd, pdo_sqlite, sodium
+          coverage: none
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-archive
+          path: build
+
+      - name: Download the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p previous
+          gh release download "${{ matrix.from }}" --repo "${{ github.repository }}" --pattern 'magna-cms-v*.zip' --dir previous
+
+      - name: Install the previous release
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          unzip -q previous/magna-cms-v*.zip -d "$RUNNER_TEMP/site"
+          php bin/ci/headless-install.php "$RUNNER_TEMP/site"
+
+      - name: Update it with the current build, through its own updater
+        run: php bin/ci/apply-headless.php "$RUNNER_TEMP/site" "$(ls build/magna-cms-v*.zip)"
+
+      - name: Assert the site runs, and received, the current build
+        run: |
+          # An updater older than 1.4.4 records nothing about what it delivered;
+          # the assertion then is that the site knows and says so.
+          if php -r 'exit(version_compare("${{ matrix.from }}", "v1.4.4", "<") ? 0 : 1);'; then FLAG="--legacy-hop"; else FLAG=""; fi
+          php bin/ci/assert-upgraded.php "$RUNNER_TEMP/site" --archive="$(ls build/magna-cms-v*.zip)" $FLAG
+
+  # The same assertions against a fresh extract of the current build.
+  fresh-install:
+    name: Fresh install of the current build
+    runs-on: ubuntu-latest
+    needs: build-archive
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, zip, gd, pdo_sqlite, sodium
+          coverage: none
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-archive
+          path: build
+
+      - name: Install and assert
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          unzip -q build/magna-cms-v*.zip -d "$RUNNER_TEMP/site"
+          php bin/ci/headless-install.php "$RUNNER_TEMP/site"
+          php bin/ci/assert-upgraded.php "$RUNNER_TEMP/site" --archive="$(ls build/magna-cms-v*.zip)" --fresh
+
+  # The oldest release with a one-click updater has no published archive, so
+  # it is installed from its tag instead: composer install the way archives
+  # of that era were built (classmap-authoritative, no PSR-4 fallback), which
+  # is the harshest autoload situation an update can land on. Advisory until
+  # it has proven stable: a resolution failure in a 2026-07 lock file is not a
+  # regression in the updater.
+  upgrade-from-checkout:
+    name: Upgrade from ${{ matrix.from }} (checkout, advisory)
+    runs-on: ubuntu-latest
+    needs: build-archive
+    continue-on-error: true
+    strategy:
+      matrix:
+        from: [v1.2.0]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, zip, gd, pdo_sqlite, sodium
+          coverage: none
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-archive
+          path: build
+
+      - name: Check out and install the previous release
+        run: |
+          git worktree add "$RUNNER_TEMP/site" "${{ matrix.from }}"
+          cd "$RUNNER_TEMP/site"
+          composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --classmap-authoritative --no-scripts
+          cd -
+          php bin/ci/headless-install.php "$RUNNER_TEMP/site"
+
+      - name: Update it with the current build, through its own updater
+        run: php bin/ci/apply-headless.php "$RUNNER_TEMP/site" "$(ls build/magna-cms-v*.zip)"
+
+      - name: Assert the site runs, and received, the current build
+        run: php bin/ci/assert-upgraded.php "$RUNNER_TEMP/site" --archive="$(ls build/magna-cms-v*.zip)" --legacy-hop
+
   octane-smoke:
     name: Octane / FrankenPHP smoke test
     runs-on: ubuntu-latest
@@ -232,6 +403,8 @@ jobs:
           php-version: '8.4'
           coverage: none
       - run: cp .env.example .env
+      # Not --strict: the exact pins and the SDK's packaged dist are deliberate.
+      - run: composer validate --no-check-publish
       - run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
       - run: composer audit
 

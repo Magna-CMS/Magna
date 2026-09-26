@@ -1,6 +1,10 @@
 <?php
 
 declare(strict_types=1);
+use Magna\Updater\CoreUpdater;
+use Magna\Updater\Engine\PathGuard;
+use Magna\Updater\Manifest\ManifestRules;
+use Magna\Updater\Manifest\ReleaseManifest;
 
 /**
  * Magna release builder.
@@ -14,10 +18,17 @@ declare(strict_types=1);
  *   - Excludes all dev-only tooling, tests, docs, plugins, and local state.
  *
  * Usage:
- *   php bin/build-release.php [version] [--hub]
+ *   php bin/build-release.php [version] [--hub] [--removed-since=<git ref>] [--vendor-strategy=keep|replace] [--skip-gates]
  *
  * Version defaults to MagnaServiceProvider::VERSION with any -dev suffix
  * stripped. The archive is written to downloads/magna-cms-v<version>.zip.
+ *
+ * Every archive carries magna-release.json at its root: the release's own
+ * account of which paths it owns, what it requires, which core classes it
+ * retired since `--removed-since` (default: the oldest release an archive may
+ * be applied over), and what to check afterwards. The installed updater reads
+ * that instead of trusting its own, older, idea of the layout — see
+ * bin/support/release-manifest.php.
  *
  * `--hub` builds the internal "Magna Hub" profile instead: identical to the
  * core archive except the first-party Magna plugins are resolved from their
@@ -50,6 +61,19 @@ chdir($root);
 // Pure composer.json rules, kept separate so tests cover them without running
 // a build — see tests/Unit/Release/ReleaseComposerTest.php.
 require_once __DIR__.'/support/release-composer.php';
+// The release manifest and its assembly, same arrangement.
+require_once __DIR__.'/support/release-manifest.php';
+// The quality gates a release must pass before it is staged; see there for
+// what runs and why `--skip-gates` is an emergency, not a shortcut.
+require_once __DIR__.'/support/release-gates.php';
+
+// The manifest names the paths the release's OWN updater lists and is checked
+// with the release's OWN rules — both read from the code being shipped, through
+// Composer's autoloader. Building without vendor/ would mean guessing at both.
+if (! is_file($root.'/vendor/autoload.php')) {
+    fail('vendor/autoload.php is missing. Run `composer install` before building a release.');
+}
+require_once $root.'/vendor/autoload.php';
 
 if (! extension_loaded('zip')) {
     fail('The zip PHP extension is required to build a release.');
@@ -59,17 +83,44 @@ if (! extension_loaded('zip')) {
 // Resolve version.
 // ---------------------------------------------------------------------------
 // Parse arguments: the first non-flag token is the version. `--hub` selects the
-// plugin-bundling profile; every other flag is rejected.
+// plugin-bundling profile, `--removed-since=<ref>` the base of the
+// removed-classes diff; every other flag is rejected.
 $version = null;
 $hub = false;
+$removedSince = RELEASE_MIN_UPGRADE_FROM_REF;
+$vendorStrategy = RELEASE_VENDOR_STRATEGY;
+$skipGates = false;
 foreach (array_slice($argv, 1) as $arg) {
     if ($arg === '--hub') {
         $hub = true;
 
         continue;
     }
+    if ($arg === '--skip-gates') {
+        $skipGates = true;
+
+        continue;
+    }
+    if (str_starts_with($arg, '--vendor-strategy=')) {
+        $vendorStrategy = substr($arg, strlen('--vendor-strategy='));
+
+        if (! in_array($vendorStrategy, ManifestRules::VENDOR_STRATEGIES, true)) {
+            fail("'--vendor-strategy' must be one of ".implode(', ', ManifestRules::VENDOR_STRATEGIES).'.');
+        }
+
+        continue;
+    }
+    if (str_starts_with($arg, '--removed-since=')) {
+        $removedSince = substr($arg, strlen('--removed-since='));
+
+        if ($removedSince === '' || preg_match('/^[A-Za-z0-9._\/-]+$/', $removedSince) !== 1) {
+            fail("'--removed-since' needs a git ref, e.g. --removed-since=v1.2.0");
+        }
+
+        continue;
+    }
     if (str_starts_with($arg, '--')) {
-        fail("Unknown option '{$arg}'. Usage: php bin/build-release.php [version] [--hub]");
+        fail("Unknown option '{$arg}'. Usage: php bin/build-release.php [version] [--hub] [--removed-since=<ref>] [--vendor-strategy=keep|replace] [--skip-gates]");
     }
     $version ??= $arg;
 }
@@ -146,6 +197,20 @@ if ($composer === null) {
 $composer ??= 'composer';
 
 $phpBin = PHP_BINARY;
+
+// ---------------------------------------------------------------------------
+// Quality gates.
+// ---------------------------------------------------------------------------
+// Everything `composer check` and CI agree on — validate, audit, pint, phpstan,
+// psalm taint analysis and the full serial test suite — before a single file
+// is staged. A build inside GitHub Actions skips the in-process pass: the
+// workflow runs the same gates as its own jobs, and the tag pipeline builds
+// only after they are green.
+if (getenv('GITHUB_ACTIONS') === 'true') {
+    say('Release gates: run by the workflow as separate jobs, not repeated here');
+} else {
+    release_gates_run($skipGates);
+}
 
 // ---------------------------------------------------------------------------
 // Staging directory.
@@ -438,6 +503,53 @@ file_put_contents($stage.'/web.config', root_web_config());
 file_put_contents($stage.'/INSTALL.txt', install_readme($version));
 
 // ---------------------------------------------------------------------------
+// The release manifest: what this archive owns, requires, retired, and
+// promises. Written last so the size it states is the size of everything
+// above, and validated with the updater's own rules so an archive every site
+// would refuse never leaves this machine.
+// ---------------------------------------------------------------------------
+say('Writing release manifest', C_GREEN);
+$removedClasses = release_removed_classes($root, $removedSince);
+if ($removedClasses === null) {
+    say("  git could not diff against {$removedSince}; the manifest states no removed classes and updated sites will scan for them instead", C_YELLOW);
+} else {
+    say('  '.count($removedClasses)." core class(es) retired since {$removedSince}");
+}
+
+// The engine is the release's own apply logic, run by the updater a site
+// already has. Its hash goes in the manifest; the installed updater refuses
+// an engine that does not match it, or one that declares anything.
+try {
+    $engine = release_engine($stage);
+} catch (RuntimeException $e) {
+    rrmdir($stage);
+    fail($e->getMessage());
+}
+
+$manifestData = release_manifest(
+    $version,
+    CoreUpdater::coreOwnedPaths(),
+    $removedClasses,
+    $removedSince,
+    release_tree_bytes($stage),
+    release_git_identity($root),
+    gmdate('c'),
+    $engine,
+    $vendorStrategy,
+);
+
+$manifestProblems = ManifestRules::validate($manifestData, new PathGuard);
+if ($manifestProblems !== []) {
+    rrmdir($stage);
+    fail('The release manifest would be refused by every site: '.implode(' ', $manifestProblems));
+}
+
+file_put_contents(
+    $stage.'/'.ReleaseManifest::FILENAME,
+    json_encode($manifestData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n",
+);
+
+// ---------------------------------------------------------------------------
 // Zip it.
 // ---------------------------------------------------------------------------
 @mkdir($root.'/downloads', 0755, true);
@@ -486,7 +598,7 @@ rrmdir($stage);
 // permission bits and a host extracted them unreadable. Fail the build loudly
 // here rather than shipping a broken zip.
 // ---------------------------------------------------------------------------
-verify_release($zipPath);
+verify_release($zipPath, $version);
 
 // Publish a SHA-256 sidecar (sha256sum format: "<hash>  <filename>"). This is
 // the value the update feed's `zip_sha256` must carry — CoreUpdater refuses to
@@ -508,10 +620,12 @@ say("Done. {$count} files, {$sizeMb} MB -> downloads/{$archiveName}", C_GREEN);
 
 /**
  * Open the finished archive and assert it is actually installable: the files
- * the app cannot boot without are present, and every entry carries readable
- * POSIX permissions (never mode 0, which some hosts extract as unreadable).
+ * the app cannot boot without are present, every entry carries readable
+ * POSIX permissions (never mode 0, which some hosts extract as unreadable),
+ * and the release manifest describes this archive and passes the rules the
+ * updater will apply to it.
  */
-function verify_release(string $zipPath): void
+function verify_release(string $zipPath, string $version): void
 {
     say('Verifying archive', C_GREEN);
 
@@ -529,6 +643,9 @@ function verify_release(string $zipPath): void
         'bootstrap/unsupported-php.php',
         'vendor/autoload.php', 'vendor/composer/autoload_real.php',
         'vendor/symfony/deprecation-contracts/function.php',
+        // The release's account of itself, which the updater reads instead
+        // of trusting its own idea of the layout.
+        ReleaseManifest::FILENAME,
     ];
 
     $missing = [];
@@ -541,6 +658,8 @@ function verify_release(string $zipPath): void
         $zip->close();
         fail('Archive is missing required files: '.implode(', ', $missing));
     }
+
+    verify_release_manifest($zip, $version);
 
     // The shipped composer.json must be resolvable on the target. v1.3.19 and
     // v1.3.20 both went out carrying a path repository pointing at the build
@@ -611,6 +730,70 @@ function verify_release(string $zipPath): void
     }
 
     say('  OK — required files present, permissions set on all entries', C_GREEN);
+}
+
+/**
+ * The manifest inside the archive must pass the updater's rules, name this
+ * archive's version, and every path it says it owns (bar the optional ones)
+ * must actually be in the archive — a manifest that promises a directory the
+ * builder forgot to copy is the exact partial release the updater refuses.
+ */
+function verify_release_manifest(ZipArchive $zip, string $version): void
+{
+    $manifestName = ReleaseManifest::FILENAME;
+    $decoded = json_decode((string) $zip->getFromName($manifestName), true);
+
+    if (! is_array($decoded)) {
+        $zip->close();
+        fail("{$manifestName} in the archive is not valid JSON.");
+    }
+
+    $problems = ManifestRules::validate($decoded, new PathGuard);
+    if ($problems !== []) {
+        $zip->close();
+        fail("{$manifestName} would be refused by every site: ".implode(' ', $problems));
+    }
+
+    if (($decoded['version'] ?? null) !== $version) {
+        $zip->close();
+        fail("{$manifestName} says version ".json_encode($decoded['version'] ?? null)." but the archive is v{$version}.");
+    }
+
+    $optional = is_array($decoded['paths']['optional'] ?? null) ? $decoded['paths']['optional'] : [];
+    $absent = [];
+    foreach (is_array($decoded['paths']['core_owned'] ?? null) ? $decoded['paths']['core_owned'] : [] as $path) {
+        if (! is_string($path) || in_array($path, $optional, true)) {
+            continue;
+        }
+        if ($zip->locateName($path) === false && $zip->locateName($path.'/') === false) {
+            $absent[] = $path;
+        }
+    }
+    if ($absent !== []) {
+        $zip->close();
+        fail("{$manifestName} claims paths the archive does not contain: ".implode(', ', $absent));
+    }
+
+    // Every archive ships an engine: a manifest without one is a build that
+    // lost bootstrap/update, and the installed updater would fall back to
+    // applying the path list itself — which works, but is not this release.
+    if (! is_array($decoded['engine'] ?? null)) {
+        $zip->close();
+        fail("{$manifestName} states no engine; the archive must ship ".RELEASE_ENGINE_PATH.'.');
+    }
+
+    $enginePath = (string) ($decoded['engine']['path'] ?? '');
+    $engineSource = $zip->getFromName($enginePath);
+    if ($engineSource === false) {
+        $zip->close();
+        fail("{$manifestName} names an engine at {$enginePath} that is not in the archive.");
+    }
+    if (hash('sha256', $engineSource) !== ($decoded['engine']['sha256'] ?? null)) {
+        $zip->close();
+        fail("{$manifestName} states a different SHA-256 for the engine than the archive's copy has.");
+    }
+
+    say('  manifest OK — v'.$version.', '.count($decoded['paths']['core_owned'] ?? []).' core-owned path(s)');
 }
 
 function copy_tree(string $src, string $dst, array $excludeNames, array $excludeExt): void
