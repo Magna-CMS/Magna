@@ -107,7 +107,7 @@ jobs:
       # The panel renders its theme through @vite, so a request to any panel
       # page 500s without a built manifest. The suite covers those pages.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
