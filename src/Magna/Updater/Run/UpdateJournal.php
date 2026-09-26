@@ -174,9 +174,19 @@ final class UpdateJournal
         $clean = [];
 
         foreach ($paths as $relative => $fields) {
-            if (is_string($relative) && is_array($fields)) {
-                $clean[$relative] = $fields;
+            if (! is_string($relative) || ! is_array($fields)) {
+                continue;
             }
+
+            $strings = [];
+
+            foreach ($fields as $key => $value) {
+                if (is_string($key)) {
+                    $strings[$key] = $value;
+                }
+            }
+
+            $clean[$relative] = $strings;
         }
 
         return $clean;
