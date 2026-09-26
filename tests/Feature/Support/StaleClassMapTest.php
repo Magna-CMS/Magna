@@ -147,6 +147,37 @@ it('rescans when the core version changes', function (): void {
     }
 });
 
+/*
+ * The manifest names every class retired since the oldest release an archive
+ * may be applied over. A site whose map still carries one gets it disarmed
+ * ahead of the first boot; a site whose vendor/ the release just replaced has
+ * a map that names none of them, and must not be told it has ten.
+ */
+it('primes only the names the classmap on disk still carries', function (): void {
+    $dir = staleClassMapFixture();
+    $classMapPath = $dir.'/autoload_classmap.php';
+    file_put_contents($classMapPath, "<?php return ['Magna\\\\StaleProbe\\\\StillNamed' => '/gone/StillNamed.php'];");
+
+    try {
+        $map = new StaleClassMap($dir.'/cache.json', $classMapPath, '9.9.9');
+        $map->prime(['Magna\\StaleProbe\\NeverNamed', 'Magna\\StaleProbe\\StillNamed', 'Acme\\NotCore']);
+
+        expect($map->stale())->toBe(['Magna\\StaleProbe\\StillNamed']);
+
+        /** @var array{stale: list<string>} $written */
+        $written = json_decode((string) file_get_contents($dir.'/cache.json'), true);
+        expect($written['stale'])->toBe(['Magna\\StaleProbe\\StillNamed']);
+
+        // Without a readable map the manifest's word is taken as given.
+        $blind = new StaleClassMap($dir.'/cache2.json', $dir.'/no-such-classmap.php', '9.9.9');
+        $blind->prime(['Magna\\StaleProbe\\NeverNamed']);
+
+        expect($blind->stale())->toBe(['Magna\\StaleProbe\\NeverNamed']);
+    } finally {
+        removeStaleClassMapFixture($dir);
+    }
+});
+
 it('survives an unwritable cache location by simply rescanning', function (): void {
     $loader = new ClassLoader;
     $loader->addClassMap(['Magna\\StaleProbe\\Unwritable' => '/definitely/not/here.php']);

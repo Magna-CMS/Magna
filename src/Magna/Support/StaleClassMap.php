@@ -87,18 +87,47 @@ final class StaleClassMap
     /**
      * Record the answer ahead of a boot, from what a release manifest says it
      * removed. The updater calls this for the version it has just laid down,
-     * so the first request on the new code neutralises without scanning. A
-     * name that is not actually in this site's map costs one empty entry.
+     * so the first request on the new code neutralises without scanning.
+     *
+     * Only names this site's map actually carries are kept: a release that
+     * replaced vendor/ left a map that names none of them, and a site with a
+     * fresh map has nothing to disarm and nothing to report. When the map
+     * cannot be read the list is taken as given — an empty entry for a name
+     * the map lacks costs nothing.
      *
      * @param  list<string>  $stale
      */
     public function prime(array $stale): void
     {
         $stale = array_values(array_unique(array_filter($stale, self::isCorePrefixed(...))));
+        $named = $this->classMapOnDisk();
+
+        if ($named !== null) {
+            $stale = array_values(array_filter($stale, static fn (string $class): bool => isset($named[$class])));
+        }
+
         sort($stale);
 
         $this->writeCache($stale);
         $this->stale = $stale;
+    }
+
+    /**
+     * The optimised map as Composer wrote it, or null when there is none to
+     * read. Composer's own file, loaded the way the loader itself loads it.
+     *
+     * @return array<string, string>|null
+     */
+    private function classMapOnDisk(): ?array
+    {
+        if (! is_file($this->classMapPath)) {
+            return null;
+        }
+
+        $map = @include $this->classMapPath;
+
+        /** @var array<string, string>|null */
+        return is_array($map) ? $map : null;
     }
 
     /**

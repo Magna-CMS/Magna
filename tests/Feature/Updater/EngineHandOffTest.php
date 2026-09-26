@@ -155,6 +155,9 @@ it('finishes a repair under the same code and records the delivery', function ()
     $zipPath = $paths->storage('app/repair.zip');
     file_put_contents($zipPath, $archive['bytes']);
 
+    // An updated site's map still names the page a release retired.
+    file_put_contents($paths->base('vendor/composer/autoload_classmap.php'), "<?php return ['Magna\\\\Admin\\\\Pages\\\\GeneralSettingsPage' => '/gone/GeneralSettingsPage.php'];");
+
     try {
         $state = app(CoreUpdater::class)->repair($zipPath, $archive['sha256']);
 

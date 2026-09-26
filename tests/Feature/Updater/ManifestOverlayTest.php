@@ -216,8 +216,11 @@ it('removes what the release retired and remembers the retired classes', functio
     $paths = manifestInstall();
     $archive = manifestArchive(MANIFEST_TEST_PATHS, [
         'paths' => ['removed' => ['app/Legacy']],
-        'removed_classes' => ['Magna\\Admin\\Pages\\GeneralSettingsPage', 'App\\Legacy\\Old'],
+        'removed_classes' => ['Magna\\Admin\\Pages\\GeneralSettingsPage', 'App\\Legacy\\Old', 'Magna\\Never\\InThisMap'],
     ]);
+
+    // The site's map names two of the three; only those two need disarming.
+    file_put_contents($paths->base('vendor/composer/autoload_classmap.php'), "<?php return ['Magna\\\\Admin\\\\Pages\\\\GeneralSettingsPage' => '/gone/GeneralSettingsPage.php', 'App\\\\Legacy\\\\Old' => '/gone/Old.php'];");
 
     try {
         $state = applyManifestArchive($archive);
