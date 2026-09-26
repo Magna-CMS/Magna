@@ -4,117 +4,58 @@ declare(strict_types=1);
 
 namespace Magna\Updater;
 
+use Closure;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
-use Laravel\Octane\OctaneServiceProvider;
-use Magna\Plugins\PluginInfo;
-use Magna\Plugins\PluginManager;
-use Magna\Plugins\PluginRecord;
-use Magna\Support\Runtime;
+use Magna\MagnaServiceProvider;
+use Magna\Marketplace\ComposerRunner;
+use Magna\Plugins\PluginCompatibilityCheck;
+use Magna\Support\StaleClassMap;
+use Magna\Updater\Engine\EngineContext;
+use Magna\Updater\Engine\EngineLoader;
+use Magna\Updater\Engine\PathGuard;
+use Magna\Updater\Engine\StagedSwap;
+use Magna\Updater\Footprint\InstalledFootprint;
+use Magna\Updater\Preflight\UpdatePreflight;
+use Magna\Updater\Run\RunRollback;
+use Magna\Updater\Run\RunState;
+use Magna\Updater\Run\UpdateJournal;
+use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Throwable;
 
 /**
- * Applies a published core release: downloads the pre-built archive, overlays
- * core-owned paths, migrates, clears caches, and reloads Octane. Modeled on
- * Magna\Marketplace\PluginInstaller — same lock-and-poll shape, same
- * fail-with-message pattern, progress written to cache for the UI to read.
+ * Applies a published core release. Modeled on Magna\Marketplace\PluginInstaller
+ * — same lock-and-poll shape, same fail-with-message pattern, progress written
+ * to cache for the UI.
  *
- * Scope note: this overlays source code only (src/Magna, app, bootstrap,
- * routes, database/migrations) plus the plugin SDK — never
- * composer.json/composer.lock, and never the rest of vendor/. A customer's
- * vendor/ may contain plugin packages added by PluginInstaller's own
- * `composer require` calls that the core release's composer.json knows
- * nothing about; overlaying it wholesale would silently drop them. A core
- * release that changes its own Composer dependencies is therefore not yet a
- * "one-click" case — see docs/updates-architecture.md.
+ * Three tiers, decided from the archive itself (ReleasePlanner):
  *
- * The SDK is the exception, and deliberately so: it is core's contract surface
- * that merely happens to live under vendor/. Shipping core without it meant a
- * plugin written against a new contract could not be enabled on an updated
- * site, because the interface it implements had never arrived.
+ *  - A release that carries a manifest AND an engine this updater can run
+ *    is HANDED OFF: the release's own engine stages and switches the paths
+ *    it names (two renames per path, the previous content kept beside it),
+ *    then this process steps back. Migrations, caches and the all-clear run
+ *    under the NEW code (Run\UpdateFinalizer), reached by whichever process
+ *    gets there first. This is what lets a release deliver something it
+ *    introduced: the installed updater no longer decides what an update
+ *    does, only what it may.
+ *  - A release with a manifest but no runnable engine is applied here, by
+ *    the manifest's path list, the way every update used to be.
+ *  - A release with no manifest (every archive up to 1.4.4) is applied here
+ *    by CoreOwnedPaths.
  *
- * Also out of scope for the same reason: a generic, cross-driver DB
- * dump/restore. Rollback restores the file-level snapshot only; if
- * `migrate --force` fails partway, the site owner's own DB backup (which
- * they should always take before updating, same as before any migration)
- * is the recovery path.
+ * Only the engine tier touches vendor/, and only as the release's manifest
+ * asks and the site allows — see Engine\EngineContext. The in-place tiers
+ * never do, beyond the SDK: a customer's vendor/ may hold packages a release
+ * knows nothing about.
+ *
+ * Out of scope: a generic, cross-driver DB dump/restore. Rollback restores
+ * files, never the database; the site owner's own DB backup is the recovery
+ * path if a migration fails partway.
  */
 class CoreUpdater
 {
     private const LOCK_KEY = 'magna.updater.apply.lock';
-
-    /** @var list<string> */
-    private const CORE_OWNED_PATHS = [
-        /*
-         * First, and the order is load-bearing.
-         *
-         * `src/Magna` hard-requires config/defaults/magna.php when the
-         * kernel provider registers, so a run killed between the two -
-         * a worker SIGKILLed on the job timeout never reaches the
-         * rollback - would leave new code beside no defaults. That is a
-         * site that cannot boot and has no panel to retry from.
-         * Delivering the defaults first makes that window empty.
-         *
-         * The SUBDIRECTORY, never `config` itself, which holds the files
-         * a site edits and must survive an update untouched. Nothing in
-         * here is a site's to edit - `config/magna.php` is the file they
-         * own and it hands to this one - so mirroring it with `delete`
-         * takes nothing from anybody. Keeping the defaults inside
-         * `config/` also keeps their `env()` calls where `env()` belongs.
-         */
-        'config/defaults',
-        'src/Magna',
-        'app',
-        'bootstrap',
-        'routes',
-        'database/migrations',
-        // The panel's compiled assets and the fonts they name. Code arrived on
-        // an update and these did not, which breaks in the least obvious way
-        // available: a Blade partial referencing a font this release added
-        // pointed at a file the update never delivered, the request 404'd, and
-        // every icon in the admin rendered as its own ligature name —
-        // "verified_user", "arrow_forward" — as plain text beside the
-        // headings. Nothing errored; the panel simply looked broken, and only
-        // on sites that had updated rather than installed fresh.
-        //
-        // Both directories are core's own build output: hashed asset bundles
-        // and font files, no customer content. Deliberately not `public`
-        // itself, which also holds uploads and the storage symlink and must
-        // survive an update untouched.
-        'public/build',
-        'public/fonts',
-        // The SDK travels with core, because it is core's own contract surface
-        // under a vendor path rather than a third-party dependency. Leaving it
-        // behind is what made a plugin built against a newer contract
-        // uninstallable on an updated site: core arrived, the interface it
-        // names did not, and enabling the plugin died with
-        // `Interface "Magna\Contracts\…" not found`. Its namespaces are
-        // registered at boot by PluginAutoloader, so a contract in a namespace
-        // the site's vendor/composer maps predate still resolves.
-        self::SDK_PATH,
-        // A hub install resolves the SDK through a path repository rooted here,
-        // copied (not symlinked) into vendor/ by Composer. Refreshing only the
-        // vendor/ copy therefore lasts exactly until the next `composer require`
-        // — which every marketplace plugin install runs — and that re-copies the
-        // stale source straight back over it, reviving the missing-interface
-        // failure the SDK overlay exists to prevent. A core-only release carries
-        // no bundled/ directory, and overlay() skips paths the archive does not
-        // contain, so listing it here is a no-op outside a hub.
-        self::SDK_SOURCE_PATH,
-        // `resources/` is deliberately NOT here, and core keeps nothing at
-        // runtime inside it. Three render-hook partials were added under
-        // resources/views in 1.4.0; the code that renders them shipped with
-        // src/Magna and the views did not, so every updated site answered 500
-        // on every admin page — "View [filament.magna.footer] not found" —
-        // while a fresh install of the same release was perfect. Core's own
-        // panel views now live in src/Magna/Admin/Resources/views under the
-        // `magna::` namespace, and an architecture test keeps them there.
-        // Overlaying resources/ instead would put core's hands on a directory
-        // whose remaining contents are build inputs a site may legitimately
-        // customise.
-    ];
 
     /**
      * The one vendor path core owns outright.
@@ -140,148 +81,125 @@ class CoreUpdater
     private ?string $targetVersion = null;
 
     /**
-     * The paths a one-click update overlays. Public so the installer's
-     * requirements screen and CoreWritability can report on the same list core
-     * actually replaces, instead of keeping a second copy that drifts.
+     * The paths a one-click update overlays when the archive carries no
+     * manifest, and the list a manifest-carrying release is compared against.
+     * Public so the installer's requirements screen and CoreWritability can
+     * report on the same list, instead of keeping a second copy that drifts.
      *
      * @return list<string>
      */
     public static function coreOwnedPaths(): array
     {
-        return self::CORE_OWNED_PATHS;
+        return CoreOwnedPaths::legacy();
     }
 
     public function __construct(
-        private readonly PluginManager $plugins,
         private readonly Filesystem $files,
         private readonly ReleaseArchive $archive,
+        private readonly ReleasePlanner $planner,
+        private readonly EngineLoader $engines,
+        private readonly PathGuard $guard,
         private readonly CoreSnapshot $snapshot,
+        private readonly InPlaceOverlay $overlay,
+        private readonly UpdatePaths $paths,
+        private readonly UpdatePreflight $preflight,
+        private readonly UpdateHousekeeping $housekeeping,
+        private readonly UpdateRunLog $runLog,
+        private readonly InstalledFootprint $footprint,
+        private readonly MaintenanceWindow $maintenance,
+        private readonly RuntimeRefresh $refresh,
+        private readonly RunRollback $rollback,
+        private readonly PluginCompatibilityCheck $compatibility,
+        private readonly ComposerRunner $composer,
     ) {}
 
+    /**
+     * @param  string|null  $maintenanceSecret  the key `down --secret` takes; the admin who started the run holds the matching bypass cookie (CoreUpdateStarter)
+     */
     public function apply(
         string $targetVersion,
         string $zipUrl,
         ?string $expectedSha256,
         bool $force = false,
         ?string $checksumSignature = null,
+        ?string $maintenanceSecret = null,
     ): CoreUpdateState {
         $this->targetVersion = $targetVersion;
+        $this->runLog->start($targetVersion);
         $this->setProgress(CoreUpdateState::Running, 'Starting…', 2);
 
-        // Fail-closed, not "verify if present": this overlay replaces the
-        // code that runs on every request, so a release without a checksum
-        // is refused outright. The full threat model — host allowlist,
-        // checksum, Ed25519-signed checksum — lives on ReleaseArchive.
-        if (! is_string($expectedSha256) || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
-            return $this->fail('This release has no verified checksum from Update Manager — refusing to apply it. If this persists, the update server may need attention.');
+        $refusal = $this->refusal($targetVersion, $expectedSha256, $checksumSignature, UpdateMode::Update, requireSignature: true);
+        if ($refusal !== null) {
+            return $this->fail($refusal);
         }
 
-        $signatureError = $this->archive->checkChecksumSignature($expectedSha256, $checksumSignature);
-        if ($signatureError !== null) {
-            return $this->fail($signatureError);
+        return $this->execute(
+            UpdateMode::Update,
+            $targetVersion,
+            fn (): array => [$this->archive->download($zipUrl), true],
+            (string) $expectedSha256,
+            $force,
+            $maintenanceSecret,
+        );
+    }
+
+    /**
+     * Re-apply the release this install already runs, from the archive
+     * Update Manager publishes for it — verified and signed exactly as an
+     * update is. For a site an older updater brought here: the code arrived
+     * and nothing recorded whether everything else did.
+     */
+    public function repairFromHub(string $zipUrl, ?string $expectedSha256, ?string $checksumSignature = null, ?string $maintenanceSecret = null): CoreUpdateState
+    {
+        $target = MagnaServiceProvider::VERSION;
+        $this->targetVersion = $target;
+        $this->runLog->start($target);
+        $this->setProgress(CoreUpdateState::Running, 'Starting repair…', 2);
+
+        $refusal = $this->refusal($target, $expectedSha256, $checksumSignature, UpdateMode::Repair, requireSignature: true);
+        if ($refusal !== null) {
+            return $this->fail($refusal);
         }
 
-        // Established before anything is written. A read-only src/Magna used to
-        // surface halfway through the overlay, with the rollback failing for the
-        // same reason and leaving the core tree mixed between two versions.
-        $writability = new CoreWritability(base_path());
-        $blocker = $writability->summary();
-        if ($blocker !== null) {
-            return $this->fail($blocker.'. A one-click update has to replace those files, so nothing was changed. '.($writability->remedy() ?? ''));
+        return $this->execute(
+            UpdateMode::Repair,
+            $target,
+            fn (): array => [$this->archive->download($zipUrl), true],
+            (string) $expectedSha256,
+            false,
+            $maintenanceSecret,
+        );
+    }
+
+    /**
+     * The same repair from an archive already on this server. The operator
+     * supplies the checksum from the published sidecar — that, not a
+     * signature, is the trust here; the archive is theirs and left in place.
+     */
+    public function repair(string $archivePath, string $expectedSha256, ?string $maintenanceSecret = null): CoreUpdateState
+    {
+        $target = MagnaServiceProvider::VERSION;
+        $this->targetVersion = $target;
+        $this->runLog->start($target);
+        $this->setProgress(CoreUpdateState::Running, 'Starting repair…', 2);
+
+        if (! is_file($archivePath)) {
+            return $this->fail("No archive at {$archivePath}.");
         }
 
-        $lock = Cache::lock(self::LOCK_KEY, 1800);
-        if (! $lock->get()) {
-            $this->setProgress(CoreUpdateState::Queued, 'Another update is already in progress…', 0);
-
-            return CoreUpdateState::Queued;
+        $refusal = $this->refusal($target, $expectedSha256, null, UpdateMode::Repair, requireSignature: false);
+        if ($refusal !== null) {
+            return $this->fail($refusal);
         }
 
-        $backupPath = null;
-
-        try {
-            $incompatible = $this->checkCompatibility($targetVersion);
-            if ($incompatible !== [] && ! $force) {
-                $names = array_map(static fn (IncompatiblePlugin $p): string => $p->displayName, $incompatible);
-
-                return $this->fail('These enabled plugins are not compatible with v'.$targetVersion.': '.implode(', ', $names).'. Disable them first or wait for updated versions.');
-            }
-
-            $this->setProgress(CoreUpdateState::Running, 'Backing up current files…', 8);
-            $backupPath = $this->snapshot->create();
-
-            $this->setProgress(CoreUpdateState::Running, 'Downloading release…', 20);
-            $zipPath = $this->archive->download($zipUrl);
-
-            $this->setProgress(CoreUpdateState::Running, 'Verifying archive checksum…', 55);
-            $this->archive->verifyChecksum($zipPath, $expectedSha256);
-
-            $this->setProgress(CoreUpdateState::Running, 'Extracting…', 65);
-            $extractPath = $this->archive->extract($zipPath);
-
-            Artisan::call('down');
-
-            $disableResult = null;
-
-            try {
-                $this->setProgress(CoreUpdateState::Running, 'Applying update…', 78);
-                $this->overlay($extractPath);
-
-                $this->setProgress(CoreUpdateState::Running, 'Running migrations…', 88);
-                Artisan::call('migrate', ['--force' => true]);
-
-                // A forced update may leave plugins enabled that are known-incompatible
-                // with $targetVersion. Booting one on the next request could throw during
-                // Laravel's own bootstrap and take the whole panel down with it — so they
-                // are disabled here, still inside maintenance mode, before the site comes
-                // back up. Data/config are preserved; the admin re-enables once updated.
-                if ($force && $incompatible !== []) {
-                    $this->setProgress(CoreUpdateState::Running, 'Disabling incompatible plugins…', 93);
-                    $disableResult = $this->disableIncompatiblePlugins($incompatible);
-                }
-
-                $this->setProgress(CoreUpdateState::Running, 'Clearing caches…', 96);
-                $this->clearCachesAndReloadOctane();
-            } catch (Throwable $e) {
-                $this->setProgress(CoreUpdateState::Running, 'Update failed mid-apply — restoring previous files…', 50);
-
-                // The restore can fail for the same reason the overlay did (a
-                // path PHP cannot write). Letting that escape replaced a
-                // readable failure with a raw stack trace, at the one moment the
-                // admin most needs to be told what state their install is in.
-                try {
-                    $this->snapshot->restore($backupPath);
-                } catch (Throwable $restoreError) {
-                    Artisan::call('config:clear');
-
-                    return $this->fail(
-                        "Update failed AND the rollback could not finish: {$e->getMessage()} — then: {$restoreError->getMessage()}. "
-                        ."Your core files are now a mix of the old and new version. Re-upload the release archive over this install (src/Magna, app, bootstrap, routes, database/migrations), run `php artisan migrate --force`, and clear the caches. A copy of the previous files is in {$backupPath}."
-                    );
-                }
-
-                Artisan::call('config:clear');
-
-                return $this->fail("Update failed and files were restored: {$e->getMessage()}. If migrations ran before the failure, your database may be ahead of the restored code — check your own DB backup before continuing.");
-            } finally {
-                Artisan::call('up');
-            }
-
-            $this->archive->cleanup($zipPath, $extractPath);
-
-            $message = $this->buildSuccessMessage($targetVersion, $disableResult);
-            $this->setProgress(CoreUpdateState::Completed, $message, 100);
-
-            return CoreUpdateState::Completed;
-        } catch (Throwable $e) {
-            if ($backupPath !== null) {
-                $this->snapshot->restore($backupPath);
-            }
-
-            return $this->fail('Update failed before any files were changed: '.$e->getMessage());
-        } finally {
-            $lock->release();
-        }
+        return $this->execute(
+            UpdateMode::Repair,
+            $target,
+            static fn (): array => [$archivePath, false],
+            $expectedSha256,
+            false,
+            $maintenanceSecret,
+        );
     }
 
     /**
@@ -310,83 +228,322 @@ class CoreUpdater
      */
     public function checkCompatibility(string $targetVersion): array
     {
-        $enabledNames = PluginRecord::query()->where('enabled', true)->pluck('name')->all();
-        if ($enabledNames === []) {
-            return [];
+        return $this->compatibility->incompatibleWithCore($targetVersion);
+    }
+
+    /**
+     * Why nothing may start, or null. Fail-closed on the checksum: this
+     * replaces the code that runs on every request, so a release without one
+     * is refused outright. The full threat model — host allowlist, checksum,
+     * Ed25519-signed checksum — lives on ReleaseArchive. Then version, disk
+     * space and writability, established before anything is written; the
+     * version guard is here and not only in CoreUpdateJob because the
+     * stalled-worker fallback calls apply() straight from the admin's poll.
+     */
+    private function refusal(string $target, ?string $expectedSha256, ?string $signature, UpdateMode $mode, bool $requireSignature): ?string
+    {
+        if (! is_string($expectedSha256) || preg_match('/^[a-f0-9]{64}$/', $expectedSha256) !== 1) {
+            return $mode === UpdateMode::Update
+                ? 'This release has no verified checksum from Update Manager — refusing to apply it. If this persists, the update server may need attention.'
+                : 'A repair needs the SHA-256 published for the archive (64 hex characters) — refusing to apply an unverified archive.';
         }
 
-        $incompatible = [];
-        foreach ($this->plugins->discover() as $info) {
-            /** @var PluginInfo $info */
-            if (in_array($info->manifest->name, $enabledNames, true) && ! $info->manifest->isCompatibleWith($targetVersion)) {
-                $incompatible[] = new IncompatiblePlugin(
-                    name: $info->manifest->name,
-                    displayName: $info->manifest->displayName,
-                    installedVersion: $info->manifest->version,
-                    requiredCompat: $info->manifest->magnaCompat,
+        if ($requireSignature) {
+            $signatureError = $this->archive->checkChecksumSignature($expectedSha256, $signature, $target);
+
+            if ($signatureError !== null) {
+                return $signatureError;
+            }
+        }
+
+        return $this->preflight->firstBlocking($this->preflight->check($target, $mode))?->message;
+    }
+
+    /**
+     * Obtain, verify, extract, plan, then apply by whichever tier the release
+     * allows. Everything that can refuse does so before a file is touched.
+     *
+     * @param  Closure(): array{0: string, 1: bool}  $obtainArchive  the archive's path, and whether it is ours to delete afterwards
+     */
+    private function execute(UpdateMode $mode, string $target, Closure $obtainArchive, string $expectedSha256, bool $force, ?string $maintenanceSecret): CoreUpdateState
+    {
+        $lock = Cache::lock(self::LOCK_KEY, 1800);
+        if (! $lock->get()) {
+            $this->setProgress(CoreUpdateState::Queued, 'Another update is already in progress…', 0);
+
+            return CoreUpdateState::Queued;
+        }
+
+        $backupPath = null;
+        $zipPath = null;
+        $disposable = false;
+        $extractPath = null;
+        $leaveMaintenanceOnExit = false;
+
+        try {
+            $this->housekeeping->pruneTemp();
+
+            $incompatible = $mode === UpdateMode::Update ? $this->checkCompatibility($target) : [];
+            if ($incompatible !== [] && ! $force) {
+                $names = array_map(static fn (IncompatiblePlugin $p): string => $p->displayName, $incompatible);
+
+                return $this->fail('These enabled plugins are not compatible with v'.$target.': '.implode(', ', $names).'. Disable them first or wait for updated versions.');
+            }
+
+            $this->setProgress(CoreUpdateState::Running, $mode === UpdateMode::Update ? 'Downloading release…' : 'Reading the archive…', 12);
+            [$zipPath, $disposable] = $obtainArchive();
+
+            $this->setProgress(CoreUpdateState::Running, 'Verifying archive checksum…', 45);
+            $this->archive->verifyChecksum($zipPath, $expectedSha256);
+
+            $this->setProgress(CoreUpdateState::Running, 'Extracting…', 55);
+            $extractPath = $this->archive->extract($zipPath);
+
+            $plan = $this->planner->plan($extractPath, $target, MagnaServiceProvider::VERSION, $mode);
+            $this->runLog->line($this->planner->describe($plan));
+
+            if ($plan->manifest !== null && $this->engines->supports($plan->manifest)) {
+                return $this->handOff($extractPath, $plan, $target, $mode, $maintenanceSecret, $force ? $incompatible : [], $leaveMaintenanceOnExit);
+            }
+
+            return $this->applyInProcess($extractPath, $plan, $target, $mode, $maintenanceSecret, $force ? $incompatible : [], $backupPath, $leaveMaintenanceOnExit);
+        } catch (Throwable $e) {
+            // Download, checksum, extraction, the manifest, the snapshot or
+            // `down` itself threw: nothing from the new release has touched the
+            // live tree. The restore is a formality here, and guarded — it used
+            // to be the one unguarded call in the class, escaping apply() with
+            // the lock released and nothing left to lift maintenance mode.
+            if ($backupPath !== null) {
+                try {
+                    $this->snapshot->restore($backupPath);
+                } catch (Throwable $restoreError) {
+                    return $this->fail(
+                        "Update failed before any files were changed: {$e->getMessage()} — and then the precautionary restore could not run: {$restoreError->getMessage()}. "
+                        ."Nothing from the new release was applied. A copy of your files is in {$backupPath}."
+                    );
+                }
+            }
+
+            return $this->fail('Update failed before any files were changed: '.$e->getMessage());
+        } finally {
+            // Every exit lifts maintenance mode — except a hand-off, where
+            // the new code lifts it once it has finished.
+            if ($leaveMaintenanceOnExit) {
+                $this->maintenance->leave();
+            }
+
+            // The download and its extraction are disposable whatever
+            // happened; an operator's own archive is not ours to remove.
+            try {
+                $this->archive->cleanup($disposable ? $zipPath : null, $extractPath);
+            } catch (Throwable $cleanupError) {
+                $this->runLog->line('Could not remove temporary files: '.$cleanupError->getMessage());
+            }
+
+            $lock->release();
+        }
+    }
+
+    /**
+     * Tier A: the release's own engine performs the switch under this
+     * process's guard, then this process steps back for the new code.
+     *
+     * @param  list<IncompatiblePlugin>  $toDisable  plugins a forced update leaves for the finalizer to disable
+     */
+    private function handOff(string $extractPath, ReleasePlan $plan, string $target, UpdateMode $mode, ?string $secret, array $toDisable, bool &$leaveMaintenanceOnExit): CoreUpdateState
+    {
+        $manifest = $plan->manifest;
+
+        if ($manifest === null) {
+            throw new RuntimeException('A hand-off needs a manifest.');
+        }
+
+        $engine = $this->engines->load($extractPath, $manifest);
+
+        $journal = UpdateJournal::create($this->paths, (string) $this->runLog->runId(), [
+            'mode' => $mode->value,
+            'tier' => 'engine',
+            'engine_api' => $manifest->engineApi,
+            'from' => MagnaServiceProvider::VERSION,
+            'to' => ltrim($target, 'vV'),
+            'secret' => $secret,
+            'manifest_sha256' => $manifest->sha256,
+            'removed_classes' => $manifest->removedClasses,
+            'check_files' => $manifest->checkFiles,
+            'check_classes' => $manifest->checkClasses,
+            'disable_plugins' => array_map(static fn (IncompatiblePlugin $p): string => $p->name, $toDisable),
+            'caches' => [
+                'config' => is_file($this->paths->base('bootstrap/cache/config.php')),
+                'routes' => (glob($this->paths->base('bootstrap/cache/routes-*.php')) ?: []) !== [],
+            ],
+        ]);
+        $journal->transition(RunState::Planned, ['plan' => ['paths' => $plan->paths, 'removed' => $plan->removedPaths]]);
+
+        $context = new EngineContext(
+            new StagedSwap($this->files, $this->paths, $this->guard, $journal),
+            $journal,
+            $plan,
+            $extractPath,
+            $this->paths,
+            $this->files,
+            $this->footprint,
+            $this->composer,
+            MagnaServiceProvider::VERSION,
+            ltrim($target, 'vV'),
+            $mode,
+            function () use ($secret, &$leaveMaintenanceOnExit): void {
+                $this->maintenance->enter($secret);
+                $leaveMaintenanceOnExit = true;
+            },
+            fn (string $message, int $percent) => $this->setProgress(CoreUpdateState::Running, $message, $percent),
+            fn (string $line) => $this->runLog->line($line),
+        );
+
+        try {
+            $engine($context);
+
+            if ($journal->state() !== RunState::FinalizePending) {
+                throw new RuntimeException('the release engine returned without completing the switch.');
+            }
+        } catch (Throwable $e) {
+            $this->runLog->line('The release engine failed: '.$e->getMessage());
+
+            if (! $context->isSwitching()) {
+                // Nothing went live; drop what was staged and report it as such.
+                $context->rollback();
+                $journal->transition(RunState::Failed, ['outcome' => $e->getMessage()]);
+
+                return $this->fail('Update failed before any files were changed: '.$e->getMessage());
+            }
+
+            $this->rollback->rollBack($journal, $e->getMessage());
+            $leaveMaintenanceOnExit = false;
+
+            return CoreUpdateState::Failed;
+        }
+
+        // The switch is done. From here the NEW code owns the run: this
+        // process must not touch the tree again, not even to lift maintenance
+        // mode — that is the finalizer's last act, once the new code has
+        // proven itself. Workers are told to exit and opcache to forget.
+        $leaveMaintenanceOnExit = false;
+        $this->rollback->armBootGuard($journal);
+        $this->refresh->restartWorkers();
+        $this->refresh->resetOpcache();
+        $this->setProgress(CoreUpdateState::Switched, "Switched to v{$target} — finishing under the new release…", 80);
+
+        return CoreUpdateState::Switched;
+    }
+
+    /**
+     * Tiers B and C: this process lays the release down and finishes it, as
+     * every update before engines did.
+     *
+     * @param  list<IncompatiblePlugin>  $toDisable
+     *
+     * @param-out string $backupPath
+     */
+    private function applyInProcess(string $extractPath, ReleasePlan $plan, string $target, UpdateMode $mode, ?string $secret, array $toDisable, ?string &$backupPath, bool &$leaveMaintenanceOnExit): CoreUpdateState
+    {
+        // After the archive is proven, not before: a bad download used to
+        // leave a full snapshot behind for nothing.
+        $this->setProgress(CoreUpdateState::Running, 'Backing up current files…', 62);
+        $backupPath = $this->snapshot->create($plan->snapshotPaths());
+
+        $leaveMaintenanceOnExit = true;
+        $this->maintenance->enter($secret);
+
+        $disableResult = null;
+
+        try {
+            $this->setProgress(CoreUpdateState::Running, 'Applying update…', 70);
+            $delivered = $this->overlay->apply($extractPath, $plan);
+
+            $this->setProgress(CoreUpdateState::Running, 'Running migrations…', 85);
+            Artisan::call('migrate', ['--force' => true]);
+
+            // A forced update may leave plugins enabled that are known-incompatible
+            // with the target. Booting one on the next request could throw during
+            // Laravel's own bootstrap and take the whole panel down with it — so they
+            // are disabled here, still inside maintenance mode, before the site comes
+            // back up. Data/config are preserved; the admin re-enables once updated.
+            if ($toDisable !== []) {
+                $this->setProgress(CoreUpdateState::Running, 'Disabling incompatible plugins…', 92);
+                $disableResult = $this->compatibility->disable($toDisable);
+            }
+
+            $this->setProgress(CoreUpdateState::Running, 'Clearing caches…', 96);
+            $this->refresh->refresh();
+
+            $this->recordDelivery($target, $mode, $plan, $delivered);
+        } catch (Throwable $e) {
+            $this->setProgress(CoreUpdateState::Running, 'Update failed mid-apply — restoring previous files…', 50);
+
+            // The restore can fail for the same reason the overlay did (a
+            // path PHP cannot write). Letting that escape replaced a
+            // readable failure with a raw stack trace, at the one moment the
+            // admin most needs to be told what state their install is in.
+            try {
+                $this->snapshot->restore($backupPath);
+            } catch (Throwable $restoreError) {
+                Artisan::call('config:clear');
+
+                return $this->fail(
+                    "Update failed AND the rollback could not finish: {$e->getMessage()} — then: {$restoreError->getMessage()}. "
+                    ."Your core files are now a mix of the old and new version. Re-upload the release archive over this install (src/Magna, app, bootstrap, routes, database/migrations), run `php artisan migrate --force`, and clear the caches. A copy of the previous files is in {$backupPath}."
                 );
             }
+
+            Artisan::call('config:clear');
+
+            return $this->fail("Update failed and files were restored: {$e->getMessage()}. If migrations ran before the failure, your database may be ahead of the restored code — check your own DB backup before continuing.");
         }
 
-        return $incompatible;
+        $this->pruneBackups();
+
+        $message = $mode === UpdateMode::Repair ? "Repaired v{$target}." : "Updated to v{$target}.";
+        $this->setProgress(CoreUpdateState::Completed, $disableResult?->describe($message) ?? $message, 100);
+
+        return CoreUpdateState::Completed;
     }
 
-    /** @param  list<IncompatiblePlugin>  $incompatible */
-    private function disableIncompatiblePlugins(array $incompatible): PluginDisableResult
+    /**
+     * Write down what was delivered, and tell the next boot which classmap
+     * entries the release retired so it need not scan for them. Neither may
+     * fail the update they describe: it has already happened.
+     *
+     * @param  list<string>  $delivered  the paths the archive actually carried and the overlay laid down
+     */
+    private function recordDelivery(string $target, UpdateMode $mode, ReleasePlan $plan, array $delivered): void
     {
-        $disabled = [];
-        $failed = [];
-
-        foreach ($incompatible as $plugin) {
-            try {
-                $this->plugins->disable($plugin->name);
-                $disabled[] = $plugin->displayName;
-            } catch (Throwable) {
-                $failed[] = $plugin->displayName;
+        try {
+            if (! $this->footprint->record($target, $mode->value, $this->runLog->runId(), $plan->manifest, $delivered)) {
+                $this->runLog->line('Could not write '.InstalledFootprint::FILENAME.'; the next boot will report the update as unrecorded.');
             }
-        }
 
-        return new PluginDisableResult($disabled, $failed);
-    }
-
-    private function clearCachesAndReloadOctane(): void
-    {
-        Artisan::call('config:clear');
-        Artisan::call('route:clear');
-        Artisan::call('view:clear');
-
-        if (class_exists(OctaneServiceProvider::class) && Runtime::isOctane()) {
-            Artisan::call('octane:reload');
-        }
-    }
-
-    private function buildSuccessMessage(string $targetVersion, ?PluginDisableResult $disableResult): string
-    {
-        $message = "Updated to v{$targetVersion}.";
-
-        if ($disableResult === null) {
-            return $message;
-        }
-
-        if ($disableResult->disabled !== []) {
-            $message .= ' Automatically disabled (incompatible with this version): '.implode(', ', $disableResult->disabled).'.';
-        }
-        if ($disableResult->failed !== []) {
-            $message .= ' WARNING: could not disable these incompatible plugins — disable them manually now: '.implode(', ', $disableResult->failed).'.';
-        }
-
-        return $message;
-    }
-
-    /** Replace only the core-owned paths — never composer.json/composer.lock/vendor/, never .env or storage/. */
-    private function overlay(string $extractPath): void
-    {
-        foreach (self::CORE_OWNED_PATHS as $relative) {
-            $source = $extractPath.'/'.$relative;
-            if (! is_dir($source) && ! is_file($source)) {
-                continue;
+            if ($plan->manifest !== null && $plan->manifest->removedClasses !== []) {
+                (new StaleClassMap(
+                    $this->paths->storage('framework/cache/magna-stale-classmap.json'),
+                    $this->paths->base('vendor/composer/autoload_classmap.php'),
+                    ltrim($target, 'vV'),
+                ))->prime($plan->manifest->removedClasses);
             }
-            $this->files->mirror($source, base_path($relative), null, ['override' => true, 'delete' => true]);
+        } catch (Throwable $e) {
+            $this->runLog->line('Could not record the delivery: '.$e->getMessage());
+        }
+    }
+
+    /** After a success only: the snapshot just taken and the one before it stay. Never fatal. */
+    private function pruneBackups(): void
+    {
+        try {
+            $removed = $this->housekeeping->pruneBackups();
+
+            if ($removed !== []) {
+                $this->runLog->line('Removed older backups: '.implode(', ', $removed));
+            }
+        } catch (Throwable $e) {
+            $this->runLog->line('Could not prune older backups: '.$e->getMessage());
         }
     }
 
@@ -406,5 +563,6 @@ class CoreUpdater
     private function setProgress(CoreUpdateState $state, string $message, int $percent = 0): void
     {
         CoreUpdateProgress::set($state, $message, $percent, $this->targetVersion);
+        $this->runLog->line(ucfirst($state->value).' '.$percent.'% — '.$message);
     }
 }

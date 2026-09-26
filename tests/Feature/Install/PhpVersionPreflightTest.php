@@ -37,7 +37,11 @@ it('states the same minimum version as composer.json and the requirements screen
     expect($composer['require']['php'] ?? null)->toBe('^8.3')
         ->and(magnaIndexSource())->toContain("'8.3.0'")
         ->and((string) file_get_contents(base_path('src/Magna/Install/Requirements.php')))
-        ->toContain("'8.3.0'");
+        ->toContain("'8.3.0'")
+        // The floor every release manifest states, which the updater checks
+        // before applying an archive.
+        ->and((string) file_get_contents(base_path('bin/support/release-manifest.php')))
+        ->toContain("const RELEASE_PHP_FLOOR = '8.3.0'");
 });
 
 it('keeps the guard and its page parseable by the old interpreters they greet', function (): void {

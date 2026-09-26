@@ -35,25 +35,74 @@ class CoreUpdateJob implements ShouldQueue
         public readonly ?string $expectedSha256 = null,
         public readonly bool $force = false,
         public readonly ?string $checksumSignature = null,
+        public readonly ?string $maintenanceSecret = null,
+        public readonly string $mode = 'update',
     ) {}
+
+    public static function fromPending(PendingCoreUpdate $pending): self
+    {
+        return new self(
+            $pending->version,
+            $pending->zipUrl,
+            $pending->expectedSha256,
+            $pending->force,
+            $pending->checksumSignature,
+            $pending->maintenanceSecret,
+            $pending->mode,
+        );
+    }
 
     public function handle(CoreUpdater $updater): void
     {
-        // The install is already at (or past) this version, so someone else
-        // applied it: either CoreUpdateStarter's stalled-update fallback ran it
-        // in-request, or an earlier attempt of this same job succeeded. Running
-        // again would re-download, re-overlay and take the site into maintenance
-        // mode a second time for no gain.
-        if (version_compare(MagnaServiceProvider::VERSION, $this->targetVersion, '>=')) {
-            Log::info('Skipping core update job: already on v'.MagnaServiceProvider::VERSION.'.', [
-                'target' => $this->targetVersion,
-            ]);
+        $target = ltrim($this->targetVersion, 'vV');
+
+        // A repair re-applies the running release and nothing else; an update
+        // moves forward and nothing else. Skipped quietly, without a progress
+        // entry: apply() has the same guard (UpdatePreflight) for every other
+        // caller, but there it is a refusal the admin is shown.
+        if ($this->mode === UpdateMode::Repair->value) {
+            if (version_compare(MagnaServiceProvider::VERSION, $target, '!=')) {
+                Log::info('Skipping core repair job: it names v'.$target.' and this site runs v'.MagnaServiceProvider::VERSION.'.');
+
+                return;
+            }
+
+            $state = $updater->repairFromHub($this->zipUrl, $this->expectedSha256, $this->checksumSignature, $this->maintenanceSecret);
+        } else {
+            // The install is already at (or past) this version, so someone else
+            // applied it: either CoreUpdateStarter's stalled-update fallback ran it
+            // in-request, or an earlier attempt of this same job succeeded. Running
+            // again would re-download, re-overlay and take the site into maintenance
+            // mode a second time for no gain.
+            if (version_compare(MagnaServiceProvider::VERSION, $target, '>=')) {
+                Log::info('Skipping core update job: already on v'.MagnaServiceProvider::VERSION.'.', [
+                    'target' => $this->targetVersion,
+                ]);
+
+                return;
+            }
+
+            $state = $updater->apply(
+                $this->targetVersion,
+                $this->zipUrl,
+                $this->expectedSha256,
+                $this->force,
+                $this->checksumSignature,
+                $this->maintenanceSecret,
+            );
+        }
+
+        if ($state === CoreUpdateState::Queued) {
+            $this->release(15);
 
             return;
         }
 
-        if ($updater->apply($this->targetVersion, $this->zipUrl, $this->expectedSha256, $this->force, $this->checksumSignature) === CoreUpdateState::Queued) {
-            $this->release(15);
+        // The switch is done and this worker is now the OLD code. The rest
+        // belongs to a process on the new release: a fresh worker (this one
+        // has been told to restart), the admin's poll, the scheduler's tick.
+        if ($state === CoreUpdateState::Switched) {
+            FinalizeCoreUpdateJob::dispatch()->delay(now()->addSeconds(5));
         }
     }
 }

@@ -25,7 +25,13 @@ use SplFileInfo;
  */
 final class CoreWritability
 {
-    public function __construct(private readonly string $basePath) {}
+    /**
+     * @param  list<string>|null  $paths  the relative paths an update will replace; the updater's own list when null
+     */
+    public function __construct(
+        private readonly string $basePath,
+        private readonly ?array $paths = null,
+    ) {}
 
     /**
      * The first unwritable entry under each core-owned path, keyed by that path.
@@ -37,7 +43,7 @@ final class CoreWritability
     {
         $blockers = [];
 
-        foreach (CoreUpdater::coreOwnedPaths() as $relative) {
+        foreach ($this->paths ?? CoreUpdater::coreOwnedPaths() as $relative) {
             $offender = $this->firstUnwritable($this->basePath.'/'.$relative);
 
             if ($offender !== null) {

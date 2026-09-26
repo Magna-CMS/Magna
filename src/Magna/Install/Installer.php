@@ -7,6 +7,10 @@ namespace Magna\Install;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Magna\MagnaServiceProvider;
+use Magna\Updater\Engine\PathGuard;
+use Magna\Updater\Footprint\InstalledFootprint;
+use Magna\Updater\Manifest\ReleaseManifest;
+use Magna\Updater\UpdatePaths;
 use RuntimeException;
 
 final class Installer
@@ -22,7 +26,10 @@ final class Installer
         return is_file(self::lockPath());
     }
 
-    public static function markInstalled(): void
+    /**
+     * @param  UpdatePaths|null  $paths  where the install lives; the running application's own paths when omitted
+     */
+    public static function markInstalled(?UpdatePaths $paths = null): void
     {
         $payload = json_encode([
             'version' => MagnaServiceProvider::VERSION,
@@ -44,6 +51,31 @@ final class Installer
         $tokenPath = self::tokenPath();
         if (is_file($tokenPath) && ! unlink($tokenPath)) {
             Log::warning('magna: could not remove install token file after installation.', ['path' => $tokenPath]);
+        }
+
+        self::recordFootprint($paths ?? new UpdatePaths(base_path(), storage_path()));
+    }
+
+    /**
+     * A fresh install is the first delivery: the archive was extracted whole,
+     * and its manifest — sitting at the install root — says what that was.
+     * Recorded so a later update can tell "delivered by an older updater"
+     * from "installed from this release". Never fatal: the install is done.
+     */
+    private static function recordFootprint(UpdatePaths $paths): void
+    {
+        try {
+            $manifest = ReleaseManifest::fromExtractedArchive($paths->basePath, new PathGuard);
+
+            (new InstalledFootprint($paths))->record(
+                MagnaServiceProvider::VERSION,
+                'fresh',
+                null,
+                $manifest,
+                $manifest === null ? [] : $manifest->coreOwnedPaths,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('magna: could not record the install footprint.', ['error' => $e->getMessage()]);
         }
     }
 

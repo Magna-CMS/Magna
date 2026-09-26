@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Magna\Licensing\PackageExtractor;
 use Magna\Licensing\SignedPayload;
+use Magna\Updater\Engine\PathGuard;
+use Magna\Updater\Manifest\InvalidReleaseManifestException;
+use Magna\Updater\Manifest\ReleaseManifest;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -43,7 +46,21 @@ class ReleaseArchive
     public function __construct(
         private readonly Filesystem $files,
         private readonly PackageExtractor $extractor,
+        private readonly UpdatePaths $paths,
+        private readonly PathGuard $guard,
     ) {}
+
+    /**
+     * The release's own description of itself, read from the verified,
+     * extracted archive — never from the hub's JSON. Null for an archive
+     * that predates manifests, which the updater applies by its own list.
+     *
+     * @throws InvalidReleaseManifestException when a manifest is present and unusable
+     */
+    public function manifest(string $extractedRoot): ?ReleaseManifest
+    {
+        return ReleaseManifest::fromExtractedArchive($extractedRoot, $this->guard);
+    }
 
     /**
      * The checksum defeats an attacker who can swap the archive. It does NOT
@@ -73,9 +90,17 @@ class ReleaseArchive
      * Update Manager signs every release — verified against a live check-in —
      * so a site only needs the hatch to talk to an update server that does not.
      *
+     * Two signed forms are accepted. The newer covers `{"sha256","version"}`,
+     * so a signature also binds WHICH release the checksum belongs to — an
+     * update server that could announce an old, still-signed archive as the
+     * latest cannot do so once every site checks this form first. The
+     * original `{"sha256"}` form stays accepted while Update Manager moves
+     * over; the archive's own manifest binds the version on that path.
+     *
+     * @param  string|null  $version  the version announced with the checksum, when known
      * @return string|null a refusal message, or null when acceptable
      */
-    public function checkChecksumSignature(string $expectedSha256, ?string $signature): ?string
+    public function checkChecksumSignature(string $expectedSha256, ?string $signature, ?string $version = null): ?string
     {
         $required = ! (bool) config('magna.updater.allow_unsigned_checksum', false);
 
@@ -103,7 +128,12 @@ class ReleaseArchive
             return null;
         }
 
-        if (! SignedPayload::verify($signature, SignedPayload::canonicalize(['sha256' => $expectedSha256]))) {
+        $version = $version === null ? null : ltrim(trim($version), 'vV');
+
+        $versioned = $version !== null && $version !== ''
+            && SignedPayload::verify($signature, SignedPayload::canonicalize(['sha256' => $expectedSha256, 'version' => $version]));
+
+        if (! $versioned && ! SignedPayload::verify($signature, SignedPayload::canonicalize(['sha256' => $expectedSha256]))) {
             Log::critical('Core update refused: the release checksum failed Ed25519 signature verification.', [
                 'sha256' => $expectedSha256,
             ]);
@@ -119,7 +149,7 @@ class ReleaseArchive
     {
         $this->guardDownloadUrl($zipUrl);
 
-        $tmpDir = storage_path('app/magna-updates/tmp');
+        $tmpDir = $this->paths->tmpDir();
         $this->files->mkdir($tmpDir);
         $zipPath = $tmpDir.'/core-'.uniqid().'.zip';
 
@@ -155,7 +185,7 @@ class ReleaseArchive
      */
     public function extract(string $zipPath): string
     {
-        $extractPath = storage_path('app/magna-updates/tmp/extract-'.uniqid());
+        $extractPath = $this->paths->tmpDir().'/extract-'.uniqid();
 
         $this->extractor->extract($zipPath, $extractPath);
 
@@ -164,9 +194,18 @@ class ReleaseArchive
         return $this->extractor->resolveContentRoot($extractPath);
     }
 
-    public function cleanup(string $zipPath, string $extractPath): void
+    /**
+     * Removes whatever of the download and extraction exists. Nulls are the
+     * steps a failed run never reached; the orchestrator calls this from a
+     * finally block and does not know how far it got.
+     */
+    public function cleanup(?string $zipPath, ?string $extractPath): void
     {
-        $this->files->remove([$zipPath, $extractPath]);
+        $paths = array_values(array_filter([$zipPath, $extractPath], static fn (?string $p): bool => $p !== null && $p !== ''));
+
+        if ($paths !== []) {
+            $this->files->remove($paths);
+        }
     }
 
     private function guardDownloadUrl(string $zipUrl): void

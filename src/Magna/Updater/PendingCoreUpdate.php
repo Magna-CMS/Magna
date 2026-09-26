@@ -14,6 +14,14 @@ namespace Magna\Updater;
  * browser, for the same reason SystemInfoPage re-reads the release row instead
  * of keeping the URL in component state: this URL is what gets overlaid onto
  * the code that runs on every request.
+ *
+ * The maintenance secret is minted by CoreUpdateStarter, one per run: it is
+ * the key `php artisan down --secret` takes, and the admin who started the
+ * update holds the matching bypass cookie so their progress poll keeps
+ * answering while everyone else sees the maintenance page.
+ *
+ * `mode` is `update` (a newer release) or `repair` (the running release,
+ * re-applied from its archive so everything it ships is present and recorded).
  */
 final readonly class PendingCoreUpdate
 {
@@ -23,9 +31,29 @@ final readonly class PendingCoreUpdate
         public ?string $expectedSha256,
         public bool $force = false,
         public ?string $checksumSignature = null,
+        public ?string $maintenanceSecret = null,
+        public string $mode = 'update',
     ) {}
 
-    /** @return array{version: string, zip_url: string, sha256: string|null, force: bool, signature: string|null} */
+    public function withMaintenanceSecret(string $secret): self
+    {
+        return new self(
+            version: $this->version,
+            zipUrl: $this->zipUrl,
+            expectedSha256: $this->expectedSha256,
+            force: $this->force,
+            checksumSignature: $this->checksumSignature,
+            maintenanceSecret: $secret,
+            mode: $this->mode,
+        );
+    }
+
+    public function isRepair(): bool
+    {
+        return $this->mode === UpdateMode::Repair->value;
+    }
+
+    /** @return array{version: string, zip_url: string, sha256: string|null, force: bool, signature: string|null, maintenance_secret: string|null, mode: string} */
     public function toArray(): array
     {
         return [
@@ -34,6 +62,8 @@ final readonly class PendingCoreUpdate
             'sha256' => $this->expectedSha256,
             'force' => $this->force,
             'signature' => $this->checksumSignature,
+            'maintenance_secret' => $this->maintenanceSecret,
+            'mode' => $this->mode,
         ];
     }
 
@@ -50,6 +80,8 @@ final readonly class PendingCoreUpdate
             expectedSha256: is_string($value['sha256'] ?? null) ? $value['sha256'] : null,
             force: (bool) ($value['force'] ?? false),
             checksumSignature: is_string($value['signature'] ?? null) ? $value['signature'] : null,
+            maintenanceSecret: is_string($value['maintenance_secret'] ?? null) ? $value['maintenance_secret'] : null,
+            mode: ($value['mode'] ?? null) === UpdateMode::Repair->value ? UpdateMode::Repair->value : UpdateMode::Update->value,
         );
     }
 }

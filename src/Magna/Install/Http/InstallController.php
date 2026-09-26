@@ -17,6 +17,7 @@ use Magna\Install\EnvWriter;
 use Magna\Install\Installer;
 use Magna\Install\Requirements;
 use Magna\Updater\UpdateCheckClient;
+use Magna\Updater\UpdatePaths;
 use Magna\Users\User;
 use Magna\Users\UserStatus;
 use Throwable;
@@ -139,7 +140,7 @@ class InstallController extends Controller
         return view('magna-install::account', ['step' => 4]);
     }
 
-    public function storeAccount(Request $request): RedirectResponse
+    public function storeAccount(Request $request, UpdatePaths $paths): RedirectResponse
     {
         if (! $request->session()->get('magna_install_verified')) {
             return redirect('/install');
@@ -164,7 +165,7 @@ class InstallController extends Controller
 
         $user->assignRole('super-admin');
 
-        Installer::markInstalled();
+        Installer::markInstalled($paths);
 
         try {
             Artisan::call('storage:link', ['--force' => true]);

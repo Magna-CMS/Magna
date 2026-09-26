@@ -1,5 +1,11 @@
 <?php
 
+// First, before any class of Magna's can fail to load: while a core update
+// has switched the live files and the new code has not yet proven it boots,
+// a fatal here renames the previous release back. Pure PHP, one stat when
+// idle. See bootstrap/update/boot-guard.php.
+require __DIR__.'/update/boot-guard.php';
+
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;

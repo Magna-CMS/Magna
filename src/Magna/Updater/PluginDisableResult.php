@@ -15,4 +15,18 @@ final readonly class PluginDisableResult
         public array $disabled,
         public array $failed,
     ) {}
+
+    /** The success line with what was disabled — and what the admin still has to — appended. */
+    public function describe(string $message): string
+    {
+        if ($this->disabled !== []) {
+            $message .= ' Automatically disabled (incompatible with this version): '.implode(', ', $this->disabled).'.';
+        }
+
+        if ($this->failed !== []) {
+            $message .= ' WARNING: could not disable these incompatible plugins — disable them manually now: '.implode(', ', $this->failed).'.';
+        }
+
+        return $message;
+    }
 }

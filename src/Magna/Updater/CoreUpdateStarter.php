@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Magna\Updater;
 
+use Illuminate\Foundation\Http\MaintenanceModeBypassCookie;
+use Illuminate\Support\Facades\Cookie;
+
 /**
  * Starts a core update and keeps it from silently going nowhere.
  *
@@ -17,6 +20,14 @@ namespace Magna\Updater;
  * up after a short grace period, the polling request carries the apply out
  * itself. That is the same work `sync` queues have always done inside the
  * request, so it introduces no capability the app didn't already have.
+ *
+ * Also minted here, once per run: the maintenance secret. `down` used to run
+ * bare, so the moment the site went into maintenance mode the admin's own
+ * progress poll answered 503 and the bar froze until `up` — and on the inline
+ * path, where the poll IS the worker, nothing at all could have moved it along.
+ * The secret goes to `down --secret`, and the admin's browser gets Laravel's
+ * matching bypass cookie in the response that started the update. Everyone
+ * else still sees the maintenance page.
  */
 final class CoreUpdateStarter
 {
@@ -31,6 +42,10 @@ final class CoreUpdateStarter
 
     public function start(PendingCoreUpdate $pending): void
     {
+        $pending = $pending->withMaintenanceSecret(bin2hex(random_bytes(20)));
+
+        Cookie::queue(MaintenanceModeBypassCookie::create((string) $pending->maintenanceSecret));
+
         CoreUpdateProgress::markQueued($pending);
 
         CoreUpdateJob::dispatch(
@@ -39,6 +54,8 @@ final class CoreUpdateStarter
             $pending->expectedSha256,
             $pending->force,
             $pending->checksumSignature,
+            $pending->maintenanceSecret,
+            $pending->mode,
         );
     }
 
@@ -85,12 +102,22 @@ final class CoreUpdateStarter
             $pending->version,
         );
 
+        if ($pending->isRepair()) {
+            return $this->updater->repairFromHub(
+                $pending->zipUrl,
+                $pending->expectedSha256,
+                $pending->checksumSignature,
+                $pending->maintenanceSecret,
+            );
+        }
+
         return $this->updater->apply(
             $pending->version,
             $pending->zipUrl,
             $pending->expectedSha256,
             $pending->force,
             $pending->checksumSignature,
+            $pending->maintenanceSecret,
         );
     }
 }

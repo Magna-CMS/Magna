@@ -881,8 +881,10 @@ it('lets the pinned big classes only shrink', function (): void {
         'Admin/Pages/PluginsPage.php' => 707,
         'Licensing/LicenseClient.php' => 580,
         'Blocks/Livewire/BlockEditor.php' => 586,
-        'Plugins/PluginManager.php' => 551,
-        'Admin/Pages/SystemInfoPage.php' => 540,
+        'Plugins/PluginManager.php' => 546,
+        // Update-driving and plugin-resolution logic moved into
+        // Admin/Concerns traits; the page is presentation again.
+        'Admin/Pages/SystemInfoPage.php' => 290,
         'Content/EntryManager.php' => 505,
         // The next-largest classes get pinned as they crest the pack — the
         // ratchet covers the top of the size distribution, not a fixed list.
@@ -929,7 +931,7 @@ it('never grows the number of app() call sites', function (): void {
         'Admin/Pages/PluginsPage.php' => 15,
         'Admin/Pages/ProfilePage.php' => 1,
         'Admin/Pages/SettingsPage.php' => 2,
-        'Admin/Pages/SystemInfoPage.php' => 8,
+        'Admin/Pages/SystemInfoPage.php' => 4,
         'Admin/Pages/ThemesPage.php' => 5,
         'Admin/Resources/ApiKey/ManageApiKeys.php' => 1,
         'Admin/Resources/Entry/CreateEntry.php' => 2,

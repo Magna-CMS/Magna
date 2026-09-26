@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Magna\Updater;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Magna\MagnaServiceProvider;
 use Magna\Marketplace\Marketplace;
 use Magna\Marketplace\MarketplaceHttp;
 use Magna\Notices\DashboardNotice;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\InstallFingerprint;
+use Magna\Updater\Engine\EngineLoader;
+use Magna\Updater\Manifest\ManifestRules;
 
 /**
  * Talks to Update Manager's check-in endpoint (Magna\Marketplace\Marketplace::API_BASE.'/updates'),
@@ -42,6 +45,21 @@ class UpdateCheckClient
             'site' => InstallFingerprint::derive(),
             'core' => MagnaServiceProvider::VERSION,
             'plugins' => $installedPlugins,
+            // What this host runs and what this updater can consume, so Update
+            // Manager can withhold a release the site could not apply — a PHP
+            // floor it does not meet, an archive shape this code does not read
+            // — instead of announcing it and letting the apply fail here.
+            // `updater` is bumped as the client learns: `manifest` is the
+            // release-manifest schema it reads (0: none yet), `engine` the
+            // engine APIs it can hand off to.
+            'php' => PHP_VERSION,
+            'extensions' => self::loadedExtensions(),
+            'updater' => [
+                'manifest' => max(ManifestRules::SUPPORTED_SCHEMAS),
+                'engine' => EngineLoader::SUPPORTED_APIS,
+                'vendor' => ManifestRules::VENDOR_STRATEGIES,
+                'signature' => ['sha256', 'sha256+version'],
+            ],
         ];
 
         $raw = $this->post('/updates', $payload);
@@ -62,19 +80,31 @@ class UpdateCheckClient
         $now = now();
 
         if ($result->core !== null) {
-            $check = UpdateCheck::query()->updateOrCreate(
-                ['type' => 'core', 'slug' => null],
-                [
-                    'current_version' => MagnaServiceProvider::VERSION,
-                    'latest_version' => $result->core->latestVersion,
-                    'changelog_url' => $result->core->changelogUrl,
-                    'download_url' => $result->core->downloadUrl,
-                    'download_sha256' => $result->core->downloadSha256,
-                    'download_sha256_signature' => $result->core->downloadSha256Signature,
-                    'update_available' => $result->core->updateAvailable,
-                    'checked_at' => $now,
-                ]
-            );
+            $attributes = [
+                'current_version' => MagnaServiceProvider::VERSION,
+                'latest_version' => $result->core->latestVersion,
+                'changelog_url' => $result->core->changelogUrl,
+                'download_url' => $result->core->downloadUrl,
+                'download_sha256' => $result->core->downloadSha256,
+                'download_sha256_signature' => $result->core->downloadSha256Signature,
+                'update_available' => $result->core->updateAvailable,
+                'checked_at' => $now,
+            ];
+
+            // Only once the columns are there: a check-in can run between a
+            // switch and the finalize that migrates, and must not fail the
+            // whole persist for a hint.
+            if (Schema::hasColumn('update_checks', 'installed_download_sha256_signature')) {
+                $attributes += [
+                    'requires_php' => $result->core->requiresPhp,
+                    'min_upgrade_from' => $result->core->minUpgradeFrom,
+                    'installed_download_url' => $result->core->installedDownloadUrl,
+                    'installed_download_sha256' => $result->core->installedDownloadSha256,
+                    'installed_download_sha256_signature' => $result->core->installedDownloadSha256Signature,
+                ];
+            }
+
+            $check = UpdateCheck::query()->updateOrCreate(['type' => 'core', 'slug' => null], $attributes);
 
             if ($check->update_available) {
                 $notifier->notifyIfChanged(
@@ -153,6 +183,15 @@ class UpdateCheckClient
         }
 
         DashboardNotice::query()->whereNotIn('remote_id', $activeRemoteIds)->delete();
+    }
+
+    /** @return list<string> lower-cased, sorted, so the hub can compare without normalising */
+    private static function loadedExtensions(): array
+    {
+        $extensions = array_map(strtolower(...), get_loaded_extensions());
+        sort($extensions);
+
+        return $extensions;
     }
 
     /**

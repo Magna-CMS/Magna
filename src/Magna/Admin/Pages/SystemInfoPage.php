@@ -9,26 +9,23 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\HtmlString;
 use Laravel\Octane\OctaneServiceProvider;
-use Livewire\Attributes\Locked;
+use Magna\Admin\Concerns\DrivesCoreUpdate;
+use Magna\Admin\Concerns\ResolvesIncompatiblePlugins;
 use Magna\MagnaServiceProvider;
-use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\Runtime;
 use Magna\System\SystemHealthCollector;
-use Magna\Updater\CoreUpdateProgress;
-use Magna\Updater\CoreUpdater;
-use Magna\Updater\CoreUpdateStarter;
-use Magna\Updater\CoreUpdateState;
-use Magna\Updater\IncompatiblePlugin;
-use Magna\Updater\PendingCoreUpdate;
+use Magna\Updater\Footprint\FootprintCheck;
 use Magna\Updater\UpdateCheck;
 use Magna\Updater\UpdateCheckClient;
 use Throwable;
 
 class SystemInfoPage extends Page
 {
+    use DrivesCoreUpdate;
+    use ResolvesIncompatiblePlugins;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-information-circle';
 
     protected static string|\UnitEnum|null $navigationGroup = 'System';
@@ -43,32 +40,6 @@ class SystemInfoPage extends Page
 
     /** @var list<array{type: string, text: string}> */
     public array $terminalLines = [];
-
-    /** True while an "Update Now" apply is in progress, so the page polls CoreUpdater::progress(). */
-    public bool $updating = false;
-
-    /**
-     * Enabled plugins found incompatible with the pending target version,
-     * captured by updateNow's pre-flight check for the resolution modal.
-     *
-     * @var list<array{name: string, displayName: string, installedVersion: string, requiredCompat: string}>
-     */
-    #[Locked]
-    public array $incompatiblePlugins = [];
-
-    /**
-     * Target version captured while the resolveIncompatiblePlugins modal is
-     * open.
-     *
-     * #[Locked] because a Livewire public property round-trips through the
-     * browser: without it the client could rewrite the pending target between
-     * opening the modal and submitting it. The URL and checksum are no longer
-     * held here at all — they are re-read from the update_checks row at
-     * dispatch time, so the only thing the browser can influence is *which*
-     * already-recorded release is applied, and even that is verified.
-     */
-    #[Locked]
-    public ?string $pendingUpdateVersion = null;
 
     public static function canAccess(): bool
     {
@@ -133,276 +104,9 @@ class SystemInfoPage extends Page
                         ->send();
                 }),
 
-            Action::make('updateNow')
-                ->label(fn (): string => 'Update to v'.(UpdateCheck::core()->latest_version ?? ''))
-                ->icon('heroicon-o-rocket-launch')
-                ->color('warning')
-                ->visible(fn (): bool => (UpdateCheck::core()->update_available ?? false) && ! $this->updating)
-                ->authorize(fn (): bool => auth()->user()?->can('settings.manage') ?? false)
-                ->requiresConfirmation()
-                ->modalHeading(fn (): string => 'Update Magna CMS to v'.(UpdateCheck::core()->latest_version ?? '').'?')
-                ->modalDescription('The site goes into maintenance mode during the update. Current files are backed up first and restored automatically if anything fails.')
-                ->modalSubmitActionLabel('Update now')
-                ->action(function (CoreUpdater $updater, CoreUpdateStarter $starter): void {
-                    $core = UpdateCheck::core();
-                    if ($core?->latest_version === null || $core->download_url === null || $core->download_sha256 === null) {
-                        Notification::make()->title("Can't update")->body('No verified release archive is available for the latest version yet.')->danger()->send();
-
-                        return;
-                    }
-
-                    $incompatible = $updater->checkCompatibility($core->latest_version);
-                    if ($incompatible !== []) {
-                        $this->pendingUpdateVersion = $core->latest_version;
-                        $this->incompatiblePlugins = array_map(
-                            static fn (IncompatiblePlugin $p): array => $p->toArray(),
-                            $incompatible,
-                        );
-                        $this->replaceMountedAction('resolveIncompatiblePlugins');
-
-                        return;
-                    }
-
-                    $starter->start(new PendingCoreUpdate(
-                        version: $core->latest_version,
-                        zipUrl: $core->download_url,
-                        expectedSha256: $core->download_sha256,
-                        checksumSignature: $core->download_sha256_signature,
-                    ));
-                    $this->updating = true;
-                    Notification::make()->title('Update started…')->send();
-                }),
+            $this->updateNowAction(),
+            $this->repairCoreAction(),
         ];
-    }
-
-    /**
-     * Shown when updateNow finds enabled plugins incompatible with the target
-     * core version. The primary submit forces the update anyway (incompatible
-     * plugins are auto-disabled by CoreUpdater once the new core is in place);
-     * the extra footer action uninstalls them first and updates cleanly;
-     * cancelling (Filament's default) leaves everything untouched.
-     */
-    public function resolveIncompatiblePluginsAction(): Action
-    {
-        return Action::make('resolveIncompatiblePlugins')
-            ->authorize(fn (): bool => auth()->user()?->can('settings.manage') ?? false)
-            ->requiresConfirmation()
-            ->modalIcon('heroicon-o-exclamation-triangle')
-            ->modalIconColor('danger')
-            ->modalHeading(fn (): string => count($this->incompatiblePlugins).' plugin(s) are incompatible with v'.($this->pendingUpdateVersion ?? ''))
-            ->modalDescription(fn (): HtmlString => $this->incompatiblePluginsModalBody())
-            ->modalSubmitActionLabel('Force update anyway')
-            ->modalCancelActionLabel('Cancel')
-            ->color('danger')
-            ->extraModalFooterActions([
-                Action::make('uninstallIncompatibleAndContinue')
-                    ->label('Uninstall these plugins & continue')
-                    ->color('warning')
-                    ->authorize(fn (): bool => auth()->user()?->can('settings.manage') ?? false)
-                    ->requiresConfirmation()
-                    ->modalHeading('Uninstall incompatible plugins?')
-                    ->modalDescription('Each plugin listed is uninstalled (data tables are preserved; you can reinstall a compatible version later) and the update then proceeds normally.')
-                    ->modalSubmitActionLabel('Uninstall & update')
-                    ->action(fn () => $this->uninstallIncompatibleAndContinue()),
-            ])
-            ->action(fn () => $this->forceUpdateAnyway());
-    }
-
-    private function incompatiblePluginsModalBody(): HtmlString
-    {
-        $rows = '';
-        foreach ($this->incompatiblePlugins as $plugin) {
-            $rows .= '<tr>'
-                .'<td class="py-1 pr-4 font-medium">'.e($plugin['displayName']).'</td>'
-                .'<td class="py-1 pr-4 text-gray-500 dark:text-gray-400">v'.e($plugin['installedVersion']).'</td>'
-                .'<td class="py-1 text-gray-500 dark:text-gray-400">requires magna '.e($plugin['requiredCompat']).'</td>'
-                .'</tr>';
-        }
-
-        $html = '<div class="space-y-3">'
-            .'<p class="text-sm">These enabled plugins declare they don\'t support v'.e($this->pendingUpdateVersion ?? '').'. '
-            .'Forcing the update anyway will automatically disable them once the new core is in place (their data and settings are preserved).</p>'
-            .'<table class="w-full text-sm"><tbody>'.$rows.'</tbody></table>'
-            .'</div>';
-
-        return new HtmlString($html);
-    }
-
-    /** Primary submit of resolveIncompatiblePlugins: proceed despite the conflicts. */
-    private function forceUpdateAnyway(): void
-    {
-        $target = $this->pendingReleaseTarget();
-        $this->incompatiblePlugins = [];
-        $this->pendingUpdateVersion = null;
-
-        if ($target === null) {
-            return;
-        }
-
-        [$version, $zipUrl, $sha256, $signature] = $target;
-
-        app(CoreUpdateStarter::class)->start(new PendingCoreUpdate($version, $zipUrl, $sha256, force: true, checksumSignature: $signature));
-        $this->updating = true;
-        Notification::make()
-            ->title('Forced update started…')
-            ->body('Incompatible plugins will be automatically disabled once the update finishes.')
-            ->warning()
-            ->send();
-    }
-
-    /** Extra footer action of resolveIncompatiblePlugins: remove the conflicting plugins, then update. */
-    private function uninstallIncompatibleAndContinue(): void
-    {
-        $target = $this->pendingReleaseTarget();
-        $names = array_column($this->incompatiblePlugins, 'name');
-        $this->incompatiblePlugins = [];
-        $this->pendingUpdateVersion = null;
-
-        if ($target === null) {
-            return;
-        }
-
-        [$version, $zipUrl, $sha256, $signature] = $target;
-
-        $manager = app(PluginManager::class);
-        $failed = [];
-        foreach ($names as $name) {
-            try {
-                $manager->uninstall($name);
-            } catch (Throwable) {
-                $failed[] = $name;
-            }
-        }
-
-        if ($failed !== []) {
-            Notification::make()
-                ->title("Couldn't uninstall: ".implode(', ', $failed))
-                ->body('The update was not started. Resolve this manually (Plugins page) and try again.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        // Re-verify rather than trusting the uninstalls succeeded silently — the
-        // update job enforces this too, but a clean recheck here gives an
-        // accurate notification instead of a job that queues then fails later.
-        $stillIncompatible = app(CoreUpdater::class)->checkCompatibility($version);
-        if ($stillIncompatible !== []) {
-            $names = array_map(static fn (IncompatiblePlugin $p): string => $p->displayName, $stillIncompatible);
-            Notification::make()
-                ->title('Still incompatible: '.implode(', ', $names))
-                ->body('The update was not started.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        app(CoreUpdateStarter::class)->start(new PendingCoreUpdate($version, $zipUrl, $sha256, checksumSignature: $signature));
-        $this->updating = true;
-        Notification::make()->title('Plugins removed. Update started…')->send();
-    }
-
-    /**
-     * Resolve the release the modal is about, from the recorded update check
-     * rather than from anything the browser sent back.
-     *
-     * The archive URL and its checksum are what CoreUpdater overlays onto
-     * `app/`, `bootstrap/`, and `src/Magna` — code that runs on every
-     * subsequent request. They are therefore never carried in component state:
-     * they are read here, at dispatch, from the row the scheduled check-in
-     * wrote, and only after confirming it still describes the version the
-     * admin was shown.
-     *
-     * @return array{0: string, 1: string, 2: string, 3: string|null}|null
-     */
-    private function pendingReleaseTarget(): ?array
-    {
-        $version = $this->pendingUpdateVersion;
-
-        if ($version === null) {
-            return null;
-        }
-
-        $core = UpdateCheck::core();
-
-        if (
-            $core?->latest_version !== $version
-            || ! is_string($core->download_url)
-            || ! is_string($core->download_sha256)
-        ) {
-            Notification::make()
-                ->title("Can't update")
-                ->body('The recorded release for v'.$version.' has changed or is missing its verified checksum. Re-check for updates and try again.')
-                ->danger()
-                ->send();
-
-            return null;
-        }
-
-        return [$version, $core->download_url, $core->download_sha256, $core->download_sha256_signature];
-    }
-
-    /** Poll the running core update; notify + reload the page when it finishes. */
-    public function pollCoreUpdate(): void
-    {
-        if (! $this->updating) {
-            return;
-        }
-
-        $starter = app(CoreUpdateStarter::class);
-
-        // Reading progress is fine for anyone who can see this page
-        // (settings.view), but the stall fallback *performs* the apply inside
-        // this request — that is the same privilege "Update Now" needs, and
-        // $updating is a plain public property a client can flip. So the
-        // fallback is authorized separately here rather than inherited from
-        // page access.
-        if ($starter->isStalled() && (auth()->user()?->can('settings.manage') ?? false)) {
-            $this->applyStalledUpdate($starter);
-
-            return;
-        }
-
-        $this->reportUpdateOutcome(CoreUpdater::progress());
-    }
-
-    /**
-     * No worker took the job, so this request applies the update itself.
-     *
-     * Deliberately synchronous: the admin is already watching a progress panel,
-     * the site is in maintenance mode for the duration, and the alternative is
-     * an update that never runs at all.
-     */
-    private function applyStalledUpdate(CoreUpdateStarter $starter): void
-    {
-        Notification::make()
-            ->title('No background worker is running')
-            ->body('Applying the update in this request instead — keep this page open until it finishes.')
-            ->warning()
-            ->send();
-
-        if ($starter->applyStalledInline() === null) {
-            return;
-        }
-
-        $this->reportUpdateOutcome(CoreUpdater::progress());
-    }
-
-    /** @param  array{state: string|null, message: string, percent: int, version: string|null, log: list<array{message: string, percent: int}>, waiting_seconds: int}  $progress */
-    private function reportUpdateOutcome(array $progress): void
-    {
-        if ($progress['state'] === CoreUpdateState::Completed->value) {
-            $this->updating = false;
-            CoreUpdateProgress::clearPending();
-            Notification::make()->title('Update complete')->body($progress['message'])->success()->send();
-            $this->js('setTimeout(function(){ window.location.reload(); }, 800)');
-        } elseif ($progress['state'] === CoreUpdateState::Failed->value) {
-            $this->updating = false;
-            CoreUpdateProgress::clearPending();
-            Notification::make()->title("Update didn't complete")->body($progress['message'])->danger()->send();
-        }
     }
 
     /**
@@ -503,6 +207,9 @@ class SystemInfoPage extends Page
             'octane_server' => $this->configString('octane.server', 'frankenphp'),
             'performance_warnings' => $health->performanceWarnings(),
             'security_warnings' => $health->securityWarnings(),
+            // Did everything the running release ships actually arrive, and is
+            // an update waiting to be finished? See FootprintCheck.
+            'update_warnings' => app(FootprintCheck::class)->warnings(),
             'boot_time_ms' => $health->bootTimeMs(),
             'memory_current_mb' => round(memory_get_usage(true) / 1_048_576, 1),
             'memory_peak_mb' => round(memory_get_peak_usage(true) / 1_048_576, 1),

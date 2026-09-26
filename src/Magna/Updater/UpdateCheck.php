@@ -21,6 +21,11 @@ use Magna\MagnaServiceProvider;
  * @property string|null $download_sha256_signature
  * @property bool $update_available
  * @property bool $license_required
+ * @property string|null $requires_php
+ * @property string|null $min_upgrade_from
+ * @property string|null $installed_download_url
+ * @property string|null $installed_download_sha256
+ * @property string|null $installed_download_sha256_signature
  * @property Carbon $checked_at
  */
 class UpdateCheck extends Model
@@ -41,8 +46,22 @@ class UpdateCheck extends Model
         // Mutually exclusive with update_available — see the /updates
         // contract in Magna\Updater\UpdateEntry.
         'license_required',
+        // Hints about the latest release (the archive's manifest is what the
+        // updater enforces), and the verified archive for the RUNNING version
+        // so the panel can repair a site an older updater left incomplete.
+        'requires_php',
+        'min_upgrade_from',
+        'installed_download_url',
+        'installed_download_sha256',
+        'installed_download_sha256_signature',
         'checked_at',
     ];
+
+    /** Whether Update Manager has published a verified archive for the version this site runs. */
+    public function hasRepairGrant(): bool
+    {
+        return is_string($this->installed_download_url) && is_string($this->installed_download_sha256);
+    }
 
     protected function casts(): array
     {

@@ -9,6 +9,7 @@ declare(strict_types=1);
  */
 
 use Illuminate\Support\Facades\Http;
+use Magna\Licensing\SignedPayload;
 use Magna\Updater\ReleaseArchive;
 use Tests\TestCase;
 
@@ -112,4 +113,59 @@ it('requires a signed checksum by default (W1-5)', function (): void {
      * arrive. See tests/Feature/Updater/CoreConfigDefaultsTest.php.
      */
     expect(config('magna.updater.allow_unsigned_checksum'))->toBeFalse();
+});
+
+/*
+|--------------------------------------------------------------------------
+| The signature also binds the version
+|--------------------------------------------------------------------------
+|
+| The original signature covered the checksum alone, so an update server
+| that could announce an OLD, still-signed archive as the latest would be
+| believed. The newer form covers {"sha256","version"}; the legacy form is
+| still accepted while Update Manager moves over, and the archive's own
+| manifest binds the version on that path.
+*/
+
+function releaseSigningPair(): array
+{
+    $pair = sodium_crypto_sign_keypair();
+    config(['magna.licensing.public_key' => base64_encode(sodium_crypto_sign_publickey($pair))]);
+
+    return [sodium_crypto_sign_secretkey($pair)];
+}
+
+function signRelease(string $secret, array $payload): string
+{
+    return base64_encode(sodium_crypto_sign_detached(SignedPayload::canonicalize($payload), $secret));
+}
+
+it('accepts a signature over the checksum and the version', function (): void {
+    [$secret] = releaseSigningPair();
+    $sha = str_repeat('d', 64);
+
+    $signature = signRelease($secret, ['sha256' => $sha, 'version' => '1.4.5']);
+
+    expect(app(ReleaseArchive::class)->checkChecksumSignature($sha, $signature, '1.4.5'))->toBeNull()
+        ->and(app(ReleaseArchive::class)->checkChecksumSignature($sha, $signature, 'v1.4.5'))->toBeNull();
+});
+
+it('refuses a versioned signature presented for a different version', function (): void {
+    [$secret] = releaseSigningPair();
+    $sha = str_repeat('d', 64);
+
+    $signature = signRelease($secret, ['sha256' => $sha, 'version' => '1.4.5']);
+
+    expect(app(ReleaseArchive::class)->checkChecksumSignature($sha, $signature, '1.4.6'))
+        ->toContain('failed signature verification');
+});
+
+it('still accepts the legacy checksum-only signature', function (): void {
+    [$secret] = releaseSigningPair();
+    $sha = str_repeat('d', 64);
+
+    $signature = signRelease($secret, ['sha256' => $sha]);
+
+    expect(app(ReleaseArchive::class)->checkChecksumSignature($sha, $signature, '1.4.5'))->toBeNull()
+        ->and(app(ReleaseArchive::class)->checkChecksumSignature($sha, $signature))->toBeNull();
 });

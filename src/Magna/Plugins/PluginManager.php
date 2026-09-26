@@ -225,12 +225,7 @@ class PluginManager
             throw new PluginNotFoundException($name);
         }
 
-        if (! $info->manifest->isCompatibleWith(MagnaServiceProvider::VERSION)) {
-            throw new PluginCompatibilityException(
-                "Plugin [{$name}] requires magna {$info->manifest->magnaCompat} "
-                .'but the installed core is '.MagnaServiceProvider::VERSION.'.'
-            );
-        }
+        PluginCompatibilityCheck::assertCompatible($info->manifest, MagnaServiceProvider::VERSION);
 
         return $info;
     }
