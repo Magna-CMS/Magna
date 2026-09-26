@@ -292,6 +292,9 @@ jobs:
 
       - name: Check out and install the previous release
         run: |
+          # That era's composer.json still wired the SDK as the path repository
+          # ../magna-plugin-sdk, so the SDK has to sit beside the checkout.
+          git clone --depth 1 https://github.com/Magna-CMS/Magna-Plugin-SDK.git "$RUNNER_TEMP/magna-plugin-sdk"
           git worktree add "$RUNNER_TEMP/site" "${{ matrix.from }}"
           cd "$RUNNER_TEMP/site"
           composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --classmap-authoritative --no-scripts
