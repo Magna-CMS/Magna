@@ -260,54 +260,16 @@ jobs:
           php bin/ci/headless-install.php "$RUNNER_TEMP/site"
           php bin/ci/assert-upgraded.php "$RUNNER_TEMP/site" --archive="$(ls build/magna-cms-v*.zip)" --fresh
 
-  # The oldest release with a one-click updater has no published archive, so
-  # it is installed from its tag instead: composer install the way archives
-  # of that era were built (classmap-authoritative, no PSR-4 fallback), which
-  # is the harshest autoload situation an update can land on. Advisory until
-  # it has proven stable: a resolution failure in a 2026-07 lock file is not a
-  # regression in the updater.
-  upgrade-from-checkout:
-    name: Upgrade from ${{ matrix.from }} (checkout, advisory)
-    runs-on: ubuntu-latest
-    needs: build-archive
-    continue-on-error: true
-    strategy:
-      matrix:
-        from: [v1.2.0]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup PHP 8.4
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, intl, zip, gd, pdo_sqlite, sodium
-          coverage: none
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-archive
-          path: build
-
-      - name: Check out and install the previous release
-        run: |
-          # That era's composer.json still wired the SDK as the path repository
-          # ../magna-plugin-sdk, so the SDK has to sit beside the checkout.
-          git clone --depth 1 https://github.com/Magna-CMS/Magna-Plugin-SDK.git "$RUNNER_TEMP/magna-plugin-sdk"
-          git worktree add "$RUNNER_TEMP/site" "${{ matrix.from }}"
-          cd "$RUNNER_TEMP/site"
-          composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --classmap-authoritative --no-scripts
-          cd -
-          php bin/ci/headless-install.php "$RUNNER_TEMP/site"
-
-      - name: Update it with the current build, through its own updater
-        run: php bin/ci/apply-headless.php "$RUNNER_TEMP/site" "$(ls build/magna-cms-v*.zip)"
-
-      - name: Assert the site runs, and received, the current build
-        run: php bin/ci/assert-upgraded.php "$RUNNER_TEMP/site" --archive="$(ls build/magna-cms-v*.zip)" --legacy-hop
+  # No row for v1.2.0, deliberately. It is the oldest release with a one-click
+  # updater but it has no published archive, and its tracked composer.json
+  # wires PRIVATE plugins as path repositories (magna-cms/marketplace among
+  # them), so no public checkout can ever `composer install` it here — the
+  # attempts failed on the missing SDK path, then on the missing plugin paths,
+  # and the next one would fail on the plugin after that. Its era's updater
+  # behaviour (five-path list, classmap-authoritative, no PSR-4 fallback) is
+  # covered by the v1.3.7 row above, which installs from a real archive of the
+  # same construction; v1.2.0 itself was proven by hand from a local archive
+  # (downloads/magna-cms-v1.2.0.zip) before 1.4.4 shipped.
 
   octane-smoke:
     name: Octane / FrankenPHP smoke test
