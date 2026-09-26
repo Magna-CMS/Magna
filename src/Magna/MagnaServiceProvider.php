@@ -25,8 +25,10 @@ use Magna\Plugins\PluginsServiceProvider;
 use Magna\Privacy\PrivacyServiceProvider;
 use Magna\Settings\PerformanceServiceProvider;
 use Magna\Settings\SettingsServiceProvider;
+use Magna\Support\ComposerLoader;
 use Magna\Support\ConfigDefaults;
 use Magna\Support\DebugWindow;
+use Magna\Support\StaleClassMap;
 use Magna\Updater\UpdaterServiceProvider;
 use Magna\Webhooks\WebhookServiceProvider;
 
@@ -52,6 +54,11 @@ class MagnaServiceProvider extends ServiceProvider
          * factory closure, which is not resolved until boot().
          */
         $this->backfillCoreDefaults();
+
+        // Right after, and before anything can ask class_exists() of a name a
+        // release deleted: Filament's discovery, plugin boot, cached panel
+        // component lists all do.
+        $this->neutraliseStaleClassMap();
 
         $this->app->singleton(DebugWindow::class, function (): DebugWindow {
             return new DebugWindow(
@@ -106,9 +113,16 @@ class MagnaServiceProvider extends ServiceProvider
      * install is missing it, and every value in it is a list — the one shape
      * the backfill deliberately never touches.
      *
-     * The defaults live in `config/defaults`, which CoreUpdater DOES overlay -
-     * see the note beside it there. That is also why their `env()` calls sit
-     * where `env()` belongs, inside `config/`.
+     * The defaults live beside this provider, in `src/Magna/Config/defaults`,
+     * because `src/Magna` is the one path every core updater ever shipped has
+     * overlaid. They used to live in `config/defaults`, which 1.4.3 added to
+     * the updater's path list — and a release cannot deliver a path it adds
+     * to that list, because the overlay is performed by the OLD release's
+     * code. Every site that updated into 1.4.3 ran new code beside no
+     * defaults, with every key null, while reporting itself up to date.
+     * `config/defaults/*.php` remain as forwarders for that generation.
+     * Larastan's env() rule is told about the new directory in
+     * phpstan.neon.dist (`configDirectories`).
      *
      * Deliberately NOT guarded by `configurationIsCached()`, which is what both
      * of Laravel's merge helpers do. `config:cache` clears the cache and boots
@@ -122,7 +136,7 @@ class MagnaServiceProvider extends ServiceProvider
         $config = $this->app->make('config');
 
         foreach (['magna', 'trustedproxy'] as $file) {
-            $path = config_path('defaults/'.$file.'.php');
+            $path = self::coreDefaultsPath($file);
 
             // Never fatal on a missing core file: see config/magna.php. A site
             // that boots wrong can be fixed from its own panel; one that does
@@ -136,6 +150,36 @@ class MagnaServiceProvider extends ServiceProvider
 
             ConfigDefaults::backfill($config, $file, $defaults);
         }
+    }
+
+    /**
+     * Where core's own copy of a config file lives: inside `src/Magna`, so it
+     * travels with the code on every update. Public so the tests that guard
+     * the delivery path assert against the same location the boot reads.
+     */
+    public static function coreDefaultsPath(string $file): string
+    {
+        return __DIR__.'/Config/defaults/'.$file.'.php';
+    }
+
+    /**
+     * A core update replaces `src/Magna` and never `vendor/`, so the site's
+     * classmap keeps naming files a release deleted, and Composer includes
+     * them unchecked — a 500 for any class_exists() on an old name. See
+     * StaleClassMap. Kept as a singleton so System Info can report what was
+     * disarmed.
+     */
+    private function neutraliseStaleClassMap(): void
+    {
+        $stale = new StaleClassMap(
+            $this->app->storagePath('framework/cache/magna-stale-classmap.json'),
+            $this->app->basePath('vendor/composer/autoload_classmap.php'),
+            self::VERSION,
+        );
+
+        $stale->neutralise(ComposerLoader::instance());
+
+        $this->app->instance(StaleClassMap::class, $stale);
     }
 
     public function boot(): void

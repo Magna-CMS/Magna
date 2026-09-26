@@ -31,29 +31,68 @@ uses(TestCase::class);
 | did both correctly. Confirmed on two production installs before this was
 | written.
 |
-| Core's defaults therefore live in config/defaults - its own core-owned path,
-| holding nothing a site edits - and config/magna.php hands straight to them.
+| Core's defaults therefore lived in config/defaults from 1.4.3 - and that fix
+| could not deliver itself. The overlay runs under the OLD release's code and
+| its path list, which had never heard of the new directory: a site that
+| updated 1.4.2 to 1.4.3 ran 1.4.3 code beside no defaults at all, every key
+| null, panel reporting "up to date". So the defaults now live in
+| src/Magna/Config/defaults - inside the one path every core updater ever
+| shipped has overlaid - and both config/magna.php and the 1.4.3-era
+| config/defaults/magna.php forward to them.
 */
 
 it('keeps the site-facing config file from becoming a second source of truth', function (): void {
     $root = dirname(__DIR__, 3);
 
-    /** @var array<string, mixed> $canonical */
-    $canonical = require $root.'/config/magna.php';
     /** @var array<string, mixed> $shipped */
-    $shipped = require $root.'/config/defaults/magna.php';
+    $shipped = require MagnaServiceProvider::coreDefaultsPath('magna');
+    /** @var array<string, mixed> $siteFacing */
+    $siteFacing = require $root.'/config/magna.php';
+    /** @var array<string, mixed> $forwarder */
+    $forwarder = require $root.'/config/defaults/magna.php';
 
-    // Identical because one requires the other. Asserted rather than assumed:
+    // Identical because one requires the next. Asserted rather than assumed:
     // the moment somebody pastes the array back into config/magna.php, every
     // key they add there stops reaching updated sites.
-    expect($canonical)->toBe($shipped, 'config/magna.php must hand to config/defaults/magna.php — config/ is not a core-owned update path, so a key defined only there never reaches a site that updated rather than installed fresh.');
+    expect($siteFacing)->toBe($shipped, 'config/magna.php must hand to src/Magna/Config/defaults/magna.php — config/ is not a core-owned update path, so a key defined only there never reaches a site that updated rather than installed fresh.')
+        ->and($forwarder)->toBe($shipped, 'config/defaults/magna.php is a forwarder for sites whose config/magna.php was written against 1.4.3; it must not grow keys of its own.');
+
+    /** @var array<string, mixed> $proxyShipped */
+    $proxyShipped = require MagnaServiceProvider::coreDefaultsPath('trustedproxy');
+    /** @var array<string, mixed> $proxySite */
+    $proxySite = require $root.'/config/trustedproxy.php';
+    /** @var array<string, mixed> $proxyForwarder */
+    $proxyForwarder = require $root.'/config/defaults/trustedproxy.php';
+
+    expect($proxySite)->toBe($proxyShipped)
+        ->and($proxyForwarder)->toBe($proxyShipped);
+});
+
+/*
+ * The whole reason for the move. `config/defaults` was added to the updater's
+ * path list in 1.4.3 and therefore could not reach a site updating INTO 1.4.3:
+ * the previous release's code performs the overlay, and its list stops at
+ * what it knew. `src/Magna` has been on that list since the first release, so
+ * a file inside it arrives on every hop whatever updater performs it.
+ */
+it('ships the canonical defaults inside the path every updater has always overlaid', function (): void {
+    $root = dirname(__DIR__, 3);
+
+    foreach (['magna', 'trustedproxy'] as $file) {
+        $path = str_replace('\\', '/', MagnaServiceProvider::coreDefaultsPath($file));
+
+        expect($path)->toStartWith(str_replace('\\', '/', $root).'/src/Magna/')
+            ->and(is_file($path))->toBeTrue();
+    }
+
+    expect(CoreUpdater::coreOwnedPaths())->toContain('src/Magna');
 });
 
 it('defines every magna config key core reads', function (): void {
     $root = dirname(__DIR__, 3);
 
     /** @var array<string, mixed> $shipped */
-    $shipped = require $root.'/config/defaults/magna.php';
+    $shipped = require MagnaServiceProvider::coreDefaultsPath('magna');
 
     /** @var list<string> $offenders */
     $offenders = [];
@@ -107,17 +146,18 @@ it('defines every magna config key core reads', function (): void {
      * MediaServiceProvider since it was built, defined by no config file, so
      * its inline fallback was the only value any install could ever have had.
      */
-    expect($offenders)->toBe([], 'A config key core reads must be defined in config/defaults/magna.php, or no install can configure it and no update can deliver it.');
+    expect($offenders)->toBe([], 'A config key core reads must be defined in src/Magna/Config/defaults/magna.php, or no install can configure it and no update can deliver it.');
 });
 
 it('leaves config out of the paths an update overwrites', function (): void {
     // The exclusion is correct and must stay: the overlay mirrors with
     // delete: true, so adding 'config' would erase every site's customisation
-    // to fix a problem config/defaults already solves.
+    // to fix a problem the backfill already solves.
     expect(CoreUpdater::coreOwnedPaths())->not->toContain('config');
 
-    // And the defaults must sit under a path it DOES overwrite, or the fix
-    // cannot deliver itself.
+    // The 1.4.3-era forwarders stay on the list so an updater that does
+    // overlay them keeps them current; the canonical files no longer depend
+    // on it (see the test above).
     expect(CoreUpdater::coreOwnedPaths())->toContain('config/defaults');
 });
 
@@ -246,7 +286,7 @@ it('repairs a config file from before the incident', function (): void {
     $stale = require dirname(__DIR__, 2).'/Fixtures/Config/magna-pre-1.4.0.php';
 
     /** @var array<string, mixed> $shipped */
-    $shipped = require dirname(__DIR__, 3).'/config/defaults/magna.php';
+    $shipped = require MagnaServiceProvider::coreDefaultsPath('magna');
 
     // The two keys that were wrong in production, and the one that was
     // configurable nowhere.
@@ -320,5 +360,27 @@ it('supplies a whole namespace whose config file the site never received', funct
 // say so, not a blank page from inside the config bootstrapper.
 it('does not fatal when a defaults file is not there', function (): void {
     expect(require dirname(__DIR__, 3).'/config/magna.php')->toBeArray()
-        ->and(require dirname(__DIR__, 3).'/config/trustedproxy.php')->toBeArray();
+        ->and(require dirname(__DIR__, 3).'/config/trustedproxy.php')->toBeArray()
+        ->and(require dirname(__DIR__, 3).'/config/defaults/magna.php')->toBeArray()
+        ->and(require dirname(__DIR__, 3).'/config/defaults/trustedproxy.php')->toBeArray();
+});
+
+/*
+ * The magna1 shape, exactly: a site whose config/magna.php predates 1.4.0 and
+ * whose config/defaults/ never arrived, because a pre-1.4.3 updater performed
+ * the hop. Nothing under config/ helps such a site; the provider must read
+ * its defaults from src/Magna and fill everything from there.
+ */
+it('repairs a site that has no config/defaults directory at all', function (): void {
+    /** @var array<string, mixed> $stale */
+    $stale = require dirname(__DIR__, 2).'/Fixtures/Config/magna-pre-1.4.0.php';
+
+    config(['magna' => $stale, 'trustedproxy' => []]);
+
+    (new MagnaServiceProvider(app()))->register();
+
+    expect(config('magna.security.trusted_hosts'))->toBeString()
+        ->and(config('magna.updater.allow_unsigned_checksum'))->toBeFalse()
+        ->and(config('magna.media.disk'))->toBe('public')
+        ->and(config()->has('trustedproxy.proxies'))->toBeTrue();
 });

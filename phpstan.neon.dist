@@ -9,6 +9,15 @@ parameters:
         - src
         - database
 
+    # Larastan forbids env() outside the config directories. Core's own
+    # config defaults live in src/Magna/Config/defaults — inside the one path
+    # every core updater has ever overlaid, so they reach a site on any hop —
+    # and are config in every sense but their address. A non-empty list
+    # REPLACES Larastan's default of config_path(), so `config` is named too.
+    configDirectories:
+        - config
+        - src/Magna/Config/defaults
+
     # ArchitectureTest holds this list shrink-only — entries can be removed,
     # never added. The whole src/Magna/Admin tree (once a blanket exclusion)
     # analyses at level 9 as of W4-1.

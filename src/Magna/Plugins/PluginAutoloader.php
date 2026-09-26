@@ -6,6 +6,7 @@ namespace Magna\Plugins;
 
 use Composer\Autoload\ClassLoader;
 use JsonException;
+use Magna\Support\ComposerLoader;
 
 /**
  * Registers an installed plugin's PSR-4 namespaces on the running Composer
@@ -226,12 +227,6 @@ final class PluginAutoloader
 
         $this->resolved = true;
 
-        foreach (spl_autoload_functions() ?: [] as $function) {
-            if (is_array($function) && $function[0] instanceof ClassLoader) {
-                return $this->loader = $function[0];
-            }
-        }
-
-        return null;
+        return $this->loader = ComposerLoader::instance();
     }
 }

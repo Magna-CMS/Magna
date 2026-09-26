@@ -25,8 +25,9 @@ use Illuminate\Contracts\Config\Repository;
  * `magna.updater.require_signed_checksum`, which left core updates accepting an
  * unsigned checksum.
  *
- * So core's own defaults live in `config/defaults`, which IS overlaid, and
- * are backfilled here. The site's file stays in charge of everything it defines.
+ * So core's own defaults live in `src/Magna/Config/defaults` — inside the one
+ * path every core updater ever shipped has overlaid — and are backfilled here.
+ * The site's file stays in charge of everything it defines.
  *
  * Neither Laravel helper does this job:
  *
