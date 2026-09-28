@@ -868,6 +868,26 @@ function root_htaccess(): string
 
 Options -Indexes
 
+# mod_dir's slash fixup has to go, because on a forwarder layout it answers
+# requests nobody meant it to. It 301s any URL that resolves to a real
+# directory to the same URL with a trailing slash, and two such URLs exist
+# here that should never have been served from disk at all:
+#
+#   /themes — an admin page AND themes/ on disk. mod_dir sends /themes to
+#   /themes/, the strip rule below sends /themes/ back to /themes, and the
+#   page is unreachable (ERR_TOO_MANY_REDIRECTS on installed sites).
+#
+#   /build — public/build/ after the forward, so the 301 target is
+#   /public/build/: the internal layout in the browser's address bar, the
+#   same leak the strip rule below exists to prevent.
+#
+# Every request is forwarded into public/ and -Indexes already refuses to
+# list anything, so the fixup has no legitimate job here. The directive needs
+# AllowOverride Indexes, which any host granting the Options line above has.
+<IfModule mod_dir.c>
+    DirectorySlash Off
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
