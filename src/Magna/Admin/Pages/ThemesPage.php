@@ -119,10 +119,25 @@ class ThemesPage extends Page
         $this->activeTab = in_array($tab, ['installed', 'browse'], true) ? $tab : 'installed';
     }
 
-    /** Pull the marketplace's theme catalog. */
-    public function refreshCatalog(): void
+    /**
+     * Pull the marketplace's theme catalog.
+     *
+     * `$fresh` is what the Refresh button passes and what a page load does
+     * not. A catalog response stands for an hour, so without it the button
+     * re-read the cache and showed exactly what was already on screen: a
+     * theme published to the marketplace minutes ago stayed missing from
+     * Browse, and there was no way to correct that short of waiting out the
+     * TTL or clearing the cache from a shell. A page load still reads the
+     * cache, because opening a screen is not a request to re-fetch.
+     */
+    public function refreshCatalog(bool $fresh = false): void
     {
         $client = app(MarketplaceClient::class);
+
+        if ($fresh) {
+            $client->clearCache();
+        }
+
         $catalog = $client->themes();
 
         $this->marketplaceUnreachable = $catalog === [] && $client->wasUnreachable();
