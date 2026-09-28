@@ -12,6 +12,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Magna\Admin\Console\NotificationsPruneCommand;
+use Magna\Admin\Console\PanelPathCommand;
 use Magna\Contracts\RegistersAdminNavigation;
 use Magna\Contracts\RegistersDashboardWidgets;
 use Magna\Contracts\RegistersSettingsPages;
@@ -40,7 +41,7 @@ class AdminServiceProvider extends ServiceProvider
             $this->wirePluginContracts();
         });
 
-        $this->commands([NotificationsPruneCommand::class]);
+        $this->commands([NotificationsPruneCommand::class, PanelPathCommand::class]);
 
         // Same unbounded-growth concern as magna:audit:prune — the bell's
         // notifications table has no other cleanup mechanism.

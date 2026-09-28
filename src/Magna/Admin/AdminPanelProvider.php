@@ -63,8 +63,8 @@ class AdminPanelProvider extends PanelProvider
             // context (e.g. the account-centre OAuth callback, plain web
             // routes), instead of throwing NoDefaultPanelSetException.
             ->default()
-            // Root domain: the admin panel lives at "/" — no "/admin" prefix.
-            ->path('')
+            // "/" unless an operator has handed the root to their own site — PanelPath decides, and answers root for anything it cannot read, so this can never strand the panel.
+            ->path(PanelPath::current())
             // ── Design Guide §9.1: navy-tinted color palette ─────────────────
             ->colors([
                 'primary' => Color::hex('#7c3aed'),
