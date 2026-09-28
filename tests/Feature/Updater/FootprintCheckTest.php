@@ -10,6 +10,7 @@ use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\ConfigDrift;
 use Magna\Support\StaleClassMap;
+use Magna\Updater\CoreUpdater;
 use Magna\Updater\Footprint\FootprintCheck;
 use Magna\Updater\Footprint\InstalledFootprint;
 use Magna\Updater\Run\RunState;
@@ -86,6 +87,38 @@ it('warns when a recorded path has gone missing, and is quiet when everything is
         mkdir($paths->base('app'), 0777, true);
 
         expect($check->warnings())->toBe([]);
+    } finally {
+        (new Filesystem)->remove($paths->basePath);
+    }
+});
+
+it('does not alarm when an optional recorded path is absent (the bundled SDK source on a non-hub install)', function (): void {
+    [$paths, $footprint, $check] = footprintCheckPaths();
+
+    try {
+        // The bundled SDK source is optional: a hub archive carries it, a
+        // core-only one does not, and an install that is not a hub has no use
+        // for it once vendor/magna-cms/plugin-sdk exists. Recorded as delivered
+        // (an archive did carry it), then gone from disk — that is not damage.
+        $footprint->record(MagnaServiceProvider::VERSION, 'update', 'r1', null, ['src/Magna', CoreUpdater::SDK_SOURCE_PATH]);
+
+        expect($check->deliveredByOlderUpdater())->toBeFalse()
+            ->and($check->warnings())->toBe([]);
+    } finally {
+        (new Filesystem)->remove($paths->basePath);
+    }
+});
+
+it('still alarms for a missing required path even when an optional one is also recorded', function (): void {
+    [$paths, $footprint, $check] = footprintCheckPaths();
+
+    try {
+        $footprint->record(MagnaServiceProvider::VERSION, 'update', 'r1', null, ['src/Magna', 'app', CoreUpdater::SDK_SOURCE_PATH]);
+
+        $labels = footprintLabels($check);
+
+        expect($labels[0])->toContain('missing: app')
+            ->and($labels[0])->not->toContain(CoreUpdater::SDK_SOURCE_PATH);
     } finally {
         (new Filesystem)->remove($paths->basePath);
     }

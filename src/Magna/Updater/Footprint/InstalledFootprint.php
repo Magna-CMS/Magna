@@ -113,6 +113,7 @@ final class InstalledFootprint
             'manifest_sha256' => $manifest?->sha256,
             'manifest_schema' => $manifest?->schema,
             'paths' => $paths,
+            'optional_paths' => $manifest === null ? [] : $manifest->optionalPaths,
             'removed_paths' => $manifest === null ? [] : $manifest->removedPaths,
             'removed_classes' => $manifest === null ? [] : $manifest->removedClasses,
             'previous' => $previous === null ? null : [

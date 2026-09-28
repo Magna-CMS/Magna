@@ -10,6 +10,7 @@ use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginCompatibilityCheck;
 use Magna\Support\ConfigDrift;
 use Magna\Support\StaleClassMap;
+use Magna\Updater\CoreUpdater;
 use Magna\Updater\IncompatiblePlugin;
 use Magna\Updater\Run\UpdateJournal;
 use Magna\Updater\UpdatePaths;
@@ -105,10 +106,15 @@ final class FootprintCheck
             ]];
         }
 
+        $optional = $this->optionalPaths($recorded);
+
         $missing = [];
 
         foreach (is_array($recorded['paths'] ?? null) ? $recorded['paths'] : [] as $relative) {
-            if (is_string($relative) && ! is_dir($this->paths->base($relative)) && ! is_file($this->paths->base($relative))) {
+            if (is_string($relative)
+                && ! in_array($relative, $optional, true)
+                && ! is_dir($this->paths->base($relative))
+                && ! is_file($this->paths->base($relative))) {
                 $missing[] = $relative;
             }
         }
@@ -121,6 +127,30 @@ final class FootprintCheck
         }
 
         return [];
+    }
+
+    /**
+     * Recorded paths a missing-file check must forgive: the ones the release
+     * declared optional. `bundled/magna-cms/plugin-sdk` is the source a hub
+     * build stages for its SDK path repository — a core-only archive never
+     * carries it, and an install that is not a hub has no use for it once its
+     * vendor/ copy exists. The updater records what it laid down, so an archive
+     * that did carry it writes the path into the footprint; its later absence
+     * is not damage and must not raise "core files need attention" and send the
+     * operator into a repair that lays it down only for it to go again. The
+     * load-bearing SDK lives at CoreUpdater::SDK_PATH (under vendor/), recorded
+     * separately and still checked.
+     *
+     * @param  array<array-key, mixed>  $recorded
+     * @return list<string>
+     */
+    private function optionalPaths(array $recorded): array
+    {
+        $declared = is_array($recorded['optional_paths'] ?? null)
+            ? array_values(array_filter($recorded['optional_paths'], 'is_string'))
+            : [];
+
+        return array_values(array_unique([CoreUpdater::SDK_SOURCE_PATH, ...$declared]));
     }
 
     /**

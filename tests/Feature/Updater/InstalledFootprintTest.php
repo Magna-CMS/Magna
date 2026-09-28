@@ -74,6 +74,15 @@ it('is recorded by a fresh install from the manifest extracted with the archive'
     );
     file_put_contents($paths->base(ReleaseManifest::FILENAME), (string) json_encode($manifest));
 
+    // A core-only archive extracts every core-owned path but the optional
+    // bundled SDK source, which only a hub build stages. The footprint must
+    // record what actually landed, not every path the manifest names — else it
+    // enters bundled/magna-cms/plugin-sdk and the check reports it removed.
+    $present = array_values(array_diff(CoreUpdater::coreOwnedPaths(), [CoreUpdater::SDK_SOURCE_PATH]));
+    foreach ($present as $relative) {
+        mkdir($paths->base($relative), 0777, true);
+    }
+
     // Keep the installer's own lock file out of the real storage directory.
     config(['magna.install.lock_path' => $paths->storage('app/magna-installed.json')]);
 
@@ -84,7 +93,9 @@ it('is recorded by a fresh install from the manifest extracted with the archive'
 
         expect($recorded['installed_via'] ?? null)->toBe('fresh')
             ->and($recorded['version'] ?? null)->toBe(MagnaServiceProvider::VERSION)
-            ->and($recorded['paths'] ?? null)->toBe(CoreUpdater::coreOwnedPaths())
+            ->and($recorded['paths'] ?? null)->toBe($present)
+            ->and($recorded['paths'] ?? [])->not->toContain(CoreUpdater::SDK_SOURCE_PATH)
+            ->and($recorded['optional_paths'] ?? null)->toContain(CoreUpdater::SDK_SOURCE_PATH)
             ->and($recorded['manifest_sha256'] ?? null)->toBe(ReleaseManifest::fromExtractedArchive($paths->basePath, new PathGuard)?->sha256);
     } finally {
         (new Filesystem)->remove($paths->basePath);

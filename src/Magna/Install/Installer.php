@@ -67,12 +67,22 @@ final class Installer
         try {
             $manifest = ReleaseManifest::fromExtractedArchive($paths->basePath, new PathGuard);
 
+            // Only what actually landed, exactly as the overlay records what it
+            // laid down. A core-only archive carries no bundled/magna-cms/plugin-sdk
+            // (it is optional, staged only by a hub build), so recording every
+            // path the manifest names would enter one the install never received
+            // and the footprint check would then report it removed.
+            $delivered = $manifest === null ? [] : array_values(array_filter(
+                $manifest->coreOwnedPaths,
+                static fn (string $relative): bool => is_dir($paths->base($relative)) || is_file($paths->base($relative)),
+            ));
+
             (new InstalledFootprint($paths))->record(
                 MagnaServiceProvider::VERSION,
                 'fresh',
                 null,
                 $manifest,
-                $manifest === null ? [] : $manifest->coreOwnedPaths,
+                $delivered,
             );
         } catch (\Throwable $e) {
             Log::warning('magna: could not record the install footprint.', ['error' => $e->getMessage()]);
