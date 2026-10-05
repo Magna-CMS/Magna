@@ -18,7 +18,7 @@ class GeneralSettingsPersister
 {
     /**
      * @param  array<string, mixed>  $data  the page's form state
-     * @param  bool  $withFrontendUrls  whether the frontend-URL fields were on the form (magna/pages installed)
+     * @param  bool  $withFrontendUrls  whether the frontend-URL fields were on the form (magna-cms/pages installed)
      */
     public function persist(array $data, bool $withFrontendUrls): void
     {
@@ -36,6 +36,11 @@ class GeneralSettingsPersister
     private function persistGeneral(array $data): void
     {
         $general = GeneralSettings::get();
+        // Defaulted to the shipped value rather than '': the field is required
+        // on the form, and a site whose name coerced to empty would render a
+        // bare "·" in every page title instead of saying who it is.
+        $general->site_name = FormStateCoercion::string($data, 'site_name', 'Magna CMS');
+        $general->site_tagline = FormStateCoercion::string($data, 'site_tagline');
         $general->registration_enabled = (bool) ($data['registration_enabled'] ?? false);
         $general->timezone = FormStateCoercion::string($data, 'timezone', 'UTC');
         $general->default_locale = FormStateCoercion::string($data, 'default_locale', 'en');

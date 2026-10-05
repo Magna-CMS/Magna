@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Settings;
 
+use Magna\Settings\Events\SettingsSaved;
 use ReflectionClass;
 use ReflectionProperty;
 
@@ -53,6 +54,10 @@ class SettingsRepository
 
         $after = $this->auditSnapshot($group, $ref);
         $this->changeLogger->log($group, $before, $after);
+
+        // After the cache is busted, so a listener that re-reads the group
+        // sees what was just written rather than the snapshot it replaced.
+        event(new SettingsSaved($group));
     }
 
     /** @return array<string, mixed> */

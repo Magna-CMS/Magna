@@ -35,8 +35,12 @@ use Magna\Settings\UrlSettings;
 
 /**
  * Unified settings page: every settings group lives on one scrollable page,
- * split into anchored sections with a sticky side sub-nav (see the view). This
- * replaces the previous one-page-per-group navigation.
+ * split into anchored sections. This replaces the previous one-page-per-group
+ * navigation.
+ *
+ * anchor() stamps an id on each Section so a link can land on one. A
+ * `sections()` method once listed the same nine again for a sticky sub-nav the
+ * view never grew; it is gone — if that sub-nav arrives, it reads the anchors.
  *
  * @property Schema $form
  */
@@ -66,30 +70,10 @@ class SettingsPage extends Page implements HasForms
         return auth()->user()?->can('settings.manage') ?? false;
     }
 
-    /**
-     * The section anchors, in order, for the sticky side navigation.
-     *
-     * @return array<int, array{id: string, label: string, icon: string}>
-     */
-    public function sections(): array
-    {
-        return [
-            ['id' => 'general', 'label' => 'General', 'icon' => 'heroicon-o-cog-6-tooth'],
-            ['id' => 'localization', 'label' => 'Localization', 'icon' => 'heroicon-o-language'],
-            ['id' => 'content', 'label' => 'Content', 'icon' => 'heroicon-o-document-text'],
-            ['id' => 'media', 'label' => 'Media', 'icon' => 'heroicon-o-photo'],
-            ['id' => 'email', 'label' => 'Email', 'icon' => 'heroicon-o-envelope'],
-            ['id' => 'storage', 'label' => 'Storage', 'icon' => 'heroicon-o-circle-stack'],
-            ['id' => 'urls', 'label' => 'URLs & Frontend', 'icon' => 'heroicon-o-link'],
-            ['id' => 'security', 'label' => 'Security', 'icon' => 'heroicon-o-shield-check'],
-            ['id' => 'performance', 'label' => 'Performance', 'icon' => 'heroicon-o-bolt'],
-        ];
-    }
-
     private function magnaPagesInstalled(): bool
     {
         return PluginRecord::query()
-            ->where('name', 'magna/pages')
+            ->where('name', 'magna-cms/pages')
             ->where('enabled', true)
             ->exists();
     }
@@ -108,6 +92,8 @@ class SettingsPage extends Page implements HasForms
 
         $this->form->fill([
             // General
+            'site_name' => $general->site_name,
+            'site_tagline' => $general->site_tagline,
             'registration_enabled' => $general->registration_enabled,
             'timezone' => $general->timezone,
             'default_locale' => $general->default_locale,
@@ -177,6 +163,11 @@ class SettingsPage extends Page implements HasForms
             ->statePath('data')
             ->components([
                 $this->anchor('general', 'General', [
+                    // Read by core's logo block and every page title on a
+                    // rendered site — until these had a form, a published site
+                    // called itself "Magna CMS" and only tinker could argue.
+                    TextInput::make('site_name')->label('Site name')->required()->maxLength(255)->placeholder('My Site')->helperText('Shown in page titles, the logo block and anywhere the site names itself.'),
+                    TextInput::make('site_tagline')->label('Tagline')->maxLength(255)->placeholder('A short line about the site')->helperText('A one-line description themes and metadata can use. Optional.'),
                     Toggle::make('registration_enabled')->label('Allow public registration')->helperText('When disabled, only admins can create new user accounts.')->inline(false),
                     Select::make('timezone')->label('Default timezone')->required()->searchable()->options(fn (): array => array_combine(timezone_identifiers_list(), timezone_identifiers_list())),
                     TextInput::make('default_locale')->label('Default language')->required()->maxLength(10)->placeholder('en')->helperText('BCP 47 locale code (e.g. en, fr, de).'),
@@ -289,6 +280,15 @@ class SettingsPage extends Page implements HasForms
                         </div>
                     </div>
                 HTML)),
+            // "Then return here" was the whole instruction, with nowhere to go
+            // in between — a notice naming a plugin owes you the screen that
+            // installs it.
+            SchemaActions::make([
+                Action::make('installMagnaPages')
+                    ->label('Install Magna Pages')
+                    ->icon('heroicon-o-puzzle-piece')
+                    ->url(PluginsPage::getUrl()),
+            ]),
             $cdn,
         ];
     }
