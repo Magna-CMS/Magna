@@ -22,6 +22,7 @@ use Magna\Auth\Role;
 use Magna\Pages\Filament\Pages\PagesSettingsPage;
 use Magna\Pages\PagesSettings;
 use Magna\Plugins\PluginManager;
+use Magna\Settings\GeneralSettings;
 use Magna\Testing\PluginTestCase;
 use Magna\Users\User;
 
@@ -84,6 +85,35 @@ it('leaves the panel alone, and does not redirect, when only site settings chang
 
     expect(PagesSettings::get()->maintenance_mode)->toBeTrue()
         ->and(PanelPath::enabled())->toBeFalse();
+});
+
+/**
+ * Site identity is core's setting, mirrored here because this plugin is what
+ * puts the name in front of visitors. One value, two screens — never a copy.
+ */
+it('reads and writes the core site name from Site settings', function (): void {
+    $this->actingAs(siteRootAdmin());
+
+    Livewire::test(PagesSettingsPage::class)
+        ->assertSet('data.site_name', 'Magna CMS')
+        ->set('data.site_name', 'Lekha')
+        ->set('data.site_tagline', 'Billing that stays out of the way')
+        ->call('save');
+
+    $general = GeneralSettings::get();
+
+    expect($general->site_name)->toBe('Lekha')
+        ->and($general->site_tagline)->toBe('Billing that stays out of the way');
+});
+
+it('keeps the existing name rather than storing a blank one', function (): void {
+    $this->actingAs(siteRootAdmin());
+
+    Livewire::test(PagesSettingsPage::class)
+        ->set('data.site_name', '   ')
+        ->call('save');
+
+    expect(GeneralSettings::get()->site_name)->toBe('Magna CMS');
 });
 
 it('saves this plugin\'s own settings even when the panel is moving', function (): void {
