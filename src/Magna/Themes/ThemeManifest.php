@@ -32,6 +32,13 @@ final class ThemeManifest
      * @param  string|null  $extends  Addon only: host theme name, or "*" for theme-agnostic
      * @param  list<string>  $pairsWith  Addon only: plugins whose blocks it may style
      * @param  int  $priority  Addon only: tie-break between addons (higher wins)
+     * @param  array<string, array<string, mixed>>  $blockSeeds  What a freshly
+     *                                                           inserted block starts with, per block handle, overriding core's own
+     *                                                           seed. A theme's blocks are a design vocabulary — dropping `features`
+     *                                                           into a timeline band seeded three generic cards, which an author
+     *                                                           then deleted before writing the real ones. Merged OVER the registry
+     *                                                           seed rather than replacing it, so a theme states only what it wants
+     *                                                           to differ and keeps the rest.
      */
     public function __construct(
         public readonly string $name,
@@ -48,6 +55,7 @@ final class ThemeManifest
         public readonly ?string $extends = null,
         public readonly array $pairsWith = [],
         public readonly int $priority = 0,
+        public readonly array $blockSeeds = [],
     ) {}
 
     public function isAddon(): bool
@@ -130,7 +138,52 @@ final class ThemeManifest
             extends: $extends,
             pairsWith: $pairsWith,
             priority: $priority,
+            blockSeeds: self::blockSeeds($data['blockSeeds'] ?? null),
         );
+    }
+
+    /**
+     * `blockSeeds` as a map of block handle to a data array.
+     *
+     * Shaped rather than trusted: a theme.json is a file an author edits, and
+     * anything that is not a handle pointing at an array of data is dropped
+     * instead of reaching the builder as a seed it cannot insert.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private static function blockSeeds(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $seeds = [];
+
+        foreach ($raw as $handle => $data) {
+            if (! is_string($handle) || $handle === '' || ! is_array($data)) {
+                continue;
+            }
+
+            // A seed is a map of FIELD HANDLE to value. JSON decodes an
+            // object that way, but `{"features": ["a", "b"]}` decodes to a
+            // list with integer keys — which is a theme author writing a
+            // value where a field map belongs. Keep the named entries and
+            // drop the rest rather than handing the builder keys no field
+            // answers to.
+            $fields = [];
+
+            foreach ($data as $field => $value) {
+                if (is_string($field) && $field !== '') {
+                    $fields[$field] = $value;
+                }
+            }
+
+            if ($fields !== []) {
+                $seeds[$handle] = $fields;
+            }
+        }
+
+        return $seeds;
     }
 
     /** @throws InvalidThemeException */
