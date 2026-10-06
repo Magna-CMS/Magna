@@ -42,6 +42,26 @@ final class RichTextSanitizer
             // Scheme allowlist aligned with Magna\Blocks\Support\SafeUrl.
             ->allowLinkSchemes(['http', 'https', 'mailto', 'tel'])
             ->allowMediaSchemes(['http', 'https'])
+            // A relative URL has no scheme, and a scheme allowlist alone
+            // drops it — so `<a href="/pricing">` was stored and rendered as
+            // `<a rel="noopener noreferrer">`: the words survived, the
+            // destination did not, and nothing said so. Linking to another
+            // page of your own site is the most ordinary thing a CMS does,
+            // and it failed silently every time.
+            //
+            // The same for media: an image dragged from the library carries
+            // `/storage/...`, which was losing its src for the identical
+            // reason and rendering blank.
+            //
+            // This is what the line above has always claimed. SafeUrl, which
+            // guards the URL FIELDS, allowlists these schemes AND passes
+            // relative through (SafeUrl::sanitize returns the URL unchanged
+            // when parse_url reports no scheme). A link typed into prose and
+            // a link typed into a button field now behave the same way.
+            // `javascript:` is unaffected: it HAS a scheme, and that scheme
+            // is not on the list.
+            ->allowRelativeLinks()
+            ->allowRelativeMedias()
             ->forceAttribute('a', 'rel', 'noopener noreferrer')
             ->withMaxInputLength(self::MAX_INPUT_LENGTH);
 

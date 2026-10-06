@@ -14,7 +14,29 @@
                 "div": "Div",
                 "section": "Section",
                 "article": "Article",
-                "aside": "Aside"
+                "aside": "Aside",
+                "figure": "Figure",
+                "nav": "Nav"
+            }
+        },
+        {
+            "handle": "role",
+            "type": "select",
+            "label": "Announced as",
+            "default": "",
+            "options": {
+                "": "Its element (default)",
+                "img": "A single image",
+                "group": "A group",
+                "figure": "A figure"
+            }
+        },
+        {
+            "handle": "label",
+            "type": "text",
+            "label": "Accessible name",
+            "options": {
+                "help": "What a screen reader announces for the whole container. Needed when the container IS the thing — a diagram built from text, for instance — rather than a box around other things."
             }
         }
     ]

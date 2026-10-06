@@ -35,6 +35,28 @@
             }
         },
         {
+            "handle": "rowHeader",
+            "type": "select",
+            "label": "First column is",
+            "required": false,
+            "default": "data",
+            "options": {
+                "data": "Ordinary data",
+                "header": "A header for its row"
+            }
+        },
+        {
+            "handle": "footer",
+            "type": "select",
+            "label": "Last row is",
+            "required": false,
+            "default": "data",
+            "options": {
+                "data": "Ordinary data",
+                "footer": "A totals row"
+            }
+        },
+        {
             "handle": "caption",
             "type": "text",
             "label": "Caption",

@@ -36,8 +36,21 @@
     }
 
     $head = $hasHeader && $rows !== [] ? array_shift($rows) : null;
+
+    // A table of money read down a column needs a header for the ROW too,
+    // or every figure is announced without saying what it is a figure for.
+    // Costs no pixels — th[scope=row] is styled back to a cell — and it is
+    // the difference between a table that can be read aloud and one that
+    // cannot.
+    $rowHeader = ($block['data']['rowHeader'] ?? 'data') === 'header';
+
+    // Same for a totals row: tfoot says "this is the sum", where a last
+    // <tr> in the body says only "another row".
+    $foot = ($block['data']['footer'] ?? 'data') === 'footer' && $rows !== []
+        ? array_pop($rows)
+        : null;
 @endphp
-@if($rows !== [] || $head !== null)
+@if($rows !== [] || $head !== null || $foot !== null)
     <div class="magna-block magna-block--table magna-table">
         <table class="magna-table__table">
             @if($caption !== '')
@@ -58,11 +71,29 @@
                 @foreach($rows as $row)
                     <tr>
                         @for($column = 0; $column < $width; $column++)
-                            <td>{{ $row[$column] ?? '' }}</td>
+                            @if($rowHeader && $column === 0)
+                                <th scope="row">{{ $row[$column] ?? '' }}</th>
+                            @else
+                                <td>{{ $row[$column] ?? '' }}</td>
+                            @endif
                         @endfor
                     </tr>
                 @endforeach
             </tbody>
+
+            @if($foot !== null)
+                <tfoot>
+                    <tr>
+                        @for($column = 0; $column < $width; $column++)
+                            @if($rowHeader && $column === 0)
+                                <th scope="row">{{ $foot[$column] ?? '' }}</th>
+                            @else
+                                <td>{{ $foot[$column] ?? '' }}</td>
+                            @endif
+                        @endfor
+                    </tr>
+                </tfoot>
+            @endif
         </table>
     </div>
 @endif

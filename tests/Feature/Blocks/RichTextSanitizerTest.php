@@ -174,3 +174,78 @@ it('sanitizes text block bodies on save, including nested children', function ()
         ->and($childBody)->toContain('<em>nested</em>')
         ->and($childBody)->not->toContain('onerror');
 });
+
+// ── Relative URLs: the half the scheme allowlist silently ate ────────────────
+
+/**
+ * A relative URL has no scheme, and a scheme allowlist alone drops it. So
+ * `<a href="/pricing">` was stored and rendered as `<a rel="noopener
+ * noreferrer">` — the words survived, the destination did not, and nothing
+ * anywhere said so. The element still looked like a link in the editor and
+ * still rendered as an <a> on the page; it simply went nowhere.
+ *
+ * Linking to another page of your own site is the most ordinary thing a CMS
+ * does. It failed silently every time, and the failure is invisible without
+ * diffing rendered output by hand — which is why these cases exist.
+ */
+it('keeps a relative link to another page of the site', function (): void {
+    $html = (new RichTextSanitizer)->sanitize('<a href="/pricing">See the plans</a>');
+
+    expect($html)->toContain('href="/pricing"');
+});
+
+it('keeps an in-page anchor', function (): void {
+    expect((new RichTextSanitizer)->sanitize('<a href="#faq">Jump</a>'))
+        ->toContain('href="#faq"');
+});
+
+it('keeps a document-relative link', function (): void {
+    expect((new RichTextSanitizer)->sanitize('<a href="./terms">Terms</a>'))
+        ->toContain('href="./terms"');
+});
+
+/**
+ * Same question for media: an image dragged out of the library carries
+ * `/storage/...`, which was losing its src for the identical reason and
+ * rendering as a blank box.
+ */
+it('keeps a relative image source', function (): void {
+    $html = (new RichTextSanitizer)->sanitize('<img src="/storage/shot.png" alt="Shot">');
+
+    expect($html)->toContain('src="/storage/shot.png"');
+});
+
+/**
+ * And the reason this is safe: `javascript:` is not relative. It HAS a
+ * scheme, that scheme is not on the allowlist, and allowing scheme-less URLs
+ * does not allow it — including the tab-obfuscated spelling browsers would
+ * otherwise execute.
+ */
+it('still refuses a script scheme in a link', function (): void {
+    expect((new RichTextSanitizer)->sanitize('<a href="javascript:alert(1)">Bad</a>'))
+        ->not->toContain('javascript');
+});
+
+it('still refuses a script scheme split by a tab', function (): void {
+    expect((new RichTextSanitizer)->sanitize("<a href=\"java\tscript:alert(1)\">Bad</a>"))
+        ->not->toContain('script:');
+});
+
+it('still refuses a script scheme in an image source', function (): void {
+    expect((new RichTextSanitizer)->sanitize('<img src="javascript:alert(1)" alt="x">'))
+        ->not->toContain('javascript');
+});
+
+/**
+ * A protocol-relative URL is scheme-less, so it passes — deliberately, and
+ * identically to Magna\Blocks\Support\SafeUrl, which guards the URL FIELDS
+ * and returns the URL unchanged when parse_url reports no scheme. It is an
+ * off-site destination rather than script execution, and the forced
+ * rel="noopener noreferrer" still applies to it.
+ */
+it('treats a protocol-relative link the same way the URL fields do', function (): void {
+    $html = (new RichTextSanitizer)->sanitize('<a href="//example.com">Out</a>');
+
+    expect($html)->toContain('href="//example.com"')
+        ->and($html)->toContain('rel="noopener noreferrer"');
+});

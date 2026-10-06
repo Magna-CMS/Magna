@@ -282,7 +282,9 @@ it('renders raw Blade output only in the allowlisted views', function (): void {
         // URI — no user-controlled markup.
         'Auth/resources/views/two-factor-setup.blade.php',
         // Child HTML composed by the block renderer itself from already-
-        // rendered child views.
+        // rendered child views, plus the container's own role/aria-label
+        // attribute string — built in the view from a fixed role list and an
+        // e()'d label, raw only so the opening tag stays on one line.
         'Blocks/resources/views/blocks/container.blade.php',
         // Richtext sanitized by TextBlockResolver; falls back to e() when no
         // resolver ran. Guarded by BlockTreeReservedKeysTest.

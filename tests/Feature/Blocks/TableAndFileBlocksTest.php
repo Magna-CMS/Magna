@@ -124,3 +124,72 @@ it('narrows to pictures when a block.json asks for something it does not know', 
     // file on the site.
     expect($field->accept)->toBe(BlockField::ACCEPT_IMAGE);
 });
+
+/**
+ * A table of money read down a column announces every figure without saying
+ * what it is a figure for. `th[scope=row]` is what names the row, and `tfoot`
+ * is what distinguishes a total from one more row of data. Both cost nothing
+ * visually — CSS puts them back — and both were unreachable until the block
+ * could say so.
+ */
+it('marks the first column as its row header when asked', function (): void {
+    $html = renderTable([
+        'rows' => "Item\tAmount\nRent\t1200\nPower\t180",
+        'separator' => 'tab',
+        'rowHeader' => 'header',
+    ]);
+
+    expect($html)->toContain('<th scope="row">Rent</th>')
+        ->and($html)->toContain('<th scope="row">Power</th>')
+        // The value beside it stays a cell: only the first column names.
+        ->and($html)->toContain('<td>1200</td>');
+});
+
+it('leaves the first column alone by default', function (): void {
+    $html = renderTable([
+        'rows' => "Item\tAmount\nRent\t1200",
+        'separator' => 'tab',
+    ]);
+
+    expect($html)->toContain('<td>Rent</td>')
+        ->and($html)->not->toContain('scope="row"');
+});
+
+it('lifts the last row into a footer when asked', function (): void {
+    $html = renderTable([
+        'rows' => "Item\tAmount\nRent\t1200\nPower\t180\nTotal\t1380",
+        'separator' => 'tab',
+        'footer' => 'footer',
+    ]);
+
+    expect($html)->toContain('<tfoot>')
+        ->and($html)->toContain('<td>1380</td>');
+
+    // And the total is no longer one more body row.
+    $body = substr($html, (int) strpos($html, '<tbody>'), (int) strpos($html, '</tbody>') - (int) strpos($html, '<tbody>'));
+
+    expect($body)->not->toContain('1380');
+});
+
+it('emits no footer by default', function (): void {
+    $html = renderTable([
+        'rows' => "Item\tAmount\nRent\t1200",
+        'separator' => 'tab',
+    ]);
+
+    expect($html)->not->toContain('<tfoot>');
+});
+
+it('renders a footer-only table rather than nothing', function (): void {
+    // One data row, promoted to the footer, leaves the body empty — the
+    // guard that decides whether to render at all has to know that.
+    $html = renderTable([
+        'rows' => "Total\t1380",
+        'separator' => 'tab',
+        'header' => 'data',
+        'footer' => 'footer',
+    ]);
+
+    expect($html)->toContain('<tfoot>')
+        ->and($html)->toContain('1380');
+});
