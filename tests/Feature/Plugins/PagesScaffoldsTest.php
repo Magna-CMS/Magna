@@ -17,8 +17,8 @@ uses(PluginTestCase::class);
 
 function scaffoldSetup(): string
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $dir = storage_path('framework/testing/scaffold-themes-'.uniqid());
     mkdir($dir, 0755, true);

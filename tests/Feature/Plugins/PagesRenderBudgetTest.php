@@ -74,8 +74,8 @@ final class FixtureQuickTag implements DynamicTag
 
 function budgetSetup(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     app(DynamicTagRegistry::class)->register(new FixtureSlowTag);
     app(DynamicTagRegistry::class)->register(new FixtureQuickTag);
 

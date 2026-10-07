@@ -25,8 +25,8 @@ uses(PluginTestCase::class);
 
 function kitUser(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $user = User::factory()->create();
     $role = Role::factory()->create();

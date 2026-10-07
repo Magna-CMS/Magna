@@ -28,8 +28,8 @@ uses(PluginTestCase::class);
 
 function frontendSetup(): void
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     view()->addNamespace('fpstub', dirname(__DIR__, 2).'/stubs/frontend');
 

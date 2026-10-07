@@ -18,8 +18,8 @@ uses(PluginTestCase::class);
 
 function commentsUser(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $user = User::factory()->create(['name' => 'Reviewer Rana']);
     $role = Role::factory()->create();

@@ -25,8 +25,8 @@ uses(PluginTestCase::class);
 
 function addonSetup(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     config(['magna.themes_path' => dirname(__DIR__, 2).'/Fixtures/themes']);
     app(ThemeManager::class)->activate('addonhost/base');

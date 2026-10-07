@@ -25,8 +25,8 @@ uses(PluginTestCase::class);
 
 function libraryPanelUser(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     Cache::flush(); // browse cache must not leak between tests
 
     $user = User::factory()->create();

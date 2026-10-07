@@ -20,8 +20,8 @@ uses(PluginTestCase::class);
 
 function stylesUser(string ...$permissions): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     // The Launch theme ships tokens; activate it so overrides have targets.
     app(ThemeManager::class)->activate('magna/launch');

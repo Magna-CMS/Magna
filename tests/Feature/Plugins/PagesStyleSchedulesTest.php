@@ -25,8 +25,8 @@ uses(PluginTestCase::class);
 
 function scheduleUser(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     app(ThemeManager::class)->activate('magna/launch');
 
     $user = User::factory()->create();

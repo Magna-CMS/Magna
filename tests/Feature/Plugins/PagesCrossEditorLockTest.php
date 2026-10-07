@@ -33,8 +33,8 @@ function crossLockUser(): User
 
 function crossLockPage(User $author): Entry
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     return app(EntryManager::class)->create('page', [
         'title' => 'Cross page',

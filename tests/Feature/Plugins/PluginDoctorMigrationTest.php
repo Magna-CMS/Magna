@@ -16,7 +16,11 @@ it('warns about an unapplied plugin migration', function (): void {
 
     // Simulate drift: a migration file exists on disk but its repository row is
     // gone (as if a new migration was added after the plugin was enabled).
-    $removed = DB::table('migrations')->where('migration', 'like', '%docs%')->first();
+    // Target a migration the docs PLUGIN actually owns — not merely any row
+    // whose name contains "docs" (core carries a rename_docs_plugin_identity
+    // migration that would otherwise be picked, and doctor only inspects the
+    // plugin's own migration directory).
+    $removed = DB::table('migrations')->where('migration', 'like', '%create_docs_pages_table%')->first();
     expect($removed)->not->toBeNull();
     DB::table('migrations')->where('id', $removed->id)->delete();
 

@@ -38,7 +38,7 @@ it('lists addons separately with their pairing and applies state', function (): 
     Livewire::test(ThemesPage::class)
         ->assertSee('Theme addons')
         ->assertSee('Pages Kit for Addon Host')
-        ->assertSee('Styles magna/pages')
+        ->assertSee('Styles magna-cms/pages')
         ->assertSee('For addonhost/base')
         ->assertSee('Applies')          // host active — specific addon applies
         ->assertSee('Any theme');       // the "*" addon

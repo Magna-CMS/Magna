@@ -28,8 +28,8 @@ uses(PluginTestCase::class);
 
 function menusAdminUser(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $role = Role::factory()->create();
     $role->grant('panel.access', 'pages.settings');

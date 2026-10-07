@@ -25,8 +25,8 @@ uses(PluginTestCase::class);
 
 function repeaterUser(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     app(PluginManager::class)->enable('magna-cms/blog');
 
     $user = User::factory()->create();

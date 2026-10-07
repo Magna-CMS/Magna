@@ -30,8 +30,8 @@ uses(PluginTestCase::class);
 
 function collectionsSetup(bool $renderable = true): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $schemaRegistry = app(SchemaRegistry::class);
     $schemaRegistry->register(ContentType::fromArray([

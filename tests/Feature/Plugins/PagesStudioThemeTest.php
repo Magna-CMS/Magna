@@ -20,8 +20,8 @@ uses(PluginTestCase::class);
 
 function studioSetup(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     app(ThemeManager::class)->activate('magna/theme-studio');
 
     return User::factory()->create();

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * First public render path for magna/pages: the fallback route resolves
+ * First public render path for magna-cms/pages: the fallback route resolves
  * published pages by slug (and the configured home page at /), renders the
  * block document through the shared resolve seam, and degrades safely —
  * drafts and unknown URLs 404, maintenance mode 503s guests, richtext stays
@@ -23,8 +23,8 @@ uses(PluginTestCase::class);
 
 function pagesRenderingSetup(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     return User::factory()->create();
 }

@@ -77,8 +77,8 @@ final class ChatOnlineCountTag implements DynamicTag
 
 function exitTestSetup(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     // What the chat plugin's entry class would register through
     // RegistersBlocks / RegistersDataSources / RegistersDynamicTags /

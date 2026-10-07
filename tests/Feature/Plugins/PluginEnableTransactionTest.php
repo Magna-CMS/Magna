@@ -26,7 +26,7 @@ uses(PluginTestCase::class);
  * it is exactly what was violated.
  */
 it('creates content-type tables outside any transaction', function (): void {
-    skipWithoutDevPlugin('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
 
     // The suite itself runs each test inside a transaction, so "no transaction"
     // means "no deeper than the harness already was" rather than zero.
@@ -41,7 +41,7 @@ it('creates content-type tables outside any transaction', function (): void {
         }
     });
 
-    app(PluginManager::class)->enable('magna/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     expect($depths)->not->toBeEmpty('No content-type table was created, so this proves nothing.');
 
@@ -51,12 +51,12 @@ it('creates content-type tables outside any transaction', function (): void {
 });
 
 it('still records the plugin and its content types', function (): void {
-    skipWithoutDevPlugin('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
 
-    app(PluginManager::class)->enable('magna/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     // The transaction split must not cost the outcome it was protecting: the
     // record and the content_types rows both have to be there afterwards.
-    expect(PluginRecord::query()->where('name', 'magna/pages')->where('enabled', true)->exists())->toBeTrue()
+    expect(PluginRecord::query()->where('name', 'magna-cms/pages')->where('enabled', true)->exists())->toBeTrue()
         ->and(DB::table('content_types')->count())->toBeGreaterThan(0);
 });

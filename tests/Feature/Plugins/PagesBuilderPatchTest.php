@@ -30,8 +30,8 @@ uses(PluginTestCase::class);
 
 function builderSetup(): void
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 }
 
 /** A user holding exactly the named permissions. */

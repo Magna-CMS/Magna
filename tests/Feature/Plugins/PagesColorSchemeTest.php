@@ -27,8 +27,8 @@ uses(PluginTestCase::class);
 
 function schemeAuthor(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     // The dark readings live in a theme's tokens.json, so a theme has to
     // be active for there to be any.

@@ -19,7 +19,7 @@ use Magna\Testing\PluginTestCase;
 uses(PluginTestCase::class);
 
 it('refuses a token value that could escape the style element', function (string $value): void {
-    skipWithoutDevPlugin('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
 
     expect(ThemeTokens::valueIsSafe($value))->toBeFalse();
 })->with([
@@ -32,7 +32,7 @@ it('refuses a token value that could escape the style element', function (string
 ]);
 
 it('accepts ordinary CSS token values', function (string $value): void {
-    skipWithoutDevPlugin('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
 
     expect(ThemeTokens::valueIsSafe($value))->toBeTrue();
 })->with([

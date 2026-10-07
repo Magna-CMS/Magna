@@ -19,8 +19,8 @@ uses(PluginTestCase::class);
 
 function themeRenderingSetup(bool $activateTheme = true): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     config()->set('magna.themes_path', base_path('tests/Fixtures/themes'));
 

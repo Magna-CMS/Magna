@@ -21,8 +21,8 @@ uses(PluginTestCase::class);
 
 function pruneFixtureAuthor(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     return User::factory()->create();
 }

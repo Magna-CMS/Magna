@@ -30,8 +30,8 @@ uses(PluginTestCase::class);
 function formsSetup(): User
 {
     skipWithoutDevPlugin('magna/forms');
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     app(PluginManager::class)->enable('magna/forms');
 
     $user = User::factory()->create();

@@ -104,7 +104,7 @@ final class FixtureBrokenCondition implements DisplayCondition
 }
 
 beforeEach(function (): void {
-    $this->enablePlugin('magna/pages');
+    $this->enablePlugin('magna-cms/pages');
 
     /** @var DisplayConditionRegistry $registry */
     $registry = app(DisplayConditionRegistry::class);

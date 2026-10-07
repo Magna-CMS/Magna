@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Skeleton acceptance for the magna/pages plugin (Phase A item 5): the plugin
+ * Skeleton acceptance for the magna-cms/pages plugin (Phase A item 5): the plugin
  * enables cleanly, ships the `page` content type with a blocks field, and its
  * settings class round-trips through the core Settings infrastructure.
  */
@@ -23,10 +23,10 @@ uses(PluginTestCase::class);
 
 function enablePagesPlugin(): PluginManager
 {
-    skipWithoutDevPlugin('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
 
     $manager = app(PluginManager::class);
-    $manager->enable('magna/pages');
+    $manager->enable('magna-cms/pages');
 
     return $manager;
 }
@@ -34,7 +34,7 @@ function enablePagesPlugin(): PluginManager
 it('enables and registers the page content type', function (): void {
     enablePagesPlugin();
 
-    expect(PluginRecord::query()->where('name', 'magna/pages')->where('enabled', true)->exists())->toBeTrue();
+    expect(PluginRecord::query()->where('name', 'magna-cms/pages')->where('enabled', true)->exists())->toBeTrue();
 
     $type = app(SchemaRegistry::class)->get('page');
 

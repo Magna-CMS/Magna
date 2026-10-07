@@ -70,8 +70,8 @@ final class FixtureBrokenTag implements DynamicTag
 
 function tagsSetup(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     app(DynamicTagRegistry::class)->register(new FixtureUnreadCountTag);
     app(DynamicTagRegistry::class)->register(new FixtureBrokenTag);
 

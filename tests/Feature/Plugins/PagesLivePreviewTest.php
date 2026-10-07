@@ -21,8 +21,8 @@ uses(PluginTestCase::class);
 
 function livePreviewUser(array $permissions = ['panel.access', 'blocks.preview']): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $role = Role::factory()->create();
     $role->grant(...$permissions);

@@ -48,8 +48,8 @@ final class FixtureJobsSource implements DataSource
 
 function loopSetup(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
     app(DataSourceRegistry::class)->register(new FixtureJobsSource);
 
     $user = User::factory()->create();

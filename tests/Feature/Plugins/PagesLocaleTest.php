@@ -22,8 +22,8 @@ uses(PluginTestCase::class);
 
 function localeUser(): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $settings = LocalizationSettings::get();
     $settings->available_locales = ['en', 'fr'];

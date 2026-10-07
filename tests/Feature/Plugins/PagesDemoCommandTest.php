@@ -21,8 +21,8 @@ uses(PluginTestCase::class);
 
 function demoSetup(): void
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 }
 
 it('seeds the demo site end to end', function (): void {

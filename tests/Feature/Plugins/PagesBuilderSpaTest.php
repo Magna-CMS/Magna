@@ -22,8 +22,8 @@ uses(PluginTestCase::class);
 
 function spaUser(string ...$permissions): User
 {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $user = User::factory()->create();
     $role = Role::factory()->create();
@@ -93,8 +93,8 @@ it('refuses to serve anything outside the bundle directory', function (): void {
 });
 
 it('refuses the builder to a user without the pages permission', function (): void {
-    skipWithoutDevPlugin('magna/pages');
-    app(PluginManager::class)->enable('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
+    app(PluginManager::class)->enable('magna-cms/pages');
 
     $author = spaUser();
     $page = spaPage($author);

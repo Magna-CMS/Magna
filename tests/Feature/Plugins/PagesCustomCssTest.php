@@ -19,7 +19,7 @@ use Magna\Testing\PluginTestCase;
 uses(PluginTestCase::class);
 
 beforeEach(function (): void {
-    skipWithoutDevPlugin('magna/pages');
+    skipWithoutDevPlugin('magna-cms/pages');
 });
 
 it('keeps an ordinary declaration', function (): void {
