@@ -8,7 +8,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
  * Optional document-edit locking, provided by whichever plugin owns
- * concurrent editing (magna/pages binds its builder lock here).
+ * concurrent editing (magna-cms/pages binds its builder lock here).
  *
  * Core's structured BlockEditor consults this binding when it exists, so
  * the Livewire editor and the visual builder honor ONE lock instead of

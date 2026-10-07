@@ -83,7 +83,7 @@ class BlockEditor extends Component
         $this->sections = $this->normalizeTokenOverridesForEditor($decoded);
 
         // Share the document lock with the visual builder when a provider
-        // is installed (magna/pages binds one) — two editors, one lock.
+        // is installed (magna-cms/pages binds one) — two editors, one lock.
         if ($entryId !== '' && app()->bound(GuardsDocumentEdits::class)) {
             $lock = app(GuardsDocumentEdits::class)
                 ->acquire($entryId, auth()->user());
