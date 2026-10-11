@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Magna\Marketplace;
 
+use Magna\Support\Runtime;
+
 /**
  * Starts a marketplace install and keeps it from silently going nowhere.
  *
@@ -87,10 +89,9 @@ final class PluginInstallStarter
         }
 
         // Composer resolution plus enabling easily exceeds the default 30s; the
-        // queued path had `$timeout = 900` for the same reason.
-        if (function_exists('set_time_limit')) {
-            set_time_limit(InstallPluginJob::TIMEOUT_SECONDS);
-        }
+        // queued path had `$timeout = 900` for the same reason. Raise-only —
+        // see Runtime::extendTimeLimit().
+        Runtime::extendTimeLimit(InstallPluginJob::TIMEOUT_SECONDS);
 
         InstallProgress::set(
             $package,

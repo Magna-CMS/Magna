@@ -6,6 +6,7 @@ namespace Magna\Updater;
 
 use Illuminate\Foundation\Http\MaintenanceModeBypassCookie;
 use Illuminate\Support\Facades\Cookie;
+use Magna\Support\Runtime;
 
 /**
  * Starts a core update and keeps it from silently going nowhere.
@@ -87,10 +88,9 @@ final class CoreUpdateStarter
         }
 
         // A download + overlay + migrate run easily exceeds the default 30s;
-        // the queued path had `$timeout = 1800` for the same reason.
-        if (function_exists('set_time_limit')) {
-            set_time_limit(CoreUpdateJob::TIMEOUT_SECONDS);
-        }
+        // the queued path had `$timeout = 1800` for the same reason. Raise-only
+        // — see Runtime::extendTimeLimit().
+        Runtime::extendTimeLimit(CoreUpdateJob::TIMEOUT_SECONDS);
 
         // Written before the (long) apply starts so the admin's next poll
         // explains why this is taking a whole request, and so the reason stays
