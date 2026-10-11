@@ -50,7 +50,12 @@ function release_gates_run(bool $skip): void
     // bin/suite-lock.php, so a session that starts its own suite meanwhile
     // waits its turn instead of halving this one's throughput — which cost
     // that release more elapsed time than any of its actual defects.
-    $lock = $php.' '.escapeshellarg(dirname(__DIR__).'/suite-lock.php').' --name=suite --timeout=0 --';
+    // Bounded, not indefinite. A release can afford to queue behind somebody
+    // else's suite — thrashing two of them helps nobody — but "wait forever"
+    // is how an unattended build spends a night holding a slot it never gets.
+    // Half an hour outlasts any suite on this machine; past that it runs and
+    // takes the contention, which is strictly better than not building.
+    $lock = $php.' '.escapeshellarg(dirname(__DIR__).'/suite-lock.php').' --name=suite --timeout=1800 --';
     $gates = [
         // Not --strict: the exact pins (intervention 3.0, google2fa 8.0) and
         // the SDK's @dev wiring are deliberate, and --strict fails on them.

@@ -67,9 +67,15 @@ echo "pre-push: phpstan"
 # Under the machine-wide suite lock: this is the one gate here that runs for
 # minutes, and a release build or another session's suite running at the same
 # time starves both. Waits rather than failing — see bin/suite-lock.php.
+#
+# Bounded, unlike the release gates. A push has somebody waiting on it, and the
+# first push after the lock shipped sat for 38 minutes behind an unrelated
+# plugin suite because this said --timeout=0. Five minutes is long enough to
+# miss the overlap with a run that is nearly done; past that the architecture
+# suite is cheap enough (~50s) to just run and take the contention.
 echo "pre-push: architecture suite"
 "$PHP" artisan config:clear --ansi >/dev/null
-"$PHP" bin/suite-lock.php --name=suite --timeout=0 -- "$PHP" vendor/bin/pest tests/Feature/Architecture
+"$PHP" bin/suite-lock.php --name=suite --timeout=300 -- "$PHP" vendor/bin/pest tests/Feature/Architecture
 
 # Machine-local extension, with the buffered refs replayed on its stdin.
 local_hook="$(git rev-parse --git-dir)/hooks/pre-push.local"
