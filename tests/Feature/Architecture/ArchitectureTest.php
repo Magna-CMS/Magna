@@ -881,7 +881,7 @@ it('lets the pinned big classes only shrink', function (): void {
         // Over the global ceiling and allowlisted there; the pin stops it
         // growing further while it waits for its remaining splits.
         'Admin/Pages/PluginsPage.php' => 707,
-        'Licensing/LicenseClient.php' => 580,
+        'Licensing/LicenseClient.php' => 579,
         'Blocks/Livewire/BlockEditor.php' => 586,
         'Plugins/PluginManager.php' => 546,
         // Update-driving and plugin-resolution logic moved into

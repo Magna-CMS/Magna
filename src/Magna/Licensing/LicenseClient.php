@@ -12,6 +12,7 @@ use Magna\AccountCentre\AccountCentreSettings;
 use Magna\MagnaServiceProvider;
 use Magna\Marketplace\Marketplace;
 use Magna\Support\InstallFingerprint;
+use Magna\Support\OriginResolver;
 use Throwable;
 
 /**
@@ -420,11 +421,9 @@ class LicenseClient
      */
     public function activate(string $key): ?array
     {
-        $domain = config('app.url');
-
         return SignedResponse::open($this->post('/license/activate', [
             'key' => $key,
-            'domain' => is_string($domain) ? $domain : '',
+            'domain' => OriginResolver::configuredHost() ?? '',
             'fingerprint' => InstallFingerprint::derive(),
             'core_version' => MagnaServiceProvider::VERSION,
         ]));

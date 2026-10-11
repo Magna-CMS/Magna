@@ -33,7 +33,44 @@ class AccountCentreController extends Controller
         Gate::authorize('settings.manage');
         abort_unless(in_array($provider, self::ALLOWED_PROVIDERS, true), 404);
 
+        $canonical = OriginResolver::configuredOrigin();
         $siteUrl = $this->handshakeOrigin($request);
+
+        /*
+         * The handshake runs on the browsing origin, and that origin becomes
+         * this site's identity on the account — so it has to be the address the
+         * licence will be bound to, not merely an address that works.
+         *
+         * An install answers on more than one origin more often than it looks:
+         * TrustHosts trusts APP_URL's host AND its subdomains, so `example.com`
+         * and `www.example.com` both reach the panel with no configuration at
+         * all, as does any address on the MAGNA_TRUSTED_HOSTS list. Connecting
+         * from the wrong one registered that origin as site_url; the marketplace
+         * stamped the licence seat from it, rebound the activation and rotated
+         * its token, and the plugin — which derives its own identity from
+         * APP_URL and had not moved — failed every verify afterwards with
+         * "Activation token invalid or revoked".
+         *
+         * Compared as whole origins rather than hosts, because the scheme and
+         * port are part of the string the account stores: http and https on one
+         * hostname are two sites to it.
+         *
+         * Refused rather than quietly rewritten. Sending APP_URL as the site_url
+         * while the callback stayed here is what the marketplace's open-redirect
+         * guard exists to reject, and moving the whole handshake to APP_URL
+         * would strand the state nonce in this origin's session — the failure
+         * that put the browser on a sign-in page with nothing to explain it.
+         * Naming both addresses is the only answer that leaves the
+         * administrator somewhere to go.
+         */
+        if ($canonical !== null && $siteUrl !== $canonical) {
+            return redirect(AccountCentrePage::getUrl())->with(
+                'account_centre_error',
+                "This panel is open at {$siteUrl}, but this install's address is {$canonical}. "
+                    ."Connecting from here would register {$siteUrl} as the site holding your licence seats, "
+                    ."and the licence would stop matching. Open {$canonical}/account-centre and connect from there."
+            );
+        }
 
         $state = Str::random(40);
         $request->session()->put(self::SESSION_STATE_KEY, $state);
@@ -152,9 +189,18 @@ class AccountCentreController extends Controller
      * merely agree. It is the one origin that is definitely reachable (the
      * administrator is on it) and the one whose session holds the state nonce
      * that has to come back — APP_URL is neither of those things when the
-     * panel is somewhere else. It costs nothing in identity terms: a site is
-     * recognised by its fingerprint, derived from APP_KEY, and site_url is
-     * label text in the account's site list.
+     * panel is somewhere else.
+     *
+     * It was once thought to cost nothing in identity terms, on the grounds
+     * that a site is recognised by its fingerprint and site_url is label text
+     * in the account's site list. It is not label text. The marketplace stamps
+     * a licence activation's domain from it, so whichever origin the handshake
+     * ran on becomes the site that holds the seat — and an install connected
+     * from a second address rebound its own activation and invalidated the
+     * token it was still using. connect() therefore refuses to start a
+     * handshake anywhere but this install's own address; this stays the
+     * browsing origin because, once that guard has passed, the two are the
+     * same thing.
      *
      * Both legs must agree on it, so callback() derives the site_url it sends
      * to the exchange endpoint from here too — Update Manager checks that the

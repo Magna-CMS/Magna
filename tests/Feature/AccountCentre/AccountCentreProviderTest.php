@@ -69,19 +69,33 @@ it('requires settings.manage to start a connect attempt', function (): void {
 // address — a LAN IP, a staging alias — the two disagreed, the guard
 // refused, and the admin was dropped on the Magna Account sign-in page with
 // nothing explaining why.
+/**
+ * This used to open the panel on the LAN while APP_URL was the public hostname
+ * and assert that the LAN address was sent as site_url — on the reasoning that
+ * site_url was label text and a site is known by its fingerprint.
+ *
+ * It is not label text. The marketplace stamps the licence seat from it, so
+ * connecting from a second address rebound the activation and rotated its
+ * token, and the plugin — which derives its identity from APP_URL and had not
+ * moved — failed every verify afterwards. connect() now refuses to start
+ * anywhere but this install's own address; that refusal is pinned in
+ * ConnectOriginGuardTest.
+ *
+ * What survives here is the half that is still true and still load-bearing: the
+ * handshake runs on the origin the browser is on, not on APP_URL, because that
+ * origin's session holds the state nonce that has to come back. It shows
+ * itself when there is no APP_URL to compare against — mid-installation, where
+ * the guard holds no opinion and this is the only answer left.
+ */
 it('conducts the handshake on the origin the administrator is browsing', function (): void {
-    config(['app.url' => 'https://erp.example.com']);
+    config(['app.url' => '']);
     $this->actingAs(accountCentreSuperAdmin());
 
-    // The panel opened on the LAN while APP_URL is the public hostname —
-    // exactly the deployment that used to send an unsatisfiable pair.
     $response = $this->get('http://192.168.1.8/account-centre/connect/github');
 
     $location = (string) $response->headers->get('Location');
     parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
 
-    // Not APP_URL: this is the origin that can actually be returned to, and
-    // the only one whose session holds the state nonce that has to come back.
     expect($query['site_url'])->toBe('http://192.168.1.8')
         ->and($query['callback'])->toBe('http://192.168.1.8/account-centre/callback');
 });
