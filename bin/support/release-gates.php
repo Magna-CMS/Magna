@@ -37,9 +37,20 @@ function release_gates_run(bool $skip): void
     $php = escapeshellarg(PHP_BINARY);
 
     // Cheapest first, so a trivial failure costs seconds, not the full
-    // serial suite. The suite runs last and complete — Unit, Feature and
-    // Plugins, never --parallel — with the architecture and duplication
-    // ratchets riding inside it.
+    // serial suite. Never --parallel: Laravel's parallel testing separates
+    // workers by appending TEST_TOKEN to the database name, which a
+    // DB_DATABASE of ":memory:" cannot express (tests/bootstrap.php asserts
+    // that literal in every worker before autoload), and the backup and
+    // content-type suites share filesystem and registry state besides.
+    //
+    // Two suite gates, not one. The second is the complete answer and the
+    // thing that may refuse a build; the first exists because the second
+    // takes hours, and four 1.4.7 builds in a row were refused by a core
+    // defect that the first would have surfaced in minutes. Both run under
+    // bin/suite-lock.php, so a session that starts its own suite meanwhile
+    // waits its turn instead of halving this one's throughput — which cost
+    // that release more elapsed time than any of its actual defects.
+    $lock = $php.' '.escapeshellarg(dirname(__DIR__).'/suite-lock.php').' --name=suite --timeout=0 --';
     $gates = [
         // Not --strict: the exact pins (intervention 3.0, google2fa 8.0) and
         // the SDK's @dev wiring are deliberate, and --strict fails on them.
@@ -49,7 +60,15 @@ function release_gates_run(bool $skip): void
         'pint' => $php.' vendor/bin/pint --test',
         'phpstan' => $php.' vendor/bin/phpstan analyse --no-progress --memory-limit=1G',
         'psalm (taint)' => $php.' vendor/bin/psalm --taint-analysis --no-progress',
-        'full test suite' => $php.' artisan config:clear --ansi && '.$php.' artisan test',
+        'core suite (fast)' => $lock.' '.$php.' artisan test --testsuite=Unit,Feature',
+        // Scoped to what a core release can answer for. The Plugins glob in
+        // phpunit.xml takes everything under plugins-dev, which on a developer
+        // machine includes client products: a 1.4.8 build was refused by 660
+        // failures that were all `lekha_test` on a Postgres server that was not
+        // running. A core release is not the place to discover that. The glob
+        // stays for `composer test`; FirstPartyPlugins names the plugins core
+        // ships alongside and therefore owes a passing suite to.
+        'full test suite' => $php.' artisan config:clear --ansi && '.$lock.' '.$php.' artisan test --testsuite=Unit,Feature,FirstPartyPlugins',
     ];
 
     foreach ($gates as $name => $command) {

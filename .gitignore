@@ -25,6 +25,8 @@
 /.idea
 /.nova
 /.phpunit.cache
+# Per-checkout analyser caches (phpstan.neon.dist tmpDir, psalm.xml cacheDirectory).
+/build/
 /.vscode
 /.zed
 /auth.json

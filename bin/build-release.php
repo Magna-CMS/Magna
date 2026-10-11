@@ -215,7 +215,11 @@ if (getenv('GITHUB_ACTIONS') === 'true') {
 // ---------------------------------------------------------------------------
 // Staging directory.
 // ---------------------------------------------------------------------------
-$stage = sys_get_temp_dir().'/magna-release-'.$version;
+// Keyed on the process as well as the version. Two builds of the same version
+// at once — a retry started while the first was still in its gates, or a second
+// session cutting the same tag — each began by rrmdir()-ing the path and then
+// staged into the other's half-deleted tree.
+$stage = sys_get_temp_dir().'/magna-release-'.$version.'-'.getmypid();
 say("Staging in {$stage}");
 rrmdir($stage);
 mkdir($stage, 0755, true);

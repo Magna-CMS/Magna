@@ -64,9 +64,12 @@ echo "pre-push: pint --test"
 echo "pre-push: phpstan"
 "$PHP" vendor/bin/phpstan analyse --no-progress --memory-limit=1G
 
+# Under the machine-wide suite lock: this is the one gate here that runs for
+# minutes, and a release build or another session's suite running at the same
+# time starves both. Waits rather than failing — see bin/suite-lock.php.
 echo "pre-push: architecture suite"
 "$PHP" artisan config:clear --ansi >/dev/null
-"$PHP" vendor/bin/pest tests/Feature/Architecture
+"$PHP" bin/suite-lock.php --name=suite --timeout=0 -- "$PHP" vendor/bin/pest tests/Feature/Architecture
 
 # Machine-local extension, with the buffered refs replayed on its stdin.
 local_hook="$(git rev-parse --git-dir)/hooks/pre-push.local"

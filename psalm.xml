@@ -7,7 +7,13 @@
     xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
     findUnusedVariablesAndParams="false"
     reportMixedIssues="false"
+    cacheDirectory="build/psalm"
 >
+    <!-- cacheDirectory is inside the checkout rather than the system temp
+         directory, for the reason written out in phpstan.neon.dist: two
+         checkouts analysing at once corrupted a shared cache and aborted the
+         run. Relative paths resolve against this file, so each worktree keeps
+         its own, and `build/` is gitignored. -->
     <!-- Taint analysis tracks untrusted user input (sources) to dangerous sinks
          (SQL queries, shell commands, HTTP responses, file writes).
          Only the API-boundary and auth layers are analysed here; the admin

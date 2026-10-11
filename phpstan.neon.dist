@@ -4,6 +4,19 @@ includes:
 parameters:
     level: 9
 
+    # Inside the checkout, not the system temp directory. Two checkouts of this
+    # repository analysing at once — a session working in a git worktree while a
+    # release builds in another — shared %TEMP%/phpstan and tore each other's
+    # cache entries out mid-run:
+    #
+    #   RecursiveDirectoryIterator(...Temp/phpstan/cache/PHPStan/7a/a9):
+    #   The system cannot find the file specified
+    #
+    # which aborts the analysis and reads like a broken install. Relative, so it
+    # resolves against THIS config file and every checkout gets its own; `build/`
+    # is gitignored.
+    tmpDir: build/phpstan
+
     paths:
         - app
         - src

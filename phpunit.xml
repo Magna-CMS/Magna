@@ -16,9 +16,49 @@
             existed none of them ran in CI: `php artisan test` reads these
             testsuites, and the marketplace's licence, payment and console
             tests sat outside all of them. A test nobody runs is a comment.
+
+            The glob takes everything in plugins-dev, which on a developer
+            machine is not only Magna's own plugins: client products live
+            there too, several times larger than core and with their own
+            infrastructure. Keep running it — it is the whole-tree sweep, and
+            it is what `composer test` and a developer asking for "the suite"
+            should get.
         -->
         <testsuite name="Plugins">
             <directory>plugins-dev/*/*/tests</directory>
+        </testsuite>
+        <!--
+            The plugins a CORE RELEASE answers for, named rather than globbed.
+            This is the release gate's scope, and the reason it is not the
+            glob above is specific: a 1.4.8 build was refused by 660 failures
+            that were all `lekha_test` on Postgres —
+
+                SQLSTATE[08006] connection to server at "127.0.0.1", port 5432 failed
+                SQLSTATE[3F000] Invalid schema name: schema "public" does not exist
+
+            — a different product whose database server was not running. That
+            is an unrelated dependency, not a quality signal.
+
+            The line drawn here: core ships alongside these, so breaking one
+            of them should stop a core release. It does not ship roya/erp,
+            lekha/core, embhas/embhas or magna/restaurant-finance; those are
+            separate products with their own repositories and their own
+            release gates, and two of them need database servers a core
+            release has no business requiring.
+
+            Named directories, not a `magna/*` glob, so adding a client
+            product under plugins-dev/magna cannot quietly start gating core
+            releases. magna/pages, magna/forms and magna/seo carry no tests
+            of their own yet — Pages is covered by tests/Feature/Plugins in
+            core — and are added here on the day they do.
+        -->
+        <testsuite name="FirstPartyPlugins">
+            <directory>plugins-dev/magna/blog/tests</directory>
+            <directory>plugins-dev/magna/defence/tests</directory>
+            <directory>plugins-dev/magna/docs/tests</directory>
+            <directory>plugins-dev/magna/marketplace/tests</directory>
+            <directory>plugins-dev/magna/message-lite/tests</directory>
+            <directory>plugins-dev/magna/plugin-manager/tests</directory>
         </testsuite>
     </testsuites>
     <!--
