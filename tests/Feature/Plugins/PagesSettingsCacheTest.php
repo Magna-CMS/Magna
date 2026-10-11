@@ -21,6 +21,7 @@ use Magna\Settings\ContentSettings;
 use Magna\Settings\Events\SettingsSaved;
 use Magna\Settings\GeneralSettings;
 use Magna\Testing\PluginTestCase;
+use Magna\Themes\ThemeSettings;
 
 uses(PluginTestCase::class);
 
@@ -70,4 +71,18 @@ it('leaves the rendered site alone for a group it does not render', function ():
     // somebody changed a revision limit. The listener reads the group for
     // exactly this reason.
     expect(app(PageCache::class)->get('/'))->not->toBeNull();
+});
+
+it('drops the rendered site when the theme changes', function (): void {
+    cacheSitePages();
+
+    $theme = ThemeSettings::get();
+    $theme->active = 'lekha/billing';
+    $theme->save();
+
+    // The sharpest case of the lot. A cached page records nothing about which
+    // theme drew it — PageCache::hash() is the URL and nothing else — so
+    // without this, activating a theme changed no pixel for an hour and read
+    // as the switch having silently failed.
+    expect(app(PageCache::class)->get('/'))->toBeNull();
 });
