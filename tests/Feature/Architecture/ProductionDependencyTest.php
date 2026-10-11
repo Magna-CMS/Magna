@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Composer\Semver\Semver;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -133,4 +134,35 @@ it('declares symfony/filesystem as a production dependency', function (): void {
 
     expect($composer)->toBeArray()
         ->and($composer['require'] ?? [])->toHaveKey('symfony/filesystem');
+});
+
+/**
+ * The SVG sanitiser must be able to receive a security release.
+ *
+ * It was required as `"enshrined/svg-sanitize": "0.22"` — an exact version, not
+ * a range. `composer update` could therefore never move it, and when three
+ * advisories landed against `<=0.22.0` (a stored XSS, a DTD parse crash, and a
+ * mixed-case `xlink:HrEf` that walked past the `<use>` nesting-DoS check) the
+ * fix in 1.0.0 was unreachable without editing the constraint by hand. The
+ * release gates caught it, which is the only reason it was noticed at all.
+ *
+ * MediaIngestor hands this library every SVG a user uploads, so it is the one
+ * dependency where "cannot take a patch" is least acceptable. Asserted as a
+ * floor rather than a shape: a caret range is the point, and `1.0` is the first
+ * version carrying all three fixes.
+ */
+it('can take a security patch for the svg sanitiser', function (): void {
+    $composer = json_decode((string) file_get_contents(base_path('composer.json')), true);
+
+    expect($composer)->toBeArray();
+
+    /** @var array{require: array<string, string>} $composer */
+    $constraint = $composer['require']['enshrined/svg-sanitize'] ?? null;
+
+    expect($constraint)->toBeString();
+
+    /** @var string $constraint */
+    expect(Semver::satisfies('1.0.0', $constraint))->toBeTrue(
+        "enshrined/svg-sanitize is constrained to '{$constraint}', which cannot reach the 1.0.0 security release."
+    );
 });
