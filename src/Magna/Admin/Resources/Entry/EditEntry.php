@@ -132,20 +132,9 @@ class EditEntry extends EditRecord
                 ->icon('heroicon-m-arrows-pointing-in')
                 ->color('gray')
                 ->modalHeading('Revision History')
-                ->modalContent(function (): View {
-                    $entry = $this->entry();
-                    $revisions = Revision::query()
-                        ->where('entry_id', $entry->getKey())
-                        ->where('entry_type', $this->type)
-                        ->orderByDesc('created_at')
-                        ->limit(20)
-                        ->get();
-
-                    return view()->make('magna::admin.entry-revisions', [
-                        'entry' => $entry,
-                        'revisions' => $revisions,
-                    ]);
-                })
+                ->modalContent(fn (): View => view('magna::admin.entry-revisions', [
+                    'revisions' => Revision::historyFor($this->type, $this->entry()->id),
+                ]))
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close'),
 

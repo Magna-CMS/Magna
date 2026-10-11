@@ -29,6 +29,7 @@ use Magna\Content\ContentType;
 use Magna\Content\Entry;
 use Magna\Content\EntryManager;
 use Magna\Content\EntryStatus;
+use Magna\Content\Models\Revision;
 use Magna\Content\SchemaRegistry;
 use Magna\Contracts\ExtendsEntryForm;
 use Magna\Settings\GeneralSettings;
@@ -283,9 +284,14 @@ class EntryResource extends Resource
                     ->icon('heroicon-m-clock')
                     ->color('gray')
                     ->modalHeading('Revision History')
-                    ->modalContent(fn (Entry $record): View => view()->make(
+                    ->modalContent(fn (Entry $record): View => view(
                         'magna::admin.entry-revisions',
-                        ['entry' => $record, 'type' => self::getTypeHandleFromRequest()]
+                        [
+                            'revisions' => Revision::historyFor(
+                                self::getTypeHandleFromRequest(),
+                                $record->id,
+                            ),
+                        ]
                     ))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close')

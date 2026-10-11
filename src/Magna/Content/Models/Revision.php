@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Content\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -52,6 +53,25 @@ class Revision extends Model
         return [
             'payload' => 'array',
         ];
+    }
+
+    /**
+     * The newest revisions of one entry, newest first.
+     *
+     * A static gateway on the model rather than a query repeated by each
+     * caller: the admin panel's history modal is opened from two different
+     * screens, and the same three clauses had already been written out twice.
+     *
+     * @return Collection<int, self>
+     */
+    public static function historyFor(string $entryType, string $entryId, int $limit = 20): Collection
+    {
+        return self::query()
+            ->where('entry_type', $entryType)
+            ->where('entry_id', $entryId)
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
     }
 
     public function save(array $options = []): bool
