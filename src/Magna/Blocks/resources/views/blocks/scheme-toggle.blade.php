@@ -12,6 +12,16 @@
      * Rendered as a real <button> so it is focusable and announceable, and
      * hidden until the script runs: a switch that cannot work without
      * JavaScript should not be offered to someone who has none.
+     *
+     * MARKUP AND ITS OWN CHROME. What makes the switch WORK — the script
+     * and the icon swap it drives — lives in
+     * `block-behaviour/scheme-toggle.blade.php`, which the renderer
+     * includes alongside whichever view won, so a theme may replace
+     * everything below without replacing the behaviour it is not allowed
+     * to ship for itself. What the behaviour binds to is therefore a
+     * contract this markup keeps, and an override must keep too: the
+     * `data-magna-scheme-toggle` hook, the `hidden` it lifts, and the
+     * `__light`/`__dark` spans it swaps.
      */
     $registry = app(\Magna\Blocks\Icons\IconRegistry::class);
 
@@ -33,6 +43,14 @@
         <span class="magna-scheme-toggle__dark" aria-hidden="true">{!! $registry->svg('core:globe', null, null, $pixels) !!}</span>
     </button>
 </div>
+{{--
+    The default button's own chrome — and nothing the behaviour depends on.
+
+    Here rather than in block-behaviour/ on purpose: a theme that replaces
+    this markup is replacing the button, and the look of a button it no
+    longer draws should go with it. The icon swap and the script stay in the
+    behaviour file, which no override can drop.
+--}}
 @once
     <style>
         .magna-scheme-toggle__button {
@@ -46,66 +64,5 @@
             color: inherit;
             cursor: pointer;
         }
-        /* One icon at a time: which one depends on the scheme in force,
-           which is the same three-state question the tokens answer. */
-        .magna-scheme-toggle__dark { display: none; }
-        @media (prefers-color-scheme: dark) {
-            :root:not([data-theme="light"]) .magna-scheme-toggle__light { display: none; }
-            :root:not([data-theme="light"]) .magna-scheme-toggle__dark { display: inline-flex; }
-        }
-        :root[data-theme="dark"] .magna-scheme-toggle__light { display: none; }
-        :root[data-theme="dark"] .magna-scheme-toggle__dark { display: inline-flex; }
-        :root[data-theme="light"] .magna-scheme-toggle__light { display: inline-flex; }
-        :root[data-theme="light"] .magna-scheme-toggle__dark { display: none; }
     </style>
-    <script>
-        (function () {
-            var KEY = 'magna-theme'
-            var root = document.documentElement
-
-            /* Applied before anything is drawn where possible, so a visitor
-               who chose dark does not watch the light palette flash first. */
-            try {
-                var stored = localStorage.getItem(KEY)
-                if (stored === 'light' || stored === 'dark') {
-                    root.setAttribute('data-theme', stored)
-                }
-            } catch (error) {
-                /* Private mode, or storage disabled. The system preference
-                   still applies; only remembering a choice is lost. */
-            }
-
-            function current() {
-                var explicit = root.getAttribute('data-theme')
-                if (explicit === 'light' || explicit === 'dark') {
-                    return explicit
-                }
-
-                return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-                    ? 'dark'
-                    : 'light'
-            }
-
-            function wire(button) {
-                button.hidden = false
-                button.setAttribute('aria-pressed', current() === 'dark' ? 'true' : 'false')
-
-                button.addEventListener('click', function () {
-                    var next = current() === 'dark' ? 'light' : 'dark'
-                    root.setAttribute('data-theme', next)
-                    try {
-                        localStorage.setItem(KEY, next)
-                    } catch (error) {
-                        /* Not remembered, but switched. */
-                    }
-
-                    document.querySelectorAll('[data-magna-scheme-toggle]').forEach(function (other) {
-                        other.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false')
-                    })
-                })
-            }
-
-            document.querySelectorAll('[data-magna-scheme-toggle]').forEach(wire)
-        })()
-    </script>
 @endonce

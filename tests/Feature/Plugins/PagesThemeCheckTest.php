@@ -7,8 +7,12 @@ declare(strict_types=1);
  * themes come out clean; the sketchy fixture trips every rule class: raw
  * PHP, forbidden calls, unallowlisted raw echo, script in a block view,
  * poisoned token values, and an addon shipping a layout.
+ *
+ * Plus the one rule that reads two files rather than one: what an
+ * overriding block view DROPS from the default view it replaces.
  */
 
+use Illuminate\Support\Facades\View;
 use Magna\Pages\Themes\ThemeAuditor;
 use Magna\Plugins\PluginManager;
 use Magna\Testing\PluginTestCase;
@@ -59,4 +63,68 @@ it('refuses an addon that ships a layout, and fails the command on errors', func
 
     $this->artisan('magna:theme:check', ['theme' => 'badvendor/sketchy'])->assertFailed();
     $this->artisan('magna:theme:check', ['theme' => 'addonhost/base'])->assertSuccessful();
+});
+
+/**
+ * What an override DROPS, which no other rule here looks at.
+ *
+ * The audit's other rules all read one file and judge it on its own. These
+ * two compare an overriding block view against the default view it replaces,
+ * because the sharpest theme failure found so far was invisible to every
+ * single-file rule: scheme-toggle carried its un-hide, click handler and
+ * stored choice in an @once script inside its own view, the rule above
+ * refuses a theme's block view any script of its own, and so a theme that
+ * overrode the view to restyle the button lost the button — silently, with
+ * the markup still rendering `hidden` and nothing left to lift it.
+ */
+it('warns when an override drops the inline script its default view ships', function (): void {
+    auditSetup();
+    config(['magna.themes_path' => dirname(__DIR__, 2).'/Fixtures/themes']);
+
+    // A default view that still carries its behaviour inline. Core has none
+    // left — scheme-toggle's moved to block-behaviour/, which is the real
+    // fix — so one is mounted behind the namespace here: the rule has to go
+    // on catching the shape wherever it survives, plugin blocks included.
+    View::addNamespace('magna', dirname(__DIR__, 2).'/Fixtures/views');
+
+    $warnings = array_values(array_filter(
+        app(ThemeAuditor::class)->audit('badvendor/sketchy'),
+        fn (array $f): bool => $f['level'] === 'warning' && $f['file'] === 'views/blocks/scripty.blade.php',
+    ));
+
+    expect($warnings)->toHaveCount(1)
+        ->and($warnings[0]['message'])->toContain('ships inline <script> that this replacement drops')
+        ->and($warnings[0]['message'])->toContain('block-behaviour view');
+});
+
+it('warns when an override drops the hook a block behaviour binds to', function (): void {
+    auditSetup();
+    config(['magna.themes_path' => dirname(__DIR__, 2).'/Fixtures/themes']);
+
+    // The one way the repaired toggle can still be broken: the behaviour
+    // ships, finds nothing to bind to, and the button stays hidden.
+    $messages = array_column(
+        array_filter(
+            app(ThemeAuditor::class)->audit('badvendor/sketchy'),
+            fn (array $f): bool => $f['file'] === 'views/blocks/scheme-toggle.blade.php',
+        ),
+        'message',
+    );
+
+    expect(implode(' | ', $messages))->toContain('without its `data-magna-scheme-toggle` attribute');
+});
+
+it('says nothing about an override that keeps what the behaviour needs', function (): void {
+    auditSetup();
+    config(['magna.themes_path' => dirname(__DIR__, 2).'/Fixtures/themes']);
+
+    // testv/fixture restyles the switch and keeps the hook, the hidden
+    // attribute and the two spans. A warning here would be noise, and noise
+    // is how a real warning gets ignored.
+    $findings = array_filter(
+        app(ThemeAuditor::class)->audit('testv/fixture'),
+        fn (array $f): bool => $f['file'] === 'views/blocks/scheme-toggle.blade.php',
+    );
+
+    expect($findings)->toBe([], 'got: '.json_encode(array_values($findings)));
 });

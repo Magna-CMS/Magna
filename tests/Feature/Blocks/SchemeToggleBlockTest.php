@@ -10,6 +10,11 @@ declare(strict_types=1);
  * the root, which the token rules already answer to. That is what keeps
  * the page cacheable — every visitor gets identical bytes and the choice
  * lives in their own browser.
+ *
+ * It arrives in two files, and which half is which matters: the view draws
+ * the button and styles it, and the BEHAVIOUR — the script, and the icon
+ * swap it drives — lives in `block-behaviour/scheme-toggle.blade.php`,
+ * where a theme replacing the view cannot drop it.
  */
 
 use Illuminate\Support\Facades\Blade;
@@ -25,6 +30,13 @@ function renderSchemeToggle(array $data = []): string
             dirname(__DIR__, 3).'/src/Magna/Blocks/resources/views/blocks/scheme-toggle.blade.php',
         ),
         ['block' => ['data' => $data]],
+    );
+}
+
+function schemeToggleBehaviour(): string
+{
+    return (string) file_get_contents(
+        dirname(__DIR__, 3).'/src/Magna/Blocks/resources/views/block-behaviour/scheme-toggle.blade.php',
     );
 }
 
@@ -52,13 +64,85 @@ it('stays hidden until the script that makes it work has run', function (): void
 });
 
 it('writes the attribute the palette already answers to', function (): void {
-    $html = renderSchemeToggle();
+    $behaviour = schemeToggleBehaviour();
 
     // Not a new mechanism: `data-theme` is the same attribute the token
     // rules use, so the switch needs no second palette to drive.
-    expect($html)->toContain("setAttribute('data-theme'")
-        ->and($html)->toContain('prefers-color-scheme: dark')
-        ->and($html)->toContain(':root[data-theme="dark"]');
+    expect($behaviour)->toContain("setAttribute('data-theme'")
+        ->and($behaviour)->toContain('prefers-color-scheme: dark')
+        ->and($behaviour)->toContain(':root[data-theme="dark"]');
+});
+
+it('keeps the behaviour out of the view a theme replaces', function (): void {
+    // The bug: all of the above once lived in the view. A theme overriding
+    // the view to restyle the button lost the un-hide, the click handler and
+    // the stored choice, and the theme audit then refused it a <script> of
+    // its own — so the honest repair was to reimplement core's behaviour in
+    // the layout. What shipped meanwhile was a button that renders `hidden`
+    // and is never un-hidden: invisible, not merely unstyled.
+    $view = renderSchemeToggle();
+
+    expect($view)->not->toContain('<script')
+        ->and($view)->not->toContain("setAttribute('data-theme'");
+
+    // What the view owes the behaviour instead: the hook it binds to, the
+    // attribute it lifts, and the two spans it swaps. ThemeAuditor warns an
+    // override that drops any of them.
+    expect($view)->toContain('data-magna-scheme-toggle')
+        ->and($view)->toContain('hidden>')
+        ->and($view)->toContain('magna-scheme-toggle__light')
+        ->and($view)->toContain('magna-scheme-toggle__dark');
+});
+
+it('lets a theme outbid the icon swap without escalating selectors', function (): void {
+    // The swap ships unconditionally now, which it did not before: when a
+    // theme overrode the view, core's @once block never ran at all. So every
+    // rule is wrapped in :where() and carries zero specificity, and a plain
+    // class rule in a theme beats it. Otherwise fixing the dead control
+    // would have broken the look of every theme that restyles the switch.
+    $behaviour = schemeToggleBehaviour();
+
+    foreach (['display: none', 'display: inline-flex'] as $declaration) {
+        expect($behaviour)->toContain($declaration);
+    }
+
+    // Every selector in the stylesheet goes through :where(). One that did
+    // not would carry real specificity and quietly outrank the theme.
+    $style = (string) substr(
+        $behaviour,
+        (int) strpos($behaviour, '<style>'),
+        (int) strpos($behaviour, '</style>') - (int) strpos($behaviour, '<style>'),
+    );
+
+    $bare = [];
+    $wrapped = 0;
+    foreach (explode("\n", $style) as $line) {
+        $line = trim($line);
+        if (! str_contains($line, '{') || str_starts_with($line, '@') || str_starts_with($line, '/*')) {
+            continue;
+        }
+
+        $selector = trim(strstr($line, '{', true) ?: '');
+        if ($selector === '') {
+            continue;
+        }
+
+        if (str_starts_with($selector, ':where(')) {
+            $wrapped++;
+        } else {
+            $bare[] = $selector;
+        }
+    }
+
+    // $wrapped guards the guard: an empty scan would pass this vacuously.
+    expect($bare)->toBe([])
+        ->and($wrapped)->toBeGreaterThan(5);
+});
+
+it('wires a button once, however often it is handed one', function (): void {
+    // A builder fragment re-render can hand the same button back; binding
+    // twice would flip the scheme and flip it straight back.
+    expect(schemeToggleBehaviour())->toContain('magnaSchemeWired');
 });
 
 it('escapes a label rather than letting it close the attribute', function (): void {

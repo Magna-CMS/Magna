@@ -60,6 +60,11 @@
                                     'block' => $resolver->viewPayload($block),
                                     'definition' => $def,
                                 ])
+                                {{-- The block's behaviour, where it ships
+                                     any: a preview of a control that cannot
+                                     be operated is a preview of the wrong
+                                     thing. --}}
+                                @includeIf('magna::block-behaviour.' . $block->block)
                             </div>
                         @else
                             <div class="magna-unknown-block" data-block-id="{{ $block->id }}">
