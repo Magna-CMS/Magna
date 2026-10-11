@@ -58,6 +58,40 @@ class RoleResource extends \Filament\Resources\Resource
         return ! self::isLastSuperAdminRole($record);
     }
 
+    /**
+     * Writes the ticked keys back, keeping the grants this form cannot show.
+     *
+     * The checkbox list is built from the permission registry, and registered
+     * keys never contain wildcards — only grants do. So a role holding `erp.*`
+     * or `content.*.view` had no tick box for it, submitted without it, and the
+     * delete-then-regrant below wrote it out of existence: opening the admin
+     * role and pressing save stripped every wildcard it had, permanently,
+     * silently, and with nothing in the audit trail to say what was lost.
+     *
+     * The seeded roles are exactly the ones this bites — `admin` carries seven
+     * wildcards, and the plugins add `erp.*` and `dms.*` to it when they are
+     * enabled, so one save could undo an install's whole permission setup.
+     *
+     * A wildcard is therefore not the form's to remove. Revoking one is a
+     * deliberate act and belongs somewhere that can say so; until then the
+     * safe direction is to carry it through untouched.
+     *
+     * @param  list<string>  $ticked
+     */
+    private static function rewriteGrants(Role $role, array $ticked): void
+    {
+        $kept = array_values(array_filter(
+            $role->grants(),
+            static fn (string $grant): bool => str_contains($grant, '*'),
+        ));
+
+        $role->permissions()->delete();
+
+        foreach (array_unique([...$kept, ...$ticked]) as $key) {
+            $role->grant($key);
+        }
+    }
+
     private static function isLastSuperAdminRole(Role $role): bool
     {
         return $role->is_super_admin && Role::where('is_super_admin', true)->count() <= 1;
@@ -152,10 +186,11 @@ class RoleResource extends \Filament\Resources\Resource
 
                         $editKeys = $data['permission_keys'] ?? [];
                         $record->update($data);
-                        $record->permissions()->delete();
-                        foreach ($editKeys as $key) {
-                            $record->grant($key);
-                        }
+                        // Whatever the form sent, only the strings are keys.
+                        self::rewriteGrants($record, array_values(array_filter(
+                            is_array($editKeys) ? $editKeys : [],
+                            static fn (mixed $key): bool => is_string($key),
+                        )));
                     }),
                 DeleteAction::make()
                     ->visible(fn (Role $record): bool => (auth()->user()?->can('roles.manage') ?? false)
