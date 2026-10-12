@@ -6,7 +6,8 @@ declare(strict_types=1);
  * magna:theme:check v2 — the §C8 restricted-view audit. Real shipped
  * themes come out clean; the sketchy fixture trips every rule class: raw
  * PHP, forbidden calls, unallowlisted raw echo, script in a block view,
- * poisoned token values, and an addon shipping a layout.
+ * poisoned token values, queries and container pulls in views, and an
+ * addon shipping a layout.
  *
  * Plus the one rule that reads two files rather than one: what an
  * overriding block view DROPS from the default view it replaces.
@@ -52,6 +53,44 @@ it('flags every restricted-view violation in the sketchy fixture', function (): 
 
     // The layout-contract raw echoes are NOT flagged.
     expect($all)->not->toContain('{!! $tokensCss !!} —');
+});
+
+it('flags queries and container pulls in theme views', function (): void {
+    auditSetup();
+    config(['magna.themes_path' => dirname(__DIR__, 2).'/Fixtures/themes']);
+
+    $messages = array_column(app(ThemeAuditor::class)->audit('badvendor/sketchy'), 'message');
+    $all = implode(' | ', $messages);
+
+    // "Views receive data; they never query" — the documented rule the
+    // audit used to let straight through: @php(Entry::type(...)) passed
+    // magna:theme:check clean, which made querying the cheap route around
+    // a value the layout payload lacked.
+    expect($all)->toContain('Entry::type() in a view')
+        ->and($all)->toContain('::query() in a view')
+        ->and($all)->toContain('DB:: in a view')
+        ->and($all)->toContain('resolve() in a view')
+        ->and($all)->toContain('app(...) in a view')
+        ->and($all)->toContain('app()-> in a view');
+});
+
+it('keeps allowing the shipped lang-attribute idiom app()->getLocale()', function (): void {
+    auditSetup();
+
+    // The shipped themes all open with
+    // `<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">` —
+    // the first test's clean audit is what pins that; this one documents
+    // the carve-out explicitly against the fixture tree's host theme.
+    config(['magna.themes_path' => dirname(__DIR__, 2).'/Fixtures/themes']);
+
+    // Only the VIEW findings: the fixture's tokens.json is poisoned on
+    // purpose for the token-filter tests and keeps its own errors.
+    $errors = array_filter(
+        app(ThemeAuditor::class)->audit('testv/fixture'),
+        fn (array $f): bool => $f['level'] === 'error' && str_starts_with($f['file'], 'views/'),
+    );
+
+    expect(array_values($errors))->toBe([]);
 });
 
 it('refuses an addon that ships a layout, and fails the command on errors', function (): void {
