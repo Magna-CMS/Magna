@@ -75,6 +75,65 @@ it('warns when the recorded delivery is an older version than the one running', 
     }
 });
 
+/**
+ * The other direction, which read as a fault and is not one.
+ *
+ * Found on a live Octane install the morning after a clean 1.4.6 to 1.4.8
+ * update: the run log showed the switch, the boot check, the migrations and the
+ * commit, `magna:core:status` from the shell read 1.4.8 against 1.4.8 with no
+ * warnings — and the panel still said the two disagreed. The running version is
+ * a class constant fixed when a worker boots, so a worker started under the
+ * previous release goes on reporting it while reading a record the finalizer
+ * has already moved on.
+ *
+ * The check had one branch for either direction, so it told the administrator
+ * an older updater had failed to record a delivery and offered the repair
+ * button. Taking that offer would have re-applied the OLDER release over a site
+ * that had genuinely moved on, re-run its migrations, and filed the newer
+ * version away as `previous`.
+ */
+it('does not call a record newer than the running code an unrecorded delivery', function (): void {
+    [$paths, $footprint, $check] = footprintCheckPaths();
+
+    try {
+        $footprint->record('99.0.0', 'update', 'r1', null, ['src/Magna']);
+
+        // The repair button hangs off this, and a repair is the wrong answer.
+        expect($check->deliveredByOlderUpdater())->toBeFalse();
+
+        $labels = footprintLabels($check);
+
+        expect($labels[0])->toContain('v99.0.0 is on disk')
+            ->and($labels[0])->toContain('still running v'.MagnaServiceProvider::VERSION);
+
+        $help = $check->warnings()[0]['help'];
+
+        expect($help)->toContain('octane:reload')
+            ->and($help)->not->toContain('magna:core:repair')
+            ->and($help)->not->toContain('older updater');
+    } finally {
+        (new Filesystem)->remove($paths->basePath);
+    }
+});
+
+/**
+ * A record that is not a version at all keeps the original reading. It is the
+ * case the undirected wording was written for, and version_compare cannot
+ * place it on either side.
+ */
+it('still advises a repair when the recorded version cannot be compared', function (): void {
+    [$paths, $footprint, $check] = footprintCheckPaths();
+
+    try {
+        $footprint->record('', 'update', 'r2', null, ['src/Magna']);
+
+        expect($check->deliveredByOlderUpdater())->toBeTrue()
+            ->and($check->warnings()[0]['help'])->toContain('magna:core:repair');
+    } finally {
+        (new Filesystem)->remove($paths->basePath);
+    }
+});
+
 it('warns when a recorded path has gone missing, and is quiet when everything is in place', function (): void {
     [$paths, $footprint, $check] = footprintCheckPaths();
 

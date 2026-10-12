@@ -49,12 +49,54 @@ final class FootprintCheck
         ];
     }
 
-    /** True when this version's delivery was never recorded — an older updater performed it. */
+    /**
+     * True when this version's delivery was never recorded — an older updater
+     * performed it, and a repair is the way to find out what arrived.
+     *
+     * Deliberately not "the record and the code disagree". A record NEWER than
+     * the running code is the opposite situation and the opposite remedy: see
+     * recordIsAhead() for what produces it, and why offering a repair there
+     * would undo a delivery that did happen.
+     */
     public function deliveredByOlderUpdater(): bool
     {
         $recorded = $this->footprint->read();
 
-        return $recorded === null || ($recorded['version'] ?? null) !== MagnaServiceProvider::VERSION;
+        if ($recorded === null) {
+            return true;
+        }
+
+        return ($recorded['version'] ?? null) !== MagnaServiceProvider::VERSION
+            && ! $this->recordIsAhead($recorded);
+    }
+
+    /**
+     * Whether the recorded delivery is NEWER than the code asking the question.
+     *
+     * Which is the ordinary state of an Octane worker for a while after every
+     * update. The running version is a class constant, captured when the worker
+     * booted; the record is read off disk. So a worker that started under the
+     * previous release goes on reporting it, against a record the finalizer has
+     * already moved on — one install, two answers, until that worker recycles.
+     *
+     * It reads as alarming and it is not, which is the whole reason this is a
+     * separate question: the undirected version of it told an administrator
+     * that an older updater had failed to record a delivery, and offered the
+     * repair button. Taking that offer re-applies the OLDER release over a
+     * site that had genuinely moved on, re-runs its migrations, and files the
+     * newer version away as `previous`.
+     *
+     * @param  array<string, mixed>  $recorded
+     */
+    private function recordIsAhead(array $recorded): bool
+    {
+        $was = $recorded['version'] ?? null;
+
+        if (! is_string($was) || $was === '') {
+            return false;
+        }
+
+        return version_compare($was, MagnaServiceProvider::VERSION, '>');
     }
 
     /** @return list<array{label: string, help: string}> */
@@ -94,6 +136,15 @@ final class FootprintCheck
             return [[
                 'label' => "v{$version} was delivered by an older updater and nothing recorded what arrived",
                 'help' => 'The code is here; whether every other path the release ships arrived with it is unknown. Repair re-applies this release from its archive and records the result: the Repair button above once Update Manager publishes the archive for this version, or `php artisan magna:core:repair --archive=<magna-cms-v'.$version.'.zip> --sha256=<its checksum>`.',
+            ]];
+        }
+
+        if ($this->recordIsAhead($recorded)) {
+            $was = is_string($recorded['version'] ?? null) ? $recorded['version'] : '?';
+
+            return [[
+                'label' => "v{$was} is on disk, but this process is still running v{$version}",
+                'help' => 'Not a fault, and not something to repair: the update finished and this worker has not picked it up yet, because the running version is fixed when a worker boots. It clears as workers recycle, or at once with `php artisan octane:reload`. If it is still here after a restart, the files and the record really do disagree — `php artisan magna:core:status` from the command line answers for the files themselves.',
             ]];
         }
 
