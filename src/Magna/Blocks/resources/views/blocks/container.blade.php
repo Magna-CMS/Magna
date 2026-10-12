@@ -27,6 +27,26 @@
 
     $label = trim((string) ($block['data']['label'] ?? ''));
 
+    // A theme's own classes. Until this existed the only styling hook an
+    // author had was a SECTION's cssClass, and a section is a whole band:
+    // when one band holds two patterns its class list holds both, and a rule
+    // written for one pattern reaches the other pattern's blocks. A class
+    // here is scoped to the blocks this container actually holds, which is
+    // the scope a theme rule usually wanted.
+    //
+    // Tokens carrying a character that would have to be escaped to be safe
+    // are DROPPED rather than escaped. No legitimate class name contains a
+    // quote or an angle bracket, and escaping one would leave `&quot;` in the
+    // class list — safe markup that styles nothing and reads as a bug. What
+    // real classes use survives: BEM underscores, and Tailwind's colons,
+    // slashes and brackets. The escape on output stays either way.
+    $classes = array_filter(
+        preg_split('/\s+/', (string) ($block['data']['cssClass'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+        static fn (string $token): bool => preg_match('/^[^"\'<>&=`\\\\]+$/u', $token) === 1,
+    );
+
+    $cssClass = $classes === [] ? '' : ' '.implode(' ', $classes);
+
     // Composed here rather than with @if inside the tag: a conditional in the
     // markup puts the attributes on their own lines, and this element's exact
     // opening tag is something the suite asserts. A container that names
@@ -41,4 +61,4 @@
         $attributes .= ' aria-label="'.e($label).'"';
     }
 @endphp
-<{{ $tag }} class="magna-block magna-block--container magna-container{{ $emptyClass }}"{!! $attributes !!}>{!! $children !!}</{{ $tag }}>
+<{{ $tag }} class="magna-block magna-block--container magna-container{{ $emptyClass }}{{ $cssClass }}"{!! $attributes !!}>{!! $children !!}</{{ $tag }}>

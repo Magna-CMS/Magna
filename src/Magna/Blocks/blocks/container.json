@@ -38,6 +38,14 @@
             "options": {
                 "help": "What a screen reader announces for the whole container. Needed when the container IS the thing — a diagram built from text, for instance — rather than a box around other things."
             }
+        },
+        {
+            "handle": "cssClass",
+            "type": "text",
+            "label": "CSS classes",
+            "options": {
+                "help": "Theme classes for this container, space separated. A rule written against one of these reaches only the blocks this container holds; a section's classes reach every block in the band."
+            }
         }
     ]
 }

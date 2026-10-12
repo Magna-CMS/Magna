@@ -362,6 +362,26 @@ it('falls back to a div for a tag the allowlist does not name', function (): voi
         ->and($html)->not->toContain('<script class=');
 });
 
+it('carries the author css classes onto the published container', function (): void {
+    // A section's cssClass covers a whole band, so when one band holds two
+    // patterns a rule written for one reaches the other's blocks. The scope
+    // a theme rule usually wants is the container, and it has to survive the
+    // whole save-publish-render path to be usable — not merely the view.
+    $author = containerSetup();
+    containerPage($author, 'container-class', containerDocument([
+        [
+            'id' => 'box-1', 'block' => 'container', 'settings' => [],
+            'data' => ['tag' => 'div', 'cssClass' => 'mock mock-sync'],
+            'children' => [containerChild('blk-1', 'Scoped')],
+        ],
+    ]));
+
+    $html = $this->get('/container-class')->assertOk()->getContent();
+
+    expect($html)->toContain('magna-container mock mock-sync')
+        ->and($html)->toContain('Scoped');
+});
+
 it('styles a nested block exactly as it styles a top-level one', function (): void {
     $author = containerSetup();
     containerPage($author, 'container-styles', containerDocument([
