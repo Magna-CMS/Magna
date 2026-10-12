@@ -25,6 +25,13 @@ use Magna\Users\User;
 
 uses(PluginTestCase::class);
 
+// Every test in this file exercises the real pages plugin. A checkout
+// without plugins-dev (CI clones core alone) skips the file rather than
+// failing on classes it was never shipped.
+beforeEach(function (): void {
+    skipWithoutDevPlugin('magna-cms/pages');
+});
+
 function responsiveUser(): User
 {
     skipWithoutDevPlugin('magna-cms/pages');
