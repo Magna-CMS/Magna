@@ -409,6 +409,11 @@ class LicenseInstaller
             $this->files->rename($contentRoot, $targetDir);
         }
 
+        // Same reasoning as the plugin branch: the Themes page reads the
+        // check-in row, which this install never touched, so without this the
+        // page kept offering the version just installed.
+        $this->versions->record($manifest->name, $manifest->version, 'theme');
+
         return $isUpdate
             ? $manifest->displayName.' updated to '.$manifest->version.'.'
             : $manifest->displayName.' installed. Activate it from Themes.';

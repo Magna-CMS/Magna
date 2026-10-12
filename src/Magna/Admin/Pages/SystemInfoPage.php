@@ -86,11 +86,16 @@ class SystemInfoPage extends Page
                     }
 
                     $pluginUpdates = UpdateCheck::pluginsWithUpdates()->count();
+                    $themeUpdates = UpdateCheck::themesWithUpdates()->count();
+                    $pending = implode(' and ', array_filter([
+                        $pluginUpdates > 0 ? "{$pluginUpdates} plugin update(s)" : null,
+                        $themeUpdates > 0 ? "{$themeUpdates} theme update(s)" : null,
+                    ]));
 
                     if ($result->core?->updateAvailable) {
                         Notification::make()
                             ->title('Update available: v'.$result->core->latestVersion)
-                            ->body("Running v{$current}.".($pluginUpdates > 0 ? " {$pluginUpdates} plugin update(s) also available." : ''))
+                            ->body("Running v{$current}.".($pending !== '' ? " {$pending} also available." : ''))
                             ->warning()
                             ->send();
 
@@ -99,7 +104,7 @@ class SystemInfoPage extends Page
 
                     Notification::make()
                         ->title('Magna CMS is up to date')
-                        ->body("Running v{$current}.".($pluginUpdates > 0 ? " {$pluginUpdates} plugin update(s) available." : ' No newer release found.'))
+                        ->body("Running v{$current}.".($pending !== '' ? " {$pending} available." : ' No newer release found.'))
                         ->success()
                         ->send();
                 }),

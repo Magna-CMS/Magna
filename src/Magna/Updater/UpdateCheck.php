@@ -11,7 +11,7 @@ use Magna\MagnaServiceProvider;
 
 /**
  * @property int $id
- * @property string $type 'core' | 'plugin'
+ * @property string $type 'core' | 'plugin' | 'theme'
  * @property string|null $slug
  * @property string $current_version
  * @property string|null $latest_version
@@ -100,6 +100,15 @@ class UpdateCheck extends Model
     {
         return static::query()
             ->where('type', 'plugin')
+            ->where('update_available', true)
+            ->get();
+    }
+
+    /** @return Collection<int, static> */
+    public static function themesWithUpdates(): Collection
+    {
+        return static::query()
+            ->where('type', 'theme')
             ->where('update_available', true)
             ->get();
     }

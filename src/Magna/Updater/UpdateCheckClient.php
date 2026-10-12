@@ -12,6 +12,8 @@ use Magna\Marketplace\MarketplaceHttp;
 use Magna\Notices\DashboardNotice;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\InstallFingerprint;
+use Magna\Themes\ThemeManager;
+use Magna\Themes\ThemeManifest;
 use Magna\Updater\Engine\EngineLoader;
 use Magna\Updater\Manifest\ManifestRules;
 
@@ -29,6 +31,8 @@ use Magna\Updater\Manifest\ManifestRules;
  */
 class UpdateCheckClient
 {
+    public function __construct(private readonly ThemeManager $themes) {}
+
     /**
      * Ask Update Manager what's current, given what's installed here, and
      * persist the answer into update_checks so the dashboard notice and the
@@ -41,10 +45,19 @@ class UpdateCheckClient
             ->mapWithKeys(fn (PluginRecord $r): array => [$r->name => $r->version])
             ->all();
 
+        // Themes (addons included) ride in the same map: to Update Manager a
+        // theme is just another marketplace package slug, and reporting only
+        // PluginRecord rows meant a published theme release could never
+        // surface as an update on a site that already had it installed.
+        $installedThemes = array_map(
+            fn (ThemeManifest $t): string => $t->version,
+            $this->themes->installed(),
+        );
+
         $payload = [
             'site' => InstallFingerprint::derive(),
             'core' => MagnaServiceProvider::VERSION,
-            'plugins' => $installedPlugins,
+            'plugins' => $installedPlugins + $installedThemes,
             // What this host runs and what this updater can consume, so Update
             // Manager can withhold a release the site could not apply — a PHP
             // floor it does not meet, an archive shape this code does not read
@@ -68,14 +81,17 @@ class UpdateCheckClient
         }
 
         $result = UpdateCheckResult::fromArray($raw);
-        $this->persist($result, $installedPlugins, new UpdateChangeNotifier);
+        $this->persist($result, $installedPlugins, $installedThemes, new UpdateChangeNotifier);
         $this->syncNotices($result->notices, new UpdateChangeNotifier);
 
         return $result;
     }
 
-    /** @param  array<string, string>  $installedPlugins */
-    private function persist(UpdateCheckResult $result, array $installedPlugins, UpdateChangeNotifier $notifier): void
+    /**
+     * @param  array<string, string>  $installedPlugins
+     * @param  array<string, string>  $installedThemes
+     */
+    private function persist(UpdateCheckResult $result, array $installedPlugins, array $installedThemes, UpdateChangeNotifier $notifier): void
     {
         $now = now();
 
@@ -117,10 +133,16 @@ class UpdateCheckClient
         }
 
         foreach ($result->plugins as $slug => $plugin) {
+            // The response map carries every reported slug; what KIND each one
+            // is was decided on this side when the payload was built — a slug
+            // reported from the themes directory is a theme row, so the Themes
+            // page and the Plugins page each read only their own.
+            $isTheme = ! array_key_exists($slug, $installedPlugins) && array_key_exists($slug, $installedThemes);
+
             $check = UpdateCheck::query()->updateOrCreate(
-                ['type' => 'plugin', 'slug' => $slug],
+                ['type' => $isTheme ? 'theme' : 'plugin', 'slug' => $slug],
                 [
-                    'current_version' => $installedPlugins[$slug] ?? 'unknown',
+                    'current_version' => ($isTheme ? $installedThemes : $installedPlugins)[$slug] ?? 'unknown',
                     'latest_version' => $plugin->latestVersion,
                     'changelog_url' => $plugin->changelogUrl,
                     'update_available' => $plugin->updateAvailable,
@@ -133,7 +155,7 @@ class UpdateCheckClient
                 $notifier->notifyIfChanged(
                     $check,
                     ['latest_version', 'update_available'],
-                    'Plugin update available',
+                    $isTheme ? 'Theme update available' : 'Plugin update available',
                     "{$slug} v{$check->latest_version} is available (currently running v{$check->current_version}).",
                 );
             }

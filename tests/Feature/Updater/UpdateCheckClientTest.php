@@ -8,9 +8,16 @@ use Illuminate\Support\Facades\Http;
 use Magna\Marketplace\Marketplace;
 use Magna\Updater\UpdateCheck;
 use Magna\Updater\UpdateCheckClient;
+use Symfony\Component\Filesystem\Filesystem;
 use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
+
+afterEach(function (): void {
+    foreach (glob(storage_path('framework/testing/update-check-themes-*')) ?: [] as $dir) {
+        (new Filesystem)->remove($dir);
+    }
+});
 
 it('persists a core update as available when the server reports a newer version', function (): void {
     Http::fake([
@@ -157,6 +164,81 @@ it('persists the release requirements and the repair grant when the server sends
         ->and($core?->installed_download_sha256)->toBe($installedHash)
         ->and($core?->installed_download_sha256_signature)->toBe('c2ln')
         ->and($core?->hasRepairGrant())->toBeTrue();
+});
+
+/*
+ * Themes ride in the same check-in map as plugins. Before this, the payload
+ * was built from PluginRecord rows only, so a theme published to the
+ * marketplace could never surface as an update on a site that already had it
+ * installed — the hub was never told the theme existed here.
+ */
+function checkInThemeRoot(): void
+{
+    $root = storage_path('framework/testing/update-check-themes-'.uniqid());
+    mkdir($root.'/testv/fixture', 0755, true);
+    file_put_contents($root.'/testv/fixture/theme.json', json_encode([
+        'name' => 'testv/fixture',
+        'displayName' => 'Fixture Theme',
+        'version' => '1.0.0',
+        'compat' => ['magna' => '^1.0'],
+    ]));
+
+    config(['magna.themes_path' => $root]);
+}
+
+it('reports installed themes alongside plugins in the check-in payload', function (): void {
+    checkInThemeRoot();
+
+    Http::fake([Marketplace::API_BASE.'/updates' => Http::response(['core' => null, 'plugins' => []])]);
+
+    app(UpdateCheckClient::class)->checkIn();
+
+    Http::assertSent(fn (Request $request): bool => $request['plugins'] === ['testv/fixture' => '1.0.0']);
+});
+
+it('persists a theme update as a theme row, never a plugin row', function (): void {
+    checkInThemeRoot();
+
+    Http::fake([
+        Marketplace::API_BASE.'/updates' => Http::response([
+            'core' => null,
+            'plugins' => [
+                'testv/fixture' => ['latest_version' => '1.7.0', 'update_available' => true, 'changelog_url' => null],
+            ],
+        ]),
+    ]);
+
+    app(UpdateCheckClient::class)->checkIn();
+
+    $row = UpdateCheck::query()->where('slug', 'testv/fixture')->sole();
+
+    expect($row->type)->toBe('theme')
+        ->and($row->update_available)->toBeTrue()
+        ->and($row->current_version)->toBe('1.0.0')
+        ->and($row->latest_version)->toBe('1.7.0')
+        // The Plugins page must not pick the theme up, and the Themes page must.
+        ->and(UpdateCheck::pluginsWithUpdates()->pluck('slug')->all())->not->toContain('testv/fixture')
+        ->and(UpdateCheck::themesWithUpdates()->pluck('slug')->all())->toContain('testv/fixture');
+});
+
+it('persists a licence-blocked theme update as a renew prompt, not an update', function (): void {
+    checkInThemeRoot();
+
+    Http::fake([
+        Marketplace::API_BASE.'/updates' => Http::response([
+            'core' => null,
+            'plugins' => [
+                'testv/fixture' => ['latest_version' => '1.7.0', 'update_available' => false, 'license_required' => true, 'changelog_url' => null],
+            ],
+        ]),
+    ]);
+
+    app(UpdateCheckClient::class)->checkIn();
+
+    $row = UpdateCheck::query()->where('type', 'theme')->where('slug', 'testv/fixture')->sole();
+
+    expect($row->update_available)->toBeFalse()
+        ->and($row->license_required)->toBeTrue();
 });
 
 it('records no repair grant when the server sends none', function (): void {

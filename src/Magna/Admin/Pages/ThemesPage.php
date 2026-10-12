@@ -7,11 +7,15 @@ namespace Magna\Admin\Pages;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Log;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
+use Magna\Licensing\LicenseInstaller;
 use Magna\Marketplace\MarketplaceClient;
+use Magna\Marketplace\PluginCatalogView;
 use Magna\Marketplace\PluginListing;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
+use Magna\Updater\UpdateCheck;
 use Throwable;
 
 /**
@@ -69,13 +73,30 @@ class ThemesPage extends Page
     /** @return array<string, mixed> */
     protected function getViewData(): array
     {
-        $themes = app(ThemeManager::class);
+        $themes = $this->themes();
         $installed = $themes->installed();
         $activeName = $themes->active()?->name;
         $activeAddonNames = array_map(
             fn (ThemeManifest $a): string => $a->name,
             $themes->activeAddons(),
         );
+
+        // What the check-in recorded for themes: a newer marketplace version
+        // (rendered as an Update button) or one the licence no longer covers
+        // (rendered as a renew prompt) — the same split the Plugins page makes.
+        $checks = UpdateCheck::query()->where('type', 'theme')->get()->keyBy('slug');
+        $updateFields = function (ThemeManifest $t) use ($checks): array {
+            $check = $checks->get($t->name);
+
+            return [
+                'update_version' => $check?->update_available === true
+                    ? PluginCatalogView::displayVersion($check->latest_version)
+                    : null,
+                'license_blocked_version' => $check?->license_required === true
+                    ? PluginCatalogView::displayVersion($check->latest_version)
+                    : null,
+            ];
+        };
 
         return [
             'installed' => array_map(
@@ -88,7 +109,7 @@ class ThemesPage extends Page
                     'tags' => $t->tags,
                     'homepage' => $t->homepage,
                     'active' => $t->name === $activeName,
-                ],
+                ] + $updateFields($t),
                 array_values(array_filter($installed, fn (ThemeManifest $t): bool => ! $t->isAddon())),
             ),
             // Addons apply automatically alongside their host — this list
@@ -102,7 +123,7 @@ class ThemesPage extends Page
                     'extends' => (string) $a->extends,
                     'pairs_with' => $a->pairsWith,
                     'applies' => in_array($a->name, $activeAddonNames, true),
-                ],
+                ] + $updateFields($a),
                 array_values(array_filter($installed, fn (ThemeManifest $t): bool => $t->isAddon())),
             ),
             // Anything already on disk is not for sale again.
@@ -160,7 +181,7 @@ class ThemesPage extends Page
     public function activate(string $name): void
     {
         try {
-            $theme = app(ThemeManager::class)->activate($name);
+            $theme = $this->themes()->activate($name);
         } catch (Throwable $e) {
             Notification::make()->title('Could not activate that theme')->body($e->getMessage())->danger()->send();
 
@@ -172,7 +193,7 @@ class ThemesPage extends Page
 
     public function deactivate(): void
     {
-        app(ThemeManager::class)->deactivate();
+        $this->themes()->deactivate();
 
         Notification::make()
             ->title('No theme is active')
@@ -181,10 +202,36 @@ class ThemesPage extends Page
             ->send();
     }
 
+    /**
+     * Fetch and apply the newer version the check-in reported.
+     *
+     * A theme only ever arrives through a licence grant (free themes install
+     * from the Magna Account too), so unlike PluginsPage::update() there is
+     * no re-enable fallback: the licence is the single route to the bytes,
+     * and LicenseInstaller::update() already does the in-place swap that
+     * keeps the active theme active.
+     */
+    public function update(string $name): void
+    {
+        try {
+            $message = app(LicenseInstaller::class)->update($name);
+            Notification::make()->title($message)->success()->send();
+        } catch (Throwable $e) {
+            // Logged as well as shown, for the same reason as the Plugins
+            // page: a toast leaves no server-side trace of a refused grant.
+            Log::warning('Theme update failed.', [
+                'theme' => $name,
+                'reason' => $e->getMessage(),
+            ]);
+
+            Notification::make()->title('Update failed')->body($e->getMessage())->danger()->send();
+        }
+    }
+
     public function remove(string $name): void
     {
         try {
-            app(ThemeManager::class)->remove($name);
+            $this->themes()->remove($name);
         } catch (Throwable $e) {
             Notification::make()->title('Could not remove that theme')->body($e->getMessage())->danger()->send();
 
@@ -192,6 +239,14 @@ class ThemesPage extends Page
         }
 
         Notification::make()->title('Theme removed.')->success()->send();
+    }
+
+    // A Livewire page cannot constructor-inject, and the app() ratchet in
+    // ArchitectureTest holds this file to a pinned count — one gateway for
+    // the manager every action needs keeps that count flat.
+    private function themes(): ThemeManager
+    {
+        return app(ThemeManager::class);
     }
 
     // buy(), startTrial(), onOrderSettled() and requireConnectedAccount()

@@ -63,12 +63,10 @@
                         // whether the product is still installed is this site's.
                         // Uninstalling does not release the seat, so the two
                         // disagree exactly when it matters — an uninstalled
-                        // plugin must offer "Install here", never "Update".
-                        // Themes have no plugin record, so for them the seat
-                        // stands in.
-                        $installedHere = $isTheme
-                            ? $activeHere
-                            : in_array($license['product_slug'], $installedProducts ?? [], true);
+                        // product must offer "Install here", never "Update".
+                        // $installedProducts covers themes too (their files on
+                        // disk, since they have no plugin record).
+                        $installedHere = in_array($license['product_slug'], $installedProducts ?? [], true);
 
                         // A live auto-debit mandate replaces the manual Renew
                         // button entirely — the gateway charges on its own, so

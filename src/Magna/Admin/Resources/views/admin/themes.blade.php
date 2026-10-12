@@ -1,7 +1,10 @@
 <x-filament-panels::page>
 {{--
     Injected by ThemesPage::getViewData():
-      $installed   — themes on disk, with the active one flagged
+      $installed   — themes on disk, with the active one flagged and any
+                     newer check-in version (update_version /
+                     license_blocked_version) attached
+      $addons      — theme addons on disk, same update fields
       $available   — marketplace themes not yet installed
       $activeName  — vendor/name of the active theme, or null
 --}}
@@ -73,6 +76,24 @@
                         </div>
                     @endif
 
+                    {{-- Update available banner — same split as the Plugins page --}}
+                    @if ($theme['update_version'])
+                        <div class="mt-3 inline-flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 text-amber-800 dark:text-amber-400 text-[12.5px] rounded-lg px-3 py-2">
+                            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                            Version {{ $theme['update_version'] }} is available.
+                            <button wire:click="update('{{ $theme['name'] }}')" wire:loading.attr="disabled" class="font-semibold underline hover:no-underline transition-all">Update now</button>
+                        </div>
+                    @elseif ($theme['license_blocked_version'])
+                        {{-- A newer version exists that this site's licence does not
+                             cover. Deliberately not an Update button: the download
+                             would be refused. Say the true thing instead. --}}
+                        <div class="mt-3 inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-[12.5px] text-primary-800 dark:border-primary-700/50 dark:bg-primary-500/10 dark:text-primary-300">
+                            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                            Version {{ $theme['license_blocked_version'] }} is available — your licence no longer covers updates.
+                            <a href="{{ \Magna\Admin\Pages\AccountCentrePage::getUrl() }}" class="font-semibold underline transition-all hover:no-underline">Renew</a>
+                        </div>
+                    @endif
+
                     <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-white/5">
                         <span class="font-mono text-[11px] text-gray-400 dark:text-gray-500">{{ $theme['name'] }}</span>
                         <div class="flex items-center gap-3">
@@ -137,6 +158,20 @@
                                 <span class="rounded bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] text-gray-600 dark:text-gray-400">Styles {{ $plugin }}</span>
                             @endforeach
                         </div>
+
+                        @if ($addon['update_version'])
+                            <div class="mt-3 inline-flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 text-amber-800 dark:text-amber-400 text-[12.5px] rounded-lg px-3 py-2">
+                                <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                                Version {{ $addon['update_version'] }} is available.
+                                <button wire:click="update('{{ $addon['name'] }}')" wire:loading.attr="disabled" class="font-semibold underline hover:no-underline transition-all">Update now</button>
+                            </div>
+                        @elseif ($addon['license_blocked_version'])
+                            <div class="mt-3 inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-[12.5px] text-primary-800 dark:border-primary-700/50 dark:bg-primary-500/10 dark:text-primary-300">
+                                <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+                                Version {{ $addon['license_blocked_version'] }} is available — your licence no longer covers updates.
+                                <a href="{{ \Magna\Admin\Pages\AccountCentrePage::getUrl() }}" class="font-semibold underline transition-all hover:no-underline">Renew</a>
+                            </div>
+                        @endif
 
                         <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-white/5">
                             <span class="font-mono text-[11px] text-gray-400 dark:text-gray-500">{{ $addon['name'] }}</span>

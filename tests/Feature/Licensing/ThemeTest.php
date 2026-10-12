@@ -10,6 +10,7 @@ use Magna\Marketplace\Marketplace;
 use Magna\Themes\InvalidThemeException;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeSettings;
+use Magna\Updater\UpdateCheck;
 use Symfony\Component\Filesystem\Filesystem;
 
 /**
@@ -156,6 +157,60 @@ it('installs a licensed theme into themes/ and leaves it inactive', function ():
         ->and(ThemeSettings::get()->active)->toBeNull()
         // And nothing about a theme may end up in the plugin registry.
         ->and(is_dir($this->pluginsRoot.'/acme/aurora'))->toBeFalse();
+});
+
+/*
+ * The Themes page reads the check-in row, which the install itself never
+ * touched — so a site that had just updated a theme went on being offered the
+ * same version for up to twelve hours, exactly the failure the plugin branch
+ * already guards against (see InstalledVersionRecorder).
+ */
+it('marks a recorded theme update as taken when the newer version is installed', function (): void {
+    writeTheme('acme/aurora', ['displayName' => 'Aurora']);
+
+    UpdateCheck::query()->create([
+        'type' => 'theme',
+        'slug' => 'acme/aurora',
+        'current_version' => '1.0.0',
+        'latest_version' => '1.1.0',
+        'update_available' => true,
+        'checked_at' => now(),
+    ]);
+
+    $pair = sodium_crypto_sign_keypair();
+    $secret = sodium_crypto_sign_secretkey($pair);
+    config(['magna.licensing.public_key' => base64_encode(sodium_crypto_sign_publickey($pair))]);
+
+    $zipPath = tempnam(sys_get_temp_dir(), 'theme').'.zip';
+    $zip = new ZipArchive;
+    $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+    $zip->addFromString('theme.json', json_encode([
+        'name' => 'acme/aurora', 'displayName' => 'Aurora', 'version' => '1.1.0',
+        'compat' => ['magna' => MagnaServiceProvider::VERSION],
+    ]));
+    $zip->close();
+
+    $bytes = (string) file_get_contents($zipPath);
+    $sha = hash('sha256', $bytes);
+
+    Http::fake(['*' => Http::response($bytes)]);
+
+    $message = app(LicenseInstaller::class)->installFromGrant('acme/aurora', [
+        'url' => Marketplace::WEB_BASE.'/api/v1/license/download/nonce?signature=x',
+        'sha256' => $sha,
+        'sha256_signature' => base64_encode(sodium_crypto_sign_detached(
+            SignedPayload::canonicalize(['sha256' => $sha]),
+            $secret,
+        )),
+    ]);
+
+    @unlink($zipPath);
+
+    $row = UpdateCheck::query()->where('type', 'theme')->where('slug', 'acme/aurora')->sole();
+
+    expect($message)->toContain('updated to 1.1.0')
+        ->and($row->update_available)->toBeFalse()
+        ->and($row->current_version)->toBe('1.1.0');
 });
 
 it('refuses a theme archive that is not the product the licence covers', function (): void {

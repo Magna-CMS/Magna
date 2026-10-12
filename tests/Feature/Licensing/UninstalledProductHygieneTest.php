@@ -22,6 +22,11 @@ use Magna\Users\User;
  */
 beforeEach(function (): void {
     Filament::setCurrentPanel(Filament::getPanel('magna'));
+
+    // installedProducts now carries themes-on-disk too; point the manager at
+    // a directory this test owns so the repo's real themes/ never leaks into
+    // the exact-array assertions below.
+    config(['magna.themes_path' => storage_path('framework/testing/no-themes-'.uniqid())]);
 });
 
 function hygieneAdmin(): User

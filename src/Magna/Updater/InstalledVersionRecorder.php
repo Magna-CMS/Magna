@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Magna\Updater;
 
 /**
- * Marks a plugin's recorded update as taken.
+ * Marks a plugin's or theme's recorded update as taken.
  *
- * The Plugins page and the dashboard badge read `update_checks`, which is
- * written by the 12-hourly check-in. Installing the update never touched that
- * row, so the panel went on advertising the same version the admin had just
- * installed — for up to twelve hours, with an Update button that would install
- * a version already present. Anyone reasonably reads that as the update having
- * failed.
+ * The Plugins and Themes pages and the dashboard badge read `update_checks`,
+ * which is written by the 12-hourly check-in. Installing the update never
+ * touched that row, so the panel went on advertising the same version the
+ * admin had just installed — for up to twelve hours, with an Update button
+ * that would install a version already present. Anyone reasonably reads that
+ * as the update having failed.
  *
  * Called on a successful install/update rather than re-checking with the
  * marketplace, because the answer is already known locally: the version that
@@ -21,10 +21,10 @@ namespace Magna\Updater;
  */
 final class InstalledVersionRecorder
 {
-    public function record(string $package, string $installedVersion): void
+    public function record(string $package, string $installedVersion, string $type = 'plugin'): void
     {
         $check = UpdateCheck::query()
-            ->where('type', 'plugin')
+            ->where('type', $type)
             ->where('slug', $package)
             ->first();
 

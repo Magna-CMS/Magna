@@ -14,6 +14,7 @@ use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseStore;
 use Magna\Licensing\SeatSummary;
 use Magna\Plugins\PluginRecord;
+use Magna\Themes\ThemeManager;
 use Magna\Updater\UpdateCheck;
 use Throwable;
 
@@ -52,6 +53,7 @@ class AccountCentrePage extends Page
     public function getViewData(): array
     {
         $settings = AccountCentreSettings::get();
+        $licenseClient = app(LicenseClient::class);
 
         $otherSites = [];
         if ($settings->connected && $settings->token !== null) {
@@ -81,19 +83,20 @@ class AccountCentrePage extends Page
             // plugin is still installed, because uninstalling does not release
             // the seat.
             'installedProducts' => $this->installedProductSlugs(),
-            'panel' => $settings->connected ? app(LicenseClient::class)->panel() : null,
-            'invoices' => $settings->connected ? app(LicenseClient::class)->invoices() : [],
+            'panel' => $settings->connected ? $licenseClient->panel() : null,
+            'invoices' => $settings->connected ? $licenseClient->invoices() : [],
         ];
     }
 
     /**
-     * Newer entitled versions of installed plugins, keyed by product slug.
+     * Newer entitled versions of installed plugins and themes, keyed by
+     * product slug.
      *
      * Read from the update check the site already performs (daily, and from
-     * "Check for Updates"), so this page agrees with the Plugins page instead
-     * of guessing. Licence-blocked versions are deliberately excluded: those
-     * cannot be downloaded, and offering an Update button for them would fail
-     * every time.
+     * "Check for Updates"), so this page agrees with the Plugins and Themes
+     * pages instead of guessing. Licence-blocked versions are deliberately
+     * excluded: those cannot be downloaded, and offering an Update button for
+     * them would fail every time.
      *
      * @return array<string, string> slug => latest version
      */
@@ -101,7 +104,7 @@ class AccountCentrePage extends Page
     {
         try {
             $updates = UpdateCheck::query()
-                ->where('type', 'plugin')
+                ->whereIn('type', ['plugin', 'theme'])
                 ->where('update_available', true)
                 ->whereNotNull('latest_version')
                 ->pluck('latest_version', 'slug')
@@ -143,7 +146,10 @@ class AccountCentrePage extends Page
                 }
             }
 
-            return $slugs;
+            // Themes have no plugin record — their files on disk are the
+            // installed-here fact, so a theme licence can offer Update
+            // rather than "Install here" when the theme is present.
+            return array_merge($slugs, array_keys(app(ThemeManager::class)->installed()));
         } catch (Throwable) {
             return [];
         }
