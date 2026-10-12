@@ -144,7 +144,11 @@ final class FootprintCheck
 
             return [[
                 'label' => "v{$was} is on disk, but this process is still running v{$version}",
-                'help' => 'Not a fault, and not something to repair: the update finished and this worker has not picked it up yet, because the running version is fixed when a worker boots. It clears as workers recycle, or at once with `php artisan octane:reload`. If it is still here after a restart, the files and the record really do disagree — `php artisan magna:core:status` from the command line answers for the files themselves.',
+                'help' => 'Not a fault, and not something to repair: the update finished and this worker has not'
+                    .' picked it up yet, because the running version is fixed when a worker boots. It clears as'
+                    .' workers recycle, or at once with `php artisan octane:reload`. If it is still here after a'
+                    .' restart, the files and the record really do disagree — `php artisan magna:core:status` from'
+                    .' the command line answers for the files themselves.',
             ]];
         }
 
