@@ -120,11 +120,21 @@ jobs:
       # Serial, not --parallel: the backup and content-type suites share
       # filesystem and registry state, and parallel workers fail each other
       # non-deterministically. A release must not hinge on that coin flip.
+      #
+      # Scoped to Unit,Feature: phpunit.xml also declares the Plugins and
+      # FirstPartyPlugins suites, whose directories live under plugins-dev/ —
+      # gitignored, so never present in a CI checkout. A bare `php artisan
+      # test` reads every declared suite and Pest aborts on the first missing
+      # directory ("Test directory .../plugins-dev/magna/blog/tests not
+      # found"), which is why every tag run from v1.3.20 to v1.4.8 failed
+      # before executing a single test. The plugin suites are covered by the
+      # local release gate (bin/support/release-gates.php runs
+      # Unit,Feature,FirstPartyPlugins), where the plugin checkouts exist.
       - name: Run test suite (Postgres)
         run: |
           set -o pipefail
           php artisan migrate:status 2>&1 | tail -n 5 || true
-          if ! php artisan test 2>&1 | tee test.log; then
+          if ! php artisan test --testsuite=Unit,Feature 2>&1 | tee test.log; then
             echo "::error::suite failed -- $(grep -aoE 'SQLSTATE\[[^]]+\][^|]{0,220}' test.log | sort -u | head -n 4 | tr '\n' ' ' | cut -c1-1500)"
             echo "::error::counts -- $(grep -aoE 'Tests: .*' test.log | tail -n 1 | cut -c1-200)"
             exit 1
@@ -205,21 +215,43 @@ jobs:
             exit 1
           fi
 
-      - name: Extract changelog section for this release
+      # The changelog is maintained outside the public repository (CHANGELOG.md
+      # is gitignored and never exists in a CI checkout), so the only per-release
+      # text a tag push can carry is the tag's own annotation. An annotated tag
+      # message becomes the release body; a lightweight or empty tag falls back
+      # to the generic install note.
+      - name: Write release notes from the tag annotation
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          # The changelog is maintained outside the public repository, so treat
-          # it as optional and fall back to a generic note when it is absent.
-          if [ -f CHANGELOG.md ]; then
-            awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > release_notes.md
-          fi
-          if [ ! -s release_notes.md ]; then
+          # %(contents) of a signed tag carries the PGP block; strip it. A
+          # lightweight tag yields nothing, so test for non-blank content
+          # rather than mere file size.
+          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" \
+            | sed '/-----BEGIN PGP SIGNATURE-----/,$d' > release_notes.md
+          if ! grep -q '[^[:space:]]' release_notes.md; then
             cat > release_notes.md <<'NOTES'
           One-click, extract-and-run installer build. Install: upload and extract this ZIP to the root of your domain or subdomain, then open the site. The web installer runs automatically. No SSH, no Composer, and no document-root changes required. The archive bundles production dependencies (vendor/), compiled assets, and a root forwarder so it serves correctly straight from the extraction root.
           NOTES
           fi
 
+      # Every release from v1.3.20 to v1.4.8 was published by hand with
+      # `gh release create` while this workflow was red, so most tags already
+      # have a release. Re-running one of those tags (or a backfilled tag)
+      # must not clobber or duplicate the hand-published assets: publishing
+      # here is only for a tag that has no release yet.
+      - name: Check for an existing release
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::A release for ${GITHUB_REF_NAME} already exists; publishing is skipped."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub release
+        if: steps.existing.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
           name: "Magna CMS ${{ github.ref_name }}"
