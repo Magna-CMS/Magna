@@ -518,7 +518,7 @@ it('magna:media:reconvert queues jobs for all image media', function (): void {
 | what stays out is anything a browser or a host can execute.
 */
 
-it('accepts the document and media types an office actually exchanges', function (string $mime, string $bytes): void {
+it('accepts the document and media types an office actually exchanges', function (array $mimes, string $bytes): void {
     Storage::fake('public');
 
     $path = tempnam(sys_get_temp_dir(), 'ingest');
@@ -526,7 +526,12 @@ it('accepts the document and media types an office actually exchanges', function
 
     $media = app(MediaIngestor::class)->ingest($path, 'attachment');
 
-    expect($media->mime_type)->toBe($mime);
+    // The sniff is libmagic's, and csv-by-content is where its versions
+    // disagree: one build answers text/csv, another text/plain for the same
+    // bytes. What this test owns is acceptance — the sniffed type is on the
+    // allowlist and the bytes land verbatim — so any of the types libmagic
+    // is known to answer will do.
+    expect($media->mime_type)->toBeIn($mimes);
 
     // Stored verbatim: nothing here is a raster this build can decode, so
     // re-encoding it would be a failure rather than a safeguard.
@@ -534,9 +539,9 @@ it('accepts the document and media types an office actually exchanges', function
 
     @unlink($path);
 })->with([
-    'plain text' => ['text/plain', 'a note
+    'plain text' => [['text/plain'], 'a note
 '],
-    'csv' => ['text/csv', 'one,two
+    'csv' => [['text/csv', 'text/plain'], 'one,two
 1,2
 '],
 ]);
