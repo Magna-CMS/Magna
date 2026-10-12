@@ -70,6 +70,26 @@
                     : 'light'
             }
 
+            /* Per-state labels are OPT-IN. The block's one configured label
+               ("Switch between light and dark") is the author's, possibly
+               localised, and this script must not overwrite it with English.
+               A view that wants the label to name the action instead — the
+               Lekha theme did — declares both data-magna-label-to-light and
+               data-magna-label-to-dark, and only then does the label change
+               with the state. aria-pressed carries the state either way. */
+            function relabel(button, state) {
+                var toLight = button.getAttribute('data-magna-label-to-light')
+                var toDark = button.getAttribute('data-magna-label-to-dark')
+                if (toLight && toDark) {
+                    button.setAttribute('aria-label', state === 'dark' ? toLight : toDark)
+                }
+            }
+
+            function reflect(button, state) {
+                button.setAttribute('aria-pressed', state === 'dark' ? 'true' : 'false')
+                relabel(button, state)
+            }
+
             function wire(button) {
                 /* A fragment re-render in the builder can hand the same
                    button back a second time; binding twice would make a
@@ -80,7 +100,7 @@
                 button.dataset.magnaSchemeWired = '1'
 
                 button.hidden = false
-                button.setAttribute('aria-pressed', current() === 'dark' ? 'true' : 'false')
+                reflect(button, current())
 
                 button.addEventListener('click', function () {
                     var next = current() === 'dark' ? 'light' : 'dark'
@@ -92,7 +112,7 @@
                     }
 
                     document.querySelectorAll('[data-magna-scheme-toggle]').forEach(function (other) {
-                        other.setAttribute('aria-pressed', next === 'dark' ? 'true' : 'false')
+                        reflect(other, next)
                     })
                 })
             }

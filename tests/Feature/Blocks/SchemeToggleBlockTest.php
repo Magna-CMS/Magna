@@ -164,3 +164,22 @@ it('sizes the icons it draws', function (): void {
         // An unknown size is the middle one, not a broken one.
         ->and(renderSchemeToggle(['size' => 'enormous']))->toContain('width="20"');
 });
+
+it('renames the button per state only where a view opts in', function (): void {
+    $behaviour = (string) file_get_contents(
+        dirname(__DIR__, 3).'/src/Magna/Blocks/resources/views/block-behaviour/scheme-toggle.blade.php'
+    );
+
+    // Both attributes, read together: one alone must change nothing, so a
+    // half-declared override cannot strand a button mid-rename.
+    expect($behaviour)->toContain('data-magna-label-to-light')
+        ->toContain('data-magna-label-to-dark')
+        ->toContain('if (toLight && toDark)');
+
+    // And the default markup declares neither — the author's configured
+    // label, which may be localised, is only ever replaced by a view that
+    // asked for exactly that.
+    expect(renderSchemeToggle())
+        ->not->toContain('data-magna-label-to-light')
+        ->not->toContain('data-magna-label-to-dark');
+});

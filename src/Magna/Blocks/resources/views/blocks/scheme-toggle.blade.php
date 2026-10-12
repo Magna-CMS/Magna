@@ -21,7 +21,10 @@
      * to ship for itself. What the behaviour binds to is therefore a
      * contract this markup keeps, and an override must keep too: the
      * `data-magna-scheme-toggle` hook, the `hidden` it lifts, and the
-     * `__light`/`__dark` spans it swaps.
+     * `__light`/`__dark` spans it swaps. An override may ALSO declare
+     * `data-magna-label-to-light` and `data-magna-label-to-dark`; with both
+     * present the behaviour renames the button per state, and without them
+     * the configured label here is never touched.
      */
     $registry = app(\Magna\Blocks\Icons\IconRegistry::class);
 
