@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * magna/forms v1: a form built in the admin, placed with the form block,
+ * magna-cms/forms v1: a form built in the admin, placed with the form block,
  * submitted by the public. The definition IS the validation — an
  * undeclared key can never be stored, a select may only submit what it
  * offers — and the spam traps stay quiet about tripping.
@@ -29,10 +29,10 @@ uses(PluginTestCase::class);
 
 function formsSetup(): User
 {
-    skipWithoutDevPlugin('magna/forms');
+    skipWithoutDevPlugin('magna-cms/forms');
     skipWithoutDevPlugin('magna-cms/pages');
     app(PluginManager::class)->enable('magna-cms/pages');
-    app(PluginManager::class)->enable('magna/forms');
+    app(PluginManager::class)->enable('magna-cms/forms');
 
     $user = User::factory()->create();
     $role = Role::factory()->create();
