@@ -214,6 +214,7 @@ it('keeps every adopted quality kit whole, and its analysis level a one-way ratc
     // reporting 9 and 10 errors respectively: the next rungs to earn.
     $levelFloors = [
         'magna/docs' => 0,
+        'magna/forms' => 8,
         'magna/marketplace' => 0,
         'magna/pages' => 0,
         'magna/plugin-manager' => 3,
