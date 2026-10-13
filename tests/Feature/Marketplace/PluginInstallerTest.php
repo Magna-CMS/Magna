@@ -153,3 +153,73 @@ it('names a stale listing when the approved version is no longer published', fun
         // Composer's own output still follows, for whoever needs the detail.
         ->and($message)->toContain('exact version match');
 });
+
+// ── Updating ──────────────────────────────────────────────────────────────────
+//
+// The free-plugin update button used to call PluginManager::enable(), which
+// re-reads what is already on disk. For a plugin delivered by Composer the new
+// release was still on Packagist, so the panel reported "Plugin updated." and
+// changed nothing — the Lekha site sat two releases behind for a week that way.
+
+it('updates by installing the version the marketplace now advertises', function (): void {
+    skipWithoutDevPlugin('magna-cms/docs');
+
+    $version = devPluginVersion('magna-cms/docs');
+
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
+    $runner = fakeRunner();
+
+    $state = app(PluginInstaller::class)->update('magna-cms/docs');
+
+    expect($state)->toBe(InstallState::Completed)
+        ->and($runner->commands)->toContain(['require', 'magna-cms/docs:'.$version])
+        ->and(PluginRecord::query()->where('name', 'magna-cms/docs')->where('enabled', true)->exists())->toBeTrue();
+});
+
+// The one difference that matters. `composer remove` is the right rollback for
+// an install — the package was not there before — and catastrophic for an
+// update: it would uninstall a plugin that was serving the site a minute ago.
+it('rolls a failed update back to the version that was installed, never removing it', function (): void {
+    skipWithoutDevPlugin('magna-cms/docs');
+
+    $installed = devPluginVersion('magna-cms/docs');
+
+    // Approved at a version that is not what the manifest on disk says, so the
+    // post-install manifest check fails and the rollback runs.
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => '9.9.9', 'compat' => '^1.0']]);
+    $runner = fakeRunner();
+
+    $state = app(PluginInstaller::class)->update('magna-cms/docs');
+
+    expect($state)->toBe(InstallState::Failed)
+        ->and($runner->commands)->toContain(['require', 'magna-cms/docs:9.9.9'])
+        ->and($runner->commands)->toContain(['require', 'magna-cms/docs:'.$installed])
+        ->and($runner->commands)->not->toContain(['remove', 'magna-cms/docs']);
+});
+
+// A plugin that is not installed has no previous version to pin back, so the
+// only sane undo is the install one. Guards against rolling back to "null".
+it('removes rather than restores when an update finds nothing installed', function (): void {
+    fakeMarket([['package' => 'acme/ghost', 'name' => 'Ghost', 'version' => '1.0.0', 'compat' => '^1.0']]);
+    $runner = fakeRunner();
+
+    $state = app(PluginInstaller::class)->update('acme/ghost');
+
+    expect($state)->toBe(InstallState::Failed)
+        ->and($runner->commands)->toContain(['remove', 'acme/ghost']);
+});
+
+// An update is a site keeping itself current, not a new adoption: counting it
+// would inflate the marketplace's install numbers on every release.
+it('does not report an update as a fresh install', function (): void {
+    skipWithoutDevPlugin('magna-cms/docs');
+
+    $version = devPluginVersion('magna-cms/docs');
+
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
+    fakeRunner();
+
+    app(PluginInstaller::class)->update('magna-cms/docs');
+
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/installed'));
+});

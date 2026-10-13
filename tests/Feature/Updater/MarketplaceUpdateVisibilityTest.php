@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Magna\Admin\Pages\PluginsPage;
 use Magna\Auth\Role;
+use Magna\Marketplace\InstallPluginJob;
 use Magna\Plugins\PluginRecord;
 use Magna\Updater\UpdateCheck;
 use Magna\Users\User;
@@ -107,4 +109,45 @@ it('does not claim an update when the marketplace reports none', function (): vo
     expect($shop['update_version'] ?? null)->toBeNull();
 
     $page->set('statusFilter', 'update')->assertDontSee('Shop');
+});
+
+// Seeing the update was only half the chain. The button beside the banner sent
+// every unlicensed plugin to PluginManager::enable(), which re-reads what is
+// already on disk — so for a plugin delivered by Composer it reported "Plugin
+// updated." and changed nothing, and the banner came straight back.
+it('fetches the new version with composer when the marketplace holds it', function (): void {
+    installedPlugin('acme/shop', '1.0.0');
+
+    UpdateCheck::query()->create([
+        'type' => 'plugin',
+        'slug' => 'acme/shop',
+        'current_version' => '1.0.0',
+        'latest_version' => '1.1.0',
+        'update_available' => true,
+        'checked_at' => now(),
+    ]);
+
+    Queue::fake();
+
+    Livewire::actingAs(pluginsPageAdmin())
+        ->test(PluginsPage::class)
+        ->call('update', 'acme/shop')
+        ->assertOk();
+
+    Queue::assertPushed(InstallPluginJob::class, fn (InstallPluginJob $job): bool => $job->package === 'acme/shop' && $job->update);
+});
+
+// The other half of the branch: a plugins-dev plugin whose newer files someone
+// already copied onto the disk has nothing to fetch, and enable() is the right
+// and only thing to do. Queueing Composer for it would be wrong.
+it('re-enables from disk when the marketplace is not offering anything', function (): void {
+    installedPlugin('acme/local', '1.0.0');
+
+    Queue::fake();
+
+    Livewire::actingAs(pluginsPageAdmin())
+        ->test(PluginsPage::class)
+        ->call('update', 'acme/local');
+
+    Queue::assertNotPushed(InstallPluginJob::class);
 });

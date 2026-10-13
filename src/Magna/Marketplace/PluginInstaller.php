@@ -12,9 +12,14 @@ use Magna\Updater\InstalledVersionRecorder;
 use Throwable;
 
 /**
- * Installs a marketplace plugin: re-verifies it is an approved, compatible
- * package, runs `composer require`, enables it, and rolls back on failure.
- * Progress is written to the cache so the UI can poll it.
+ * Installs or updates a marketplace plugin: re-verifies it is an approved,
+ * compatible package, runs `composer require`, enables it, and rolls back on
+ * failure. Progress is written to the cache so the UI can poll it.
+ *
+ * Install and update are one pipeline differing in exactly two places, both of
+ * which matter: an update rolls a failure back to the version that was working
+ * a minute ago rather than removing the plugin outright, and it does not report
+ * a new install to the marketplace's adoption counter.
  */
 class PluginInstaller
 {
@@ -28,6 +33,24 @@ class PluginInstaller
     ) {}
 
     public function install(string $package): InstallState
+    {
+        return $this->run($package, update: false);
+    }
+
+    /**
+     * Fetch and install the version the marketplace now advertises.
+     *
+     * The free-plugin update path used to be PluginManager::enable(), which
+     * re-reads what is already on disk: for a plugin delivered by Composer the
+     * newer version was still on Packagist, so the panel reported success and
+     * changed nothing. An update is an install of a newer pinned version.
+     */
+    public function update(string $package): InstallState
+    {
+        return $this->run($package, update: true);
+    }
+
+    private function run(string $package, bool $update): InstallState
     {
         $this->setProgress($package, InstallState::Running, 'Starting…');
 
@@ -68,6 +91,10 @@ class PluginInstaller
             // being added by some future code path that skips that reset).
             // Pinning here means "install" always installs precisely the
             // version this trust-boundary check just verified is approved.
+            // Read BEFORE Composer touches the tree: on an update this is the
+            // version to go back to, and after `require` nothing records it.
+            $previous = $update ? $this->findInstalled($package)?->manifest->version : null;
+
             $this->setProgress($package, InstallState::Running, 'Downloading…');
             $required = $this->composer->run(['require', $package.':'.$listing->version], 600);
             if (! $required->successful()) {
@@ -79,7 +106,7 @@ class PluginInstaller
                 );
             }
 
-            $manifestMismatch = $this->verifyInstalledManifest($package, $listing->version);
+            $manifestMismatch = $this->verifyInstalledManifest($package, $listing->version, $previous);
             if ($manifestMismatch !== null) {
                 return $manifestMismatch;
             }
@@ -88,13 +115,16 @@ class PluginInstaller
             try {
                 $this->plugins->enable($package);
             } catch (Throwable $e) {
-                // Roll the failed install back out of the dependency tree.
-                $this->composer->run(['remove', $package], 600);
+                $this->rollBack($package, $previous);
 
-                return $this->fail($package, 'The plugin was installed but failed to enable, and has been rolled back: '.$e->getMessage());
+                return $this->fail(
+                    $package,
+                    'The plugin was '.($update ? 'updated' : 'installed')
+                    .' but failed to enable, and has been rolled back: '.$e->getMessage(),
+                );
             }
 
-            return $this->finishSuccess($package, $listing->version);
+            return $this->finishSuccess($package, $listing->version, $update);
         } finally {
             $lock->release();
         }
@@ -115,7 +145,7 @@ class PluginInstaller
      * match" cost a debugging session that "expected v1.1.0, found manifest
      * magna/docs 1.1.0" would not have.
      */
-    private function verifyInstalledManifest(string $package, string $approvedVersion): ?InstallState
+    private function verifyInstalledManifest(string $package, string $approvedVersion, ?string $previousVersion): ?InstallState
     {
         $installedInfo = $this->findInstalled($package);
 
@@ -124,7 +154,7 @@ class PluginInstaller
             return null;
         }
 
-        $this->composer->run(['remove', $package], 600);
+        $this->rollBack($package, $previousVersion);
 
         $found = $installedInfo === null
             ? "no discovered plugin names \"{$package}\" in its manifest"
@@ -136,18 +166,38 @@ class PluginInstaller
         );
     }
 
-    private function finishSuccess(string $package, string $installedVersion): InstallState
+    /**
+     * Undo a failed run.
+     *
+     * Removing the package is right for an install — it was not there before —
+     * and wrong for an update: the site had a working plugin a minute ago, and
+     * uninstalling it would be a worse outage than the failed update. Pinning
+     * the previous version back puts the tree where it started.
+     */
+    private function rollBack(string $package, ?string $previousVersion): void
+    {
+        $previousVersion === null
+            ? $this->composer->run(['remove', $package], 600)
+            : $this->composer->run(['require', $package.':'.$previousVersion], 600);
+    }
+
+    private function finishSuccess(string $package, string $installedVersion, bool $update = false): InstallState
     {
         InstallProgress::clearPending($package);
         $this->marketplace->clearCache();
-        $this->marketplace->reportInstall($package);
+
+        // An update is not a new adoption: counting it would inflate the
+        // marketplace's install numbers every time a site keeps itself current.
+        if (! $update) {
+            $this->marketplace->reportInstall($package);
+        }
 
         // Without this the Plugins page and the dashboard badge went on offering
         // the version just installed, because they read the check-in row and
         // nothing updated it until the next 12-hourly check.
         $this->versions->record($package, $installedVersion);
 
-        $this->setProgress($package, InstallState::Completed, 'Installed.');
+        $this->setProgress($package, InstallState::Completed, $update ? 'Updated.' : 'Installed.');
 
         return InstallState::Completed;
     }
