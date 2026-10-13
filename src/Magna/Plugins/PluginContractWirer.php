@@ -20,6 +20,7 @@ use Magna\Contracts\RegistersDataSources;
 use Magna\Contracts\RegistersDisplayConditions;
 use Magna\Contracts\RegistersDynamicTags;
 use Magna\Contracts\RegistersLoginChecks;
+use Magna\Contracts\RegistersSiteKitSections;
 use Magna\Frontend\FrontendPageRegistry;
 
 /**
@@ -79,6 +80,13 @@ class PluginContractWirer
         // toggles without hardcoding which plugins exist.
         if ($plugin instanceof RegistersCaptchaSurfaces) {
             $this->appendToBinding('magna.captcha.surfaces', $plugin->captchaSurfaces());
+        }
+
+        // RegistersSiteKitSections: plugin-owned sections of a site-kit
+        // bundle, collected here so whichever plugin reads/writes kits can
+        // carry every plugin's entities without hardcoding which exist.
+        if ($plugin instanceof RegistersSiteKitSections) {
+            $this->appendToBinding('magna.site_kit.sections', $plugin->siteKitSections());
         }
     }
 
