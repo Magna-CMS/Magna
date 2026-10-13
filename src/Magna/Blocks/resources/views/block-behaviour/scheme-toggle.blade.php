@@ -70,13 +70,26 @@
                     : 'light'
             }
 
-            /* Per-state labels are OPT-IN. The block's one configured label
-               ("Switch between light and dark") is the author's, possibly
-               localised, and this script must not overwrite it with English.
-               A view that wants the label to name the action instead — the
-               Lekha theme did — declares both data-magna-label-to-light and
-               data-magna-label-to-dark, and only then does the label change
-               with the state. aria-pressed carries the state either way. */
+            /* Per-state labels are OPT-IN, and they are the ALTERNATIVE to
+               aria-pressed rather than an addition to it.
+
+               A toggle button announces its state one of two ways: a stable
+               name plus aria-pressed, or a name that describes the action it
+               will perform next. Both are correct; doing both can announce
+               twice on some screen readers. The default here is the first,
+               which is also what the shipped markup declares.
+
+               So a view that declares BOTH data-magna-label-to-light and
+               data-magna-label-to-dark has chosen the second pattern, and
+               should drop aria-pressed from its own markup — this script only
+               writes the attribute, it cannot know a theme wanted it gone.
+               Declaring one attribute alone changes nothing, so a half-done
+               override cannot strand a button mid-rename.
+
+               The block's single configured label ("Switch between light and
+               dark") is the author's and possibly localised, which is why
+               nothing is renamed unless a view asks: a shared script must not
+               overwrite a translated label with English. */
             function relabel(button, state) {
                 var toLight = button.getAttribute('data-magna-label-to-light')
                 var toDark = button.getAttribute('data-magna-label-to-dark')
