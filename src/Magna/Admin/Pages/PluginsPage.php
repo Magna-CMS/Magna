@@ -6,13 +6,12 @@ namespace Magna\Admin\Pages;
 
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
+use Magna\Admin\Concerns\SubmitsPluginFeedback;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseInstaller;
 use Magna\Licensing\LicenseStore;
@@ -32,6 +31,7 @@ class PluginsPage extends Page
     // Buying a paid plugin: open the order, show the gateway, wait for the
     // webhook. onOrderSettled() below is this page's half of it.
     use ChecksOutWithRazorpay;
+    use SubmitsPluginFeedback;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-puzzle-piece';
 
@@ -74,9 +74,6 @@ class PluginsPage extends Page
 
     /** @var list<string> Packages currently queued/installing from the marketplace. */
     public array $installQueue = [];
-
-    // The marketplace package a review/report modal is currently targeting.
-    public string $feedbackPackage = '';
 
     public static function canAccess(): bool
     {
@@ -366,105 +363,6 @@ class PluginsPage extends Page
             });
     }
 
-    public function requestReview(string $name): void
-    {
-        if (! $this->requireConnectedAccount('Reviews and reports are tied to your Magna Account so they can be traced back to a real install.')) {
-            return;
-        }
-
-        $this->feedbackPackage = $name;
-        $this->mountAction('review');
-    }
-
-    public function requestReport(string $name): void
-    {
-        if (! $this->requireConnectedAccount('Reviews and reports are tied to your Magna Account so they can be traced back to a real install.')) {
-            return;
-        }
-
-        $this->feedbackPackage = $name;
-        $this->mountAction('report');
-    }
-
-    /** Write-a-review sheet: star rating + optional name and text, sent to the marketplace. */
-    public function reviewAction(): Action
-    {
-        return Action::make('review')
-            ->modalHeading(fn (): string => 'Review '.$this->feedbackDisplayName())
-            ->modalIcon('heroicon-o-star')
-            ->modalSubmitActionLabel('Submit review')
-            ->form([
-                Select::make('stars')
-                    ->label('Your rating')
-                    ->options([5 => '★★★★★', 4 => '★★★★☆', 3 => '★★★☆☆', 2 => '★★☆☆☆', 1 => '★☆☆☆☆'])
-                    ->default(5)
-                    ->required()
-                    ->native(false),
-                TextInput::make('author')->label('Your name')->maxLength(255)->placeholder('Optional'),
-                Textarea::make('review')->label('Review')->rows(4)->maxLength(2000)->placeholder('What did you think of this plugin?'),
-            ])
-            ->action(function (array $data): void {
-                $package = $this->feedbackPackage;
-                $this->feedbackPackage = '';
-                if ($package === '') {
-                    return;
-                }
-
-                $ok = app(MarketplaceClient::class)->submitReview(
-                    $package,
-                    (int) $data['stars'],
-                    $data['review'] ?? null,
-                    $data['author'] ?? null,
-                );
-
-                $ok
-                    ? Notification::make()->title('Thanks for your review!')->success()->send()
-                    : Notification::make()->title("Couldn't submit your review")->body('The marketplace could not be reached. Please try again later.')->danger()->send();
-            });
-    }
-
-    /** Report-a-plugin sheet: a reason + optional details, sent to the marketplace operators. */
-    public function reportAction(): Action
-    {
-        return Action::make('report')
-            ->modalHeading(fn (): string => 'Report '.$this->feedbackDisplayName())
-            ->modalIcon('heroicon-o-flag')
-            ->modalIconColor('danger')
-            ->modalSubmitActionLabel('Submit report')
-            ->color('danger')
-            ->form([
-                Select::make('reason')
-                    ->label('Reason')
-                    ->options([
-                        'spam' => 'Spam or misleading',
-                        'malicious' => 'Malicious or unsafe',
-                        'broken' => "Doesn't work",
-                        'copyright' => 'Copyright violation',
-                        'other' => 'Other',
-                    ])
-                    ->required()
-                    ->native(false),
-                Textarea::make('details')->label('Details')->rows(3)->maxLength(2000)->placeholder('Optional — tell us what’s wrong.'),
-            ])
-            ->action(function (array $data): void {
-                $package = $this->feedbackPackage;
-                $this->feedbackPackage = '';
-                if ($package === '') {
-                    return;
-                }
-
-                $ok = app(MarketplaceClient::class)->reportPlugin(
-                    $package,
-                    (string) $data['reason'],
-                    $data['details'] ?? null,
-                );
-
-                $ok
-                    ? Notification::make()->title('Reported — thanks for flagging this.')->success()->send()
-                    : Notification::make()->title("Couldn't submit the report")->body('The marketplace could not be reached. Please try again later.')->danger()->send();
-            });
-    }
-
     // ── Storefront ────────────────────────────────────────────────────────────
     // buy(), startTrial(), onOrderSettled() and requireConnectedAccount()
     // live in ChecksOutWithRazorpay — this page only supplies its copy.
@@ -477,14 +375,6 @@ class PluginsPage extends Page
     protected function trialNeedsAccountBecause(): ?string
     {
         return 'A trial is issued to your Magna Account, so connect one first.';
-    }
-
-    private function feedbackDisplayName(): string
-    {
-        $plugin = collect($this->available)->firstWhere('name', $this->feedbackPackage);
-        $name = is_array($plugin) ? ($plugin['display_name'] ?? null) : null;
-
-        return is_string($name) ? $name : $this->feedbackPackage;
     }
 
     /** Poll install progress for the queued packages; notify + reload when done. */
@@ -680,6 +570,37 @@ class PluginsPage extends Page
         $this->installed = $snapshot->installed;
         $this->available = $snapshot->available;
         $this->marketplaceUnreachable = $snapshot->marketplaceUnreachable;
+    }
+
+    /**
+     * Drop the cached catalog and ask the marketplace again.
+     *
+     * The catalog is cached for an hour, so a plugin published minutes ago is
+     * simply absent from Add New until the TTL lapses — with nothing on the
+     * page saying the list is a cached one, which reads as "the marketplace
+     * only has four plugins". A site that had just published one counted the
+     * catalog and found it short, exactly that way. The cache stays, because
+     * the catalog is fetched on every render of this page; this is the way to
+     * say "ask again now".
+     */
+    public function refreshCatalog(MarketplaceClient $marketplace): void
+    {
+        $marketplace->clearCache();
+        $this->refreshPlugins();
+
+        if ($this->marketplaceUnreachable) {
+            Notification::make()
+                ->title('Could not reach the marketplace — showing what is known.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Catalog refreshed — '.count($this->available).' available to install.')
+            ->success()
+            ->send();
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
