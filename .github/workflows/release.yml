@@ -107,7 +107,7 @@ jobs:
       # The panel renders its theme through @vite; panel pages 500 without a
       # built manifest, and the suite requests them.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
@@ -181,7 +181,7 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader --no-scripts
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm
