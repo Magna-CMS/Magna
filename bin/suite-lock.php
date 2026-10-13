@@ -159,8 +159,13 @@ exit($exitCode);
  */
 function suite_lock_run(array $command): int
 {
+    // Quote anything outside a known-safe charset, not just whitespace: the
+    // shell behind passthru() is cmd on Windows but sh on Linux, where a bare
+    // `(`, `;` or `$` is syntax, not data — `php -r sleep(4);` dies on sh
+    // before php ever runs. `%` stays bare so Windows env expansion keeps
+    // working (escapeshellarg would blank it there).
     $line = implode(' ', array_map(
-        static fn (string $part): string => preg_match('/\s/', $part) === 1 ? escapeshellarg($part) : $part,
+        static fn (string $part): string => preg_match('#^[A-Za-z0-9_\-./:\\\\=%+@,]+$#', $part) === 1 ? $part : escapeshellarg($part),
         $command,
     ));
 

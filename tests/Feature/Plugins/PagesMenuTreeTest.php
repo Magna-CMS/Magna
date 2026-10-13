@@ -17,6 +17,13 @@ use Magna\Testing\PluginTestCase;
 
 uses(PluginTestCase::class);
 
+// Every test in this file exercises the real pages plugin. A checkout
+// without plugins-dev (CI clones core alone) skips the file rather than
+// failing on classes it was never shipped.
+beforeEach(function (): void {
+    skipWithoutDevPlugin('magna-cms/pages');
+});
+
 /** Rows as `label:depth`, which is the whole state a move can change. */
 function rows(string ...$spec): array
 {

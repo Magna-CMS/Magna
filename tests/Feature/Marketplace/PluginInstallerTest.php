@@ -108,6 +108,10 @@ it('rolls back when the installed manifest version does not match the approved v
     // magna/docs is a real, discoverable dev plugin whose manifest version
     // is 1.0.0 — claim the marketplace approved a different version to
     // simulate Composer resolving something other than what was reviewed.
+    // The "found manifest" wording below only exists when discovery really
+    // finds the plugin, so a checkout without plugins-dev skips.
+    skipWithoutDevPlugin('magna-cms/docs');
+
     fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => '9.9.9', 'compat' => '^1.0']]);
     $runner = fakeRunner();
 

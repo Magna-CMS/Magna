@@ -84,6 +84,8 @@ final class VendorSelection
 
     private static function normalise(string $path): string
     {
-        return rtrim(str_replace(DIRECTORY_SEPARATOR, '/', $path), '/');
+        // Both separators, not DIRECTORY_SEPARATOR: a Windows-written manifest
+        // can hand this a backslashed path on any host.
+        return rtrim(str_replace('\\', '/', $path), '/');
     }
 }
