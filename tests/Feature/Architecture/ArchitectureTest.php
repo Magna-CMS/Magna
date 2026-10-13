@@ -922,6 +922,19 @@ it('lets the pinned big classes only shrink', function (): void {
  * sites. A file may only go DOWN or hold: fix a site, lower its pin (or
  * delete the line at zero); a new app() anywhere — a higher count, or any
  * count in an unpinned file — fails here. Pins never go up.
+ *
+ * The count is a grep over the file's TEXT and does not skip comments, so a
+ * docblock that names the helper counts as a call site. Two sessions have now
+ * lost a gate run to a comment explaining why the container was NOT used —
+ * write that explanation around the name ("service location") rather than
+ * spelling it. Making the scan comment-aware would be the other fix, and a
+ * worse one: the honest number is how many times the file mentions reaching
+ * into the container at all.
+ *
+ * Where the framework DOES leave a seam, take it instead of a pin: Livewire
+ * injects action-method parameters and Filament resolves action-closure
+ * parameters from the container, so a Filament page can ask for a dependency
+ * by type in the method that needs it.
  */
 it('never grows the number of app() call sites', function (): void {
     $pins = [
