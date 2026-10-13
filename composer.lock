@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "eccc317ff4cd4ecab118e561712dc763",
+    "content-hash": "96222e4b3c78171c6207ad272b2b3a71",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -4052,16 +4052,16 @@
         },
         {
             "name": "magna-cms/plugin-sdk",
-            "version": "v1.6.0",
+            "version": "v1.7.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/Magna-CMS/Magna-Plugin-SDK.git",
-                "reference": "7966820d71d774f8af8c70081e75c38f30bbf774"
+                "reference": "cc99e6deecfa4937d6cd30a699cbdcb2f11b6897"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Magna-CMS/Magna-Plugin-SDK/zipball/7966820d71d774f8af8c70081e75c38f30bbf774",
-                "reference": "7966820d71d774f8af8c70081e75c38f30bbf774",
+                "url": "https://api.github.com/repos/Magna-CMS/Magna-Plugin-SDK/zipball/cc99e6deecfa4937d6cd30a699cbdcb2f11b6897",
+                "reference": "cc99e6deecfa4937d6cd30a699cbdcb2f11b6897",
                 "shasum": ""
             },
             "require": {
@@ -4112,7 +4112,7 @@
                 "issues": "https://github.com/Magna-CMS/Magna-Plugin-SDK/issues",
                 "source": "https://github.com/Magna-CMS/Magna-Plugin-SDK"
             },
-            "time": "2026-09-26T07:07:58+00:00"
+            "time": "2026-10-12T17:21:01+00:00"
         },
         {
             "name": "masterminds/html5",
