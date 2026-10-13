@@ -22,9 +22,9 @@ uses(PluginTestCase::class);
 function formsKitUser(): void
 {
     skipWithoutDevPlugin('magna-cms/pages');
-    skipWithoutDevPlugin('magna/forms');
+    skipWithoutDevPlugin('magna-cms/forms');
     app(PluginManager::class)->enable('magna-cms/pages');
-    app(PluginManager::class)->enable('magna/forms');
+    app(PluginManager::class)->enable('magna-cms/forms');
 }
 
 function kitContactForm(): Form
