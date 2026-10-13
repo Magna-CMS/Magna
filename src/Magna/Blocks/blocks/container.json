@@ -44,7 +44,7 @@
             "type": "text",
             "label": "CSS classes",
             "options": {
-                "help": "Theme classes for this container, space separated. A rule written against one of these reaches only the blocks this container holds; a section's classes reach every block in the band."
+                "help": "Theme classes for this container, space separated. A rule written against one of these reaches only the blocks this container holds; a section's classes reach every block in the band. Prefer one class here over qualifying a section rule with ancestors — the extra specificity beats your own media queries and silently kills the breakpoint."
             }
         }
     ]
