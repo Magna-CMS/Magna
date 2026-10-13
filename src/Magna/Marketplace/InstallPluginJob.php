@@ -11,8 +11,9 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Queued wrapper around {@see PluginInstaller} so an install runs in the
- * background and the admin request returns immediately.
+ * Queued wrapper around {@see PluginInstaller} so an install — or an update,
+ * which is the same Composer run against a newer pinned version — happens in
+ * the background and the admin request returns immediately.
  */
 class InstallPluginJob implements ShouldQueue
 {
@@ -26,13 +27,17 @@ class InstallPluginJob implements ShouldQueue
 
     public int $timeout = self::TIMEOUT_SECONDS;
 
-    public function __construct(public readonly string $package) {}
+    public function __construct(public readonly string $package, public readonly bool $update = false) {}
 
     public function handle(PluginInstaller $installer): void
     {
         // If another install is in progress, wait our turn: put the job back on
         // the queue with a short delay (a simple serial install queue).
-        if ($installer->install($this->package) === InstallState::Queued) {
+        $state = $this->update
+            ? $installer->update($this->package)
+            : $installer->install($this->package);
+
+        if ($state === InstallState::Queued) {
             $this->release(10);
         }
     }

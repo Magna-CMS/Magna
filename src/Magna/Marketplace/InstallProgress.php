@@ -43,9 +43,12 @@ final class InstallProgress
      * can only ever act on a package this install queued itself — never one a
      * browser put into the page's `installQueue` property.
      */
-    public static function markQueued(string $package, ?string $message = null): void
+    public static function markQueued(string $package, ?string $message = null, bool $update = false): void
     {
-        Cache::put(self::pendingKey($package), true, self::TTL);
+        // The pending flag carries WHICH run was queued, so the stalled-install
+        // fallback re-runs the same one. An update that fell back to an install
+        // would reinstall the version already on disk and report success.
+        Cache::put(self::pendingKey($package), $update ? 'update' : 'install', self::TTL);
 
         Cache::put(self::key($package), [
             'state' => InstallState::Queued->value,
@@ -81,6 +84,12 @@ final class InstallProgress
     public static function claimPending(string $package): bool
     {
         return Cache::pull(self::pendingKey($package)) !== null;
+    }
+
+    /** Whether the queued run is an update rather than a first install. */
+    public static function pendingIsUpdate(string $package): bool
+    {
+        return Cache::get(self::pendingKey($package)) === 'update';
     }
 
     public static function clearPending(string $package): void
