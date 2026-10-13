@@ -92,9 +92,32 @@ it('warns when an override drops the inline script its default view ships', func
         fn (array $f): bool => $f['level'] === 'warning' && $f['file'] === 'views/blocks/scripty.blade.php',
     ));
 
+    // Asserted on what the warning TELLS the author to do, not on its prose:
+    // that core still ships the behaviour here, and that the theme must carry
+    // it. The previous wording named the block-behaviour view as though the
+    // move had happened, and a theme author deleted working wiring on the
+    // strength of it.
     expect($warnings)->toHaveCount(1)
-        ->and($warnings[0]['message'])->toContain('ships inline <script> that this replacement drops')
-        ->and($warnings[0]['message'])->toContain('block-behaviour view');
+        ->and($warnings[0]['message'])->toContain('core still ships')
+        ->and($warnings[0]['message'])->toContain('your theme has to carry it');
+});
+
+it('stops warning about a dropped script once core ships the behaviour apart', function (): void {
+    View::addNamespace('magna', dirname(__DIR__, 2).'/Fixtures/views');
+
+    // The fixture namespace has blocks/scripty but no block-behaviour/scripty,
+    // which is what makes the warning above fire. scheme-toggle is the handle
+    // core HAS moved, so the same override shape draws nothing for it — the
+    // warning retires itself per handle as the migration reaches it, instead
+    // of having to be remembered and removed.
+    $warnings = array_values(array_filter(
+        app(ThemeAuditor::class)->audit('badvendor/sketchy'),
+        fn (array $f): bool => $f['level'] === 'warning'
+            && str_contains($f['message'], 'core still ships')
+            && str_contains($f['file'], 'scheme-toggle'),
+    ));
+
+    expect($warnings)->toBe([]);
 });
 
 it('warns when an override drops the hook a block behaviour binds to', function (): void {
