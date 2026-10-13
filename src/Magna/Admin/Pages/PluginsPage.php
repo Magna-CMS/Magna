@@ -23,6 +23,7 @@ use Magna\Marketplace\PluginInstallStarter;
 use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\Exceptions\PluginNotFoundException;
 use Magna\Plugins\PluginManager;
+use Magna\Updater\UpdateCheck;
 use Throwable;
 
 class PluginsPage extends Page
@@ -237,7 +238,35 @@ class PluginsPage extends Page
                 return;
             }
 
-            // Re-enable syncs the version from the manifest and re-runs any new migrations.
+            // A plugin the marketplace has a newer version of lives on
+            // Packagist, not on this disk: re-enabling would re-read the
+            // version already installed and report success without changing
+            // anything, which is what this branch used to do. Fetching it is
+            // the same pinned `composer require` an install runs, so it goes
+            // through the same queue-with-inline-fallback machinery.
+            if ($this->marketplaceOffersUpdate($name)) {
+                if (! app(PluginInstallStarter::class)->start($name, update: true)) {
+                    Notification::make()
+                        ->title("Can't update that")
+                        ->body('That is not a valid vendor/package name.')
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                if (! in_array($name, $this->installQueue, true)) {
+                    $this->installQueue[] = $name;
+                }
+
+                Notification::make()->title("Queued {$name} for update…")->send();
+
+                return;
+            }
+
+            // Nothing to fetch: the newer files are already on disk (a
+            // plugins-dev plugin someone replaced). Re-enable syncs the version
+            // from the manifest and re-runs any new migrations.
             app(PluginManager::class)->enable($name);
             Notification::make()->title('Plugin updated.')->success()->send();
             $url = static::getUrl();
@@ -254,6 +283,22 @@ class PluginsPage extends Page
 
             Notification::make()->title('Update failed')->body($e->getMessage())->danger()->send();
         }
+    }
+
+    /**
+     * Whether the newer version is one the marketplace holds rather than one
+     * already sitting on disk. Reads the same check-in row the page's amber
+     * "Version X is available" banner is drawn from, so the button can never
+     * promise a fetch the catalog does not actually offer.
+     */
+    private function marketplaceOffersUpdate(string $name): bool
+    {
+        return UpdateCheck::query()
+            ->where('type', 'plugin')
+            ->where('slug', $name)
+            ->where('update_available', true)
+            ->whereNotNull('latest_version')
+            ->exists();
     }
 
     // ── Confirmation-gated actions ─────────────────────────────────────────────

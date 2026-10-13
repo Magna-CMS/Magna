@@ -42,15 +42,15 @@ final class PluginInstallStarter
 
     public function __construct(private readonly PluginInstaller $installer) {}
 
-    public function start(string $package): bool
+    public function start(string $package, bool $update = false): bool
     {
         if (preg_match(self::PACKAGE_PATTERN, $package) !== 1) {
             return false;
         }
 
-        InstallProgress::markQueued($package);
+        InstallProgress::markQueued($package, update: $update);
 
-        InstallPluginJob::dispatch($package);
+        InstallPluginJob::dispatch($package, $update);
 
         return true;
     }
@@ -84,6 +84,8 @@ final class PluginInstallStarter
             return null;
         }
 
+        $update = InstallProgress::pendingIsUpdate($package);
+
         if (! InstallProgress::claimPending($package)) {
             return null;
         }
@@ -96,16 +98,18 @@ final class PluginInstallStarter
         InstallProgress::set(
             $package,
             InstallState::Running,
-            'No background worker found — installing in this browser session…',
+            $update
+                ? 'No background worker found — updating in this browser session…'
+                : 'No background worker found — installing in this browser session…',
         );
 
-        $state = $this->installer->install($package);
+        $state = $update ? $this->installer->update($package) : $this->installer->install($package);
 
         // The installer refuses to run two installs at once. Losing that race is
         // not a failure: put the package back in the queue so a later poll (or a
         // worker, if one appears) picks it up once the lock frees.
         if ($state === InstallState::Queued) {
-            InstallProgress::markQueued($package, 'Waiting for another installation to finish…');
+            InstallProgress::markQueued($package, 'Waiting for another installation to finish…', $update);
         }
 
         return $state;
