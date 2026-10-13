@@ -142,6 +142,12 @@ it('warns when an override drops the inline script its default view ships', func
 });
 
 it('stops warning about a dropped script once core ships the behaviour apart', function (): void {
+    // Same guard as every sibling here: the auditor comes from the Pages
+    // plugin, so a checkout without plugins-dev (CI) must skip rather than
+    // fail resolving it.
+    auditSetup();
+    config(['magna.themes_path' => dirname(__DIR__, 2).'/Fixtures/themes']);
+
     View::addNamespace('magna', dirname(__DIR__, 2).'/Fixtures/views');
 
     // The fixture namespace has blocks/scripty but no block-behaviour/scripty,
