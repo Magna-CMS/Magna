@@ -9,43 +9,31 @@ on:
   pull_request:
 
 jobs:
+  # One axis, PHP, because one axis is all this job has ever varied.
+  #
+  # It used to declare `db: [sqlite, pgsql, mysql]` with Postgres and MySQL
+  # service containers beside it, and the three rows ran identically:
+  # `tests/bootstrap.php` sets DB_CONNECTION=sqlite and DB_DATABASE=:memory:
+  # into putenv() plus $_ENV plus $_SERVER, unconditionally, before
+  # vendor/autoload.php is even required — so nothing a workflow exports can
+  # reach the suite. Six jobs claimed three drivers and every one of them was
+  # SQLite. A green that names coverage it does not have is worse than a
+  # missing one, so the claim is gone rather than the containers being kept
+  # warm for it.
+  #
+  # Real multi-driver coverage needs a narrow, explicit escape hatch in
+  # tests/bootstrap.php (whose override exists because a cached config once let
+  # RefreshDatabase drop the development database — see the comment there), and
+  # then whatever a first genuine Postgres and MySQL run surfaces. That is its
+  # own task. tests/Unit/Release/TestDatabaseDriverTest.php fails if this
+  # workflow starts claiming a driver again without it.
   check:
-    name: PHP ${{ matrix.php }} / ${{ matrix.db }}
+    name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         php: ['8.3', '8.4']
-        db: [sqlite, pgsql, mysql]
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: magna_test
-          POSTGRES_USER: magna
-          POSTGRES_PASSWORD: secret
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U magna"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_DATABASE: magna_test
-          MYSQL_USER: magna
-          MYSQL_PASSWORD: secret
-          MYSQL_ROOT_PASSWORD: secret
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -umagna -psecret"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -70,39 +58,11 @@ jobs:
           php artisan key:generate
           php artisan package:discover --ansi
 
-      # DB connection is exported to the PROCESS environment ($GITHUB_ENV), not
-      # .env. phpunit.xml pins DB_CONNECTION=sqlite/:memory: with a non-forced
-      # <env>, which only applies when the variable is absent from the process
-      # environment (and Laravel's immutable Dotenv won't override a process
-      # var either). Writing to .env is therefore ignored under `artisan test`;
-      # exporting here is what actually switches the driver the tests run on.
-      - name: Configure SQLite
-        if: matrix.db == 'sqlite'
+      # Not for the suite — that runs on :memory: whatever is on disk — but for
+      # the artisan commands above and below it, whose default connection is
+      # this file.
+      - name: Create the SQLite file
         run: touch database/database.sqlite
-
-      - name: Configure PostgreSQL
-        if: matrix.db == 'pgsql'
-        run: |
-          {
-            echo "DB_CONNECTION=pgsql"
-            echo "DB_HOST=127.0.0.1"
-            echo "DB_PORT=5432"
-            echo "DB_DATABASE=magna_test"
-            echo "DB_USERNAME=magna"
-            echo "DB_PASSWORD=secret"
-          } >> "$GITHUB_ENV"
-
-      - name: Configure MySQL
-        if: matrix.db == 'mysql'
-        run: |
-          {
-            echo "DB_CONNECTION=mysql"
-            echo "DB_HOST=127.0.0.1"
-            echo "DB_PORT=3306"
-            echo "DB_DATABASE=magna_test"
-            echo "DB_USERNAME=magna"
-            echo "DB_PASSWORD=secret"
-          } >> "$GITHUB_ENV"
 
       # The panel renders its theme through @vite, so a request to any panel
       # page 500s without a built manifest. The suite covers those pages.
@@ -130,13 +90,25 @@ jobs:
       # test — the reason every run of this job had been red. Plugin suites
       # run where the plugin checkouts exist: locally, via the release gates
       # and `composer test`.
-      - name: Tests (Pest)
+      # SQLite in the name because SQLite is what runs: tests/bootstrap.php pins
+      # it before the framework exists. See the matrix comment at the top.
+      #
+      # Every annotation falls back to the tail of the log when its pattern
+      # misses. A tag run failed for two releases with all three annotations
+      # empty — the suite had aborted on a missing directory, which is neither
+      # a failure line, nor a SQLSTATE, nor a count — so the one line that said
+      # what happened was the one line never captured.
+      - name: Tests (Pest, SQLite)
         run: |
           set -o pipefail
           if ! php artisan test --testsuite=Unit,Feature 2>&1 | tee test.log; then
-            echo "::error::${{ matrix.db }} failures -- $(grep -aoE '(FAILED|⨯) [^│]{0,90}' test.log | tail -n 8 | tr '\n' ' ' | cut -c1-1200)"
-            echo "::error::${{ matrix.db }} reason -- $(grep -aoE '(SQLSTATE\[[^]]+\][^|]{0,140}|Failed asserting[^|]{0,140}|Undefined [a-z ]+ "[^"]+")' test.log | sort -u | head -n 4 | tr '\n' ' ' | cut -c1-1200)"
-            echo "::error::${{ matrix.db }} counts -- $(grep -aoE 'Tests:.*' test.log | tail -n 1 | cut -c1-160)"
+            FAILURES=$(grep -aoE '(FAILED|⨯) [^│]{0,90}' test.log | tail -n 8 | tr '\n' ' ' | cut -c1-1200)
+            REASON=$(grep -aoE '(SQLSTATE\[[^]]+\][^|]{0,140}|Failed asserting[^|]{0,140}|Undefined [a-z ]+ "[^"]+")' test.log | sort -u | head -n 4 | tr '\n' ' ' | cut -c1-1200)
+            COUNTS=$(grep -aoE 'Tests:.*' test.log | tail -n 1 | cut -c1-160)
+            TAIL=$(tail -n 12 test.log | tr '\n' ' ' | cut -c1-1200)
+            echo "::error::failures -- ${FAILURES:-none matched; log tail: $TAIL}"
+            echo "::error::reason -- ${REASON:-none matched; log tail: $TAIL}"
+            echo "::error::counts -- ${COUNTS:-none matched; the suite did not reach a summary}"
             exit 1
           fi
 
