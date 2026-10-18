@@ -89,11 +89,21 @@ class ThemesPage extends Page
         $updateFields = function (ThemeManifest $t) use ($checks): array {
             $check = $checks->get($t->name);
 
+            // Both flags are answers to "is something newer than what was on
+            // disk AT CHECK TIME", and a theme's files move independently of
+            // the row — a zip upload, a manual copy into themes/, a restored
+            // backup. Re-asking the question against the manifest this page is
+            // already holding is what stops a stale row offering an update to
+            // a version the site has, or has since moved past.
+            if ($check === null || ! self::isAheadOfDisk($check->latest_version, $t->version)) {
+                return ['update_version' => null, 'license_blocked_version' => null];
+            }
+
             return [
-                'update_version' => $check?->update_available === true
+                'update_version' => $check->update_available
                     ? PluginCatalogView::displayVersion($check->latest_version)
                     : null,
-                'license_blocked_version' => $check?->license_required === true
+                'license_blocked_version' => $check->license_required
                     ? PluginCatalogView::displayVersion($check->latest_version)
                     : null,
             ];
@@ -134,6 +144,21 @@ class ThemesPage extends Page
             )),
             'activeName' => $activeName,
         ];
+    }
+
+    /**
+     * Is the recorded version genuinely ahead of the one on disk?
+     *
+     * Same comparison `UpdateCheck::core()` makes when it self-heals after a
+     * core update, and for the same reason: the stored flag describes a moment
+     * that has passed. A missing or empty `latest_version` is not ahead of
+     * anything.
+     */
+    private static function isAheadOfDisk(?string $latest, string $installed): bool
+    {
+        $latest = ltrim((string) $latest, 'vV');
+
+        return $latest !== '' && version_compare($latest, ltrim($installed, 'vV'), '>');
     }
 
     public function setTab(string $tab): void

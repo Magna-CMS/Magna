@@ -71,6 +71,48 @@ it('offers nothing when the check-in recorded no newer version', function (): vo
         ->assertDontSee('no longer covers updates');
 });
 
+// The row records what was true at CHECK time. Theme files move without it —
+// a zip upload, a manual copy into themes/, a restored backup — so the offer
+// is re-tested against the manifest on disk before it is drawn. Without this,
+// the stale row offers to "update" a site onto a version it has already left.
+it('offers nothing when the recorded version is the one already on disk', function (): void {
+    $this->actingAs(themesUpdatesAdmin());
+    themeCheckRow(['latest_version' => '1.0.0']); // fixture theme.json is 1.0.0
+
+    Livewire::test(ThemesPage::class)->assertDontSee('Update now');
+});
+
+it('offers nothing when the theme on disk has moved past the recorded version', function (): void {
+    $this->actingAs(themesUpdatesAdmin());
+    themeCheckRow(['current_version' => '0.9.0', 'latest_version' => '0.9.5']);
+
+    Livewire::test(ThemesPage::class)->assertDontSee('Update now');
+});
+
+// 'v1.7.0' and '1.7.0' are the same release; the hub may send either.
+it('reads a v-prefixed recorded version as the same release', function (): void {
+    $this->actingAs(themesUpdatesAdmin());
+    themeCheckRow(['latest_version' => 'v1.0.0']);
+
+    Livewire::test(ThemesPage::class)->assertDontSee('Update now');
+});
+
+it('still offers a v-prefixed version that is genuinely newer', function (): void {
+    $this->actingAs(themesUpdatesAdmin());
+    themeCheckRow(['latest_version' => 'v1.7.0']);
+
+    Livewire::test(ThemesPage::class)->assertSee('Version 1.7.0 is available.');
+});
+
+// A renew prompt for a version the site already has is the same lie in a
+// different colour, so the comparison gates both halves of the split.
+it('drops the renew prompt too when the disk is already at the blocked version', function (): void {
+    $this->actingAs(themesUpdatesAdmin());
+    themeCheckRow(['update_available' => false, 'license_required' => true, 'latest_version' => '1.0.0']);
+
+    Livewire::test(ThemesPage::class)->assertDontSee('no longer covers updates');
+});
+
 // Addons update through the same licence path as their host theme.
 it('offers an update on an addon card too', function (): void {
     $this->actingAs(themesUpdatesAdmin());

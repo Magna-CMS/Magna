@@ -9,17 +9,23 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * One row per updatable thing (core, or one row per installed plugin slug).
-     * Populated by the scheduled check-in and by the manual "Check for Updates"
-     * action — both write here, so the dashboard notice and the System Info
-     * page can never disagree about what's available.
+     * One row per updatable thing (core, or one row per installed plugin or
+     * theme slug). Populated by the scheduled check-in and by the manual
+     * "Check for Updates" action — both write here, so the dashboard notice
+     * and the System Info page can never disagree about what's available.
+     *
+     * `type` is a free string and deliberately not an enum or a check
+     * constraint: a kind added later (themes were) then needs no schema change
+     * on every existing install, only a writer and a reader that agree. The
+     * unique index is what keeps the kinds apart — a theme and a plugin may
+     * share a slug and still get a row each.
      */
     public function up(): void
     {
         Schema::create('update_checks', function (Blueprint $table): void {
             $table->id();
-            $table->string('type'); // 'core' | 'plugin'
-            $table->string('slug')->nullable(); // null for core, package slug for plugins
+            $table->string('type'); // 'core' | 'plugin' | 'theme'
+            $table->string('slug')->nullable(); // null for core, package slug for plugins and themes
             $table->string('current_version');
             $table->string('latest_version')->nullable();
             $table->string('changelog_url')->nullable();
