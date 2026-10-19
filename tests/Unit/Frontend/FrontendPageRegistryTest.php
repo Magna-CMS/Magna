@@ -50,3 +50,63 @@ it('replaces a page registered under the same name, last write wins', function (
     expect($registry->all())->toHaveCount(1)
         ->and($registry->get('chat.home')?->path)->toBe('chat-v2');
 });
+
+/*
+ * resolve() is match() plus `{param}` capture — the half the blog's
+ * `/blog/{slug}` post pages ride on. The precedence rule is pinned hardest:
+ * an exact page always beats a parameterized sibling, whatever order the
+ * plugins booted in.
+ */
+
+it('resolves a parameterized path and captures its segments', function (): void {
+    $registry = new FrontendPageRegistry;
+    $registry->register(frontendPage('blog/{slug}', 'blog.post'));
+
+    $match = $registry->resolve('blog/hello-world');
+
+    expect($match?->page->name)->toBe('blog.post')
+        ->and($match?->params)->toBe(['slug' => 'hello-world'])
+        ->and($registry->resolve('/blog/hello-world/')?->params)->toBe(['slug' => 'hello-world']);
+});
+
+it('refuses a parameterized match at the wrong depth or with an empty segment', function (): void {
+    $registry = new FrontendPageRegistry;
+    $registry->register(frontendPage('blog/{slug}', 'blog.post'));
+
+    expect($registry->resolve('blog'))->toBeNull()
+        ->and($registry->resolve('blog/a/b'))->toBeNull()
+        ->and($registry->resolve('blog//'))->toBeNull();
+});
+
+it('prefers an exact page over a parameterized one, whatever the registration order', function (): void {
+    $registry = new FrontendPageRegistry;
+    $registry->register(frontendPage('blog/{slug}', 'blog.post'));
+    $registry->register(frontendPage('blog/archive', 'blog.archive'));
+
+    $match = $registry->resolve('blog/archive');
+
+    expect($match?->page->name)->toBe('blog.archive')
+        ->and($match?->params)->toBe([]);
+});
+
+it('captures several parameters, literal segments compared exactly', function (): void {
+    $registry = new FrontendPageRegistry;
+    $registry->register(frontendPage('blog/{year}/{slug}', 'blog.dated'));
+
+    expect($registry->resolve('blog/2026/hello')?->params)->toBe(['year' => '2026', 'slug' => 'hello'])
+        ->and($registry->resolve('news/2026/hello'))->toBeNull()
+        // An empty middle segment never satisfies a token — `{year}` must
+        // capture something, not vanish between two slashes.
+        ->and($registry->resolve('blog//hello'))->toBeNull();
+});
+
+it('resolves an exact page with no params, so existing pages are untouched', function (): void {
+    $registry = new FrontendPageRegistry;
+    $registry->register(frontendPage('chat', 'chat.home'));
+
+    $match = $registry->resolve('chat');
+
+    expect($match?->page->name)->toBe('chat.home')
+        ->and($match?->params)->toBe([])
+        ->and($match?->page->hasParameters())->toBeFalse();
+});

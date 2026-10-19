@@ -38,7 +38,19 @@ final class FrontendPage
         public readonly bool $requiresAuth = false,
         /** Permission the user must hold, or null for none. Implies auth. */
         public readonly ?string $permission = null,
+        /**
+         * A FrontendPageDataProvider class name, resolved from the container
+         * per request, or null for a static view. Required in practice for a
+         * parameterized path — something has to turn `{slug}` into data.
+         */
+        public readonly ?string $controller = null,
     ) {}
+
+    /** Whether the path carries `{param}` segments a provider must resolve. */
+    public function hasParameters(): bool
+    {
+        return str_contains($this->path, '{');
+    }
 
     /** The site-relative path, normalized without a leading slash. */
     public function normalizedPath(): string
