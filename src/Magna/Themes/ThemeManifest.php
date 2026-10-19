@@ -32,6 +32,14 @@ final class ThemeManifest
      * @param  string|null  $extends  Addon only: host theme name, or "*" for theme-agnostic
      * @param  list<string>  $pairsWith  Addon only: plugins whose blocks it may style
      * @param  int  $priority  Addon only: tie-break between addons (higher wins)
+     * @param  array<string, string>  $pluginCompat  `compat.plugins`: the
+     *                                               plugin versions this theme's rendering needs, as package name to
+     *                                               semver constraint. A theme's layout can depend on a PLUGIN rather
+     *                                               than on core — `settings.row.columnTemplate` is a magna/pages
+     *                                               feature — and an unknown block setting is silently dropped, so a
+     *                                               theme built on one renders every two-up band as equal columns on a
+     *                                               site whose pages plugin predates it. No error, no warning: just the
+     *                                               wrong layout. Until this key existed a theme had no way to say so.
      * @param  array<string, array<string, mixed>>  $blockSeeds  What a freshly
      *                                                           inserted block starts with, per block handle, overriding core's own
      *                                                           seed. A theme's blocks are a design vocabulary — dropping `features`
@@ -48,6 +56,7 @@ final class ThemeManifest
         public readonly string $author,
         public readonly string $license,
         public readonly string $magnaCompat,
+        public readonly array $pluginCompat = [],
         public readonly ?string $screenshot = null,
         public readonly array $tags = [],
         public readonly ?string $homepage = null,
@@ -98,6 +107,7 @@ final class ThemeManifest
 
         $compat = $data['compat'] ?? null;
         $magnaCompat = is_array($compat) && is_string($compat['magna'] ?? null) ? $compat['magna'] : '^1.0';
+        $pluginCompat = self::pluginCompat(is_array($compat) ? $compat['plugins'] ?? null : null);
 
         $tags = [];
         if (is_array($data['tags'] ?? null)) {
@@ -131,6 +141,7 @@ final class ThemeManifest
             author: is_string($data['author'] ?? null) ? $data['author'] : '',
             license: is_string($data['license'] ?? null) ? $data['license'] : '',
             magnaCompat: $magnaCompat,
+            pluginCompat: $pluginCompat,
             screenshot: is_string($data['screenshot'] ?? null) && $data['screenshot'] !== '' ? $data['screenshot'] : null,
             tags: $tags,
             homepage: is_string($data['homepage'] ?? null) && $data['homepage'] !== '' ? $data['homepage'] : null,
@@ -186,6 +197,33 @@ final class ThemeManifest
         return $seeds;
     }
 
+    /**
+     * `compat.plugins` as a map of package name to version constraint.
+     *
+     * Shaped, not trusted, exactly like blockSeeds: a theme.json is a file an
+     * author edits by hand. An entry whose key is not a vendor/name package
+     * or whose value is not a non-empty string is dropped — a floor nobody
+     * can parse must not become a floor nobody can satisfy.
+     *
+     * @return array<string, string>
+     */
+    private static function pluginCompat(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $compat = [];
+
+        foreach ($raw as $package => $constraint) {
+            if (is_string($package) && self::isValidName($package) && is_string($constraint) && $constraint !== '') {
+                $compat[$package] = $constraint;
+            }
+        }
+
+        return $compat;
+    }
+
     /** @throws InvalidThemeException */
     public static function loadFromFile(string $path): self
     {
@@ -211,5 +249,47 @@ final class ThemeManifest
         } catch (Throwable) {
             return false;
         }
+    }
+
+    /**
+     * The `compat.plugins` floors this site does not meet.
+     *
+     * Keyed by package name, valued with the version found — null when the
+     * plugin is not enabled here at all — so the caller can say which of the
+     * two it was. An absent plugin and an old one fail for the same reason
+     * (the rendering this theme is drawn against is not present) but they
+     * need different remedies.
+     *
+     * @param  array<string, string>  $enabled  plugin name to version
+     * @return array<string, array{required: string, found: string|null}>
+     */
+    public function unmetPluginCompat(array $enabled): array
+    {
+        $unmet = [];
+
+        foreach ($this->pluginCompat as $package => $constraint) {
+            $found = $enabled[$package] ?? null;
+
+            if ($found === null) {
+                $unmet[$package] = ['required' => $constraint, 'found' => null];
+
+                continue;
+            }
+
+            try {
+                $satisfied = Semver::satisfies($found, $constraint);
+            } catch (Throwable) {
+                // An unparseable pair is not a satisfied one. A plugin
+                // version this cannot read is exactly the case where the
+                // theme's assumptions are unverifiable.
+                $satisfied = false;
+            }
+
+            if (! $satisfied) {
+                $unmet[$package] = ['required' => $constraint, 'found' => $found];
+            }
+        }
+
+        return $unmet;
     }
 }

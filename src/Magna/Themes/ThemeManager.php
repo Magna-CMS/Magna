@@ -21,7 +21,10 @@ use Throwable;
  */
 class ThemeManager
 {
-    public function __construct(private readonly Filesystem $files) {}
+    public function __construct(
+        private readonly Filesystem $files,
+        private readonly EnabledPluginVersions $pluginVersions = new EnabledPluginVersions,
+    ) {}
 
     /** Absolute path of the themes directory. */
     public function directory(): string
@@ -168,11 +171,64 @@ class ThemeManager
             throw new InvalidThemeException('"'.$theme->displayName.'" is not compatible with this version of Magna.');
         }
 
+        $this->assertPluginFloorsMet($theme);
+
         $settings = ThemeSettings::get();
         $settings->active = $theme->name;
         $settings->save();
 
         return $theme;
+    }
+
+    /**
+     * Refuse a theme whose `compat.plugins` floors this site does not meet.
+     *
+     * Loud rather than silent, which is the whole point. A theme's rendering
+     * can depend on a plugin feature — `settings.row.columnTemplate` belongs
+     * to magna/pages — and an unknown block setting is DROPPED on the way in,
+     * so the same theme on an older plugin draws every two-up band as equal
+     * columns with nothing reported anywhere. One theme had 26 such bands.
+     * A refusal names the gap; the alternative is a site that looks subtly
+     * wrong and no way to find out why.
+     *
+     * Not checked at install time as well, for the same reason the core check
+     * is not: a plugin downgrade or a disable can turn a working theme into
+     * an unsupported one with nothing being installed at all.
+     *
+     * @throws InvalidThemeException
+     */
+    private function assertPluginFloorsMet(ThemeManifest $theme): void
+    {
+        if ($theme->pluginCompat === []) {
+            return;
+        }
+
+        $enabled = $this->pluginVersions->all();
+
+        // Unknown, not empty — the plugins table does not exist yet during
+        // installation, and a theme is activated there. See
+        // EnabledPluginVersions::all().
+        if ($enabled === null) {
+            return;
+        }
+
+        $unmet = $theme->unmetPluginCompat($enabled);
+
+        if ($unmet === []) {
+            return;
+        }
+
+        $reasons = [];
+
+        foreach ($unmet as $package => $state) {
+            $reasons[] = $state['found'] === null
+                ? $package.' '.$state['required'].' (not enabled here)'
+                : $package.' '.$state['required'].' (this site has '.$state['found'].')';
+        }
+
+        throw new InvalidThemeException(
+            '"'.$theme->displayName.'" needs '.implode(', ', $reasons).'. Its layout is drawn against features those versions provide, and a block setting an older plugin does not know is dropped silently.'
+        );
     }
 
     /** Leave the site with no active theme. */
