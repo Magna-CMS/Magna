@@ -21,6 +21,15 @@ use Throwable;
 
 class AdminServiceProvider extends ServiceProvider
 {
+    /**
+     * Core sidebar groups, in display order. Plugin groups render between
+     * Dashboard (ungrouped, always first) and these — the WordPress shape
+     * the owner asked for: a freshly installed plugin lands in a
+     * predictable block after Dashboard instead of wherever its
+     * lowest-sorted item happens to fall, and the core groups hold the end.
+     */
+    public const CORE_NAVIGATION_GROUP_ORDER = ['Content', 'Access', 'API', 'Settings', 'System'];
+
     public function register(): void
     {
         $this->app->register(AdminPanelProvider::class);
@@ -53,6 +62,11 @@ class AdminServiceProvider extends ServiceProvider
     private function wirePluginContracts(): void
     {
         if (! $this->app->bound(PluginManager::class)) {
+            // Even with no plugin system (some test apps), the core groups
+            // need a registered order, or each sits wherever its
+            // lowest-sorted item lands in Filament's global item sort.
+            $this->registerNavigationGroupOrder([]);
+
             return;
         }
 
@@ -124,15 +138,13 @@ class AdminServiceProvider extends ServiceProvider
             }
         }
 
-        if ($navGroups !== [] || $widgets !== [] || $settingPages !== []) {
-            $panel = Filament::getPanel('magna');
+        // Always, not only when a plugin registered a group: the ORDER is the
+        // point, and a site with no nav-registering plugins still needs the
+        // core groups held in their fixed positions.
+        $this->registerNavigationGroupOrder($navGroups);
 
-            if ($navGroups !== []) {
-                $panel->navigationGroups(array_merge(
-                    $panel->getNavigationGroups(),
-                    $navGroups,
-                ));
-            }
+        if ($widgets !== [] || $settingPages !== []) {
+            $panel = Filament::getPanel('magna');
 
             if ($widgets !== []) {
                 $panel->widgets(array_merge(
@@ -148,5 +160,100 @@ class AdminServiceProvider extends ServiceProvider
                 ));
             }
         }
+    }
+
+    /**
+     * Register the sidebar's group order: plugin groups first (Dashboard is
+     * ungrouped and always leads regardless), core groups last, in
+     * CORE_NAVIGATION_GROUP_ORDER.
+     *
+     * Filament positions a REGISTERED group by its index in this list and
+     * sends unregistered groups to the end — but with nothing registered, a
+     * group sat wherever its lowest-sorted item fell in the global item
+     * sort, so a plugin whose page declared no sort (-1) jumped its whole
+     * group above Content, and two installs of the same plugins could
+     * disagree. Plugin groups are sorted by label here for the same reason:
+     * boot order is dependency order, which reshuffles as plugins come and
+     * go.
+     *
+     * A plugin that deliberately files its page under a core group
+     * ('System', like the Core Plugin Manager) is untouched: groups match
+     * by label, so its items land in the core slot.
+     *
+     * @param  list<NavigationGroup>  $pluginGroups  from RegistersAdminNavigation
+     */
+    private function registerNavigationGroupOrder(array $pluginGroups): void
+    {
+        // One call, once per boot: the panel's navigationGroups() APPENDS to
+        // what is registered, so the whole ordered list goes in together.
+        Filament::getPanel('magna')->navigationGroups(
+            $this->orderedNavigationGroups($pluginGroups),
+        );
+    }
+
+    /**
+     * The full registered-group list: plugin groups alphabetically, then the
+     * core groups in their fixed order.
+     *
+     * @param  list<NavigationGroup>  $pluginGroups  from RegistersAdminNavigation
+     * @return list<NavigationGroup>
+     */
+    private function orderedNavigationGroups(array $pluginGroups): array
+    {
+        $core = self::CORE_NAVIGATION_GROUP_ORDER;
+        $byLabel = [];
+
+        foreach ($pluginGroups as $group) {
+            $label = (string) $group->getLabel();
+
+            if (! in_array($label, $core, true)) {
+                $byLabel[$label] ??= $group;
+            }
+        }
+
+        // Groups declared only on plugin page/resource classes (no
+        // RegistersAdminNavigation): without a registered entry they would
+        // sort to the end, BEHIND the core groups meant to hold it.
+        foreach ($this->pluginSurfaceGroupLabels() as $label) {
+            if (! in_array($label, $core, true)) {
+                $byLabel[$label] ??= NavigationGroup::make($label);
+            }
+        }
+
+        ksort($byLabel, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return [
+            ...array_values($byLabel),
+            ...array_map(static fn (string $label): NavigationGroup => NavigationGroup::make($label), $core),
+        ];
+    }
+
+    /**
+     * The navigation-group labels of plugin-contributed pages and resources.
+     *
+     * @return list<string>
+     */
+    private function pluginSurfaceGroupLabels(): array
+    {
+        $labels = [];
+        $surface = new PluginPanelSurface($this->app);
+
+        foreach ([...$surface->pages(), ...$surface->resources()] as $class) {
+            try {
+                $label = $class::getNavigationGroup();
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($label instanceof \UnitEnum) {
+                $label = $label instanceof \BackedEnum ? (string) $label->value : $label->name;
+            }
+
+            if (is_string($label) && $label !== '' && ! in_array($label, $labels, true)) {
+                $labels[] = $label;
+            }
+        }
+
+        return $labels;
     }
 }
