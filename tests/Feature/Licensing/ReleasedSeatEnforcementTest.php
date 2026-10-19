@@ -3,14 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Carbon;
-use Magna\Auth\Role;
 use Magna\Licensing\LicenseEntry;
 use Magna\Licensing\LicenseGate;
 use Magna\Licensing\LicenseState;
 use Magna\Licensing\LicenseStore;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
-use Magna\Users\User;
 
 // Releasing a seat frees it on the marketplace AND forgets the local licence
 // entry. LicenseGate read a missing entry as "unlicensed", which boots — the
@@ -89,21 +87,7 @@ it('keeps a released plugin out of the booted set', function (): void {
     expect(app(PluginManager::class)->getEnabled())->not->toHaveKey('acme/paid');
 });
 
-it('disables the plugin when its seat is released from the account page', function (): void {
-    $record = paidPluginRecord();
-    cachePaidLicense('acme/paid');
-
-    $role = Role::factory()->create(['handle' => 'licensing', 'name' => 'Licensing']);
-    $role->grant('licensing.manage');
-    $user = User::factory()->create(['two_factor_confirmed_at' => now()]);
-    $user->assignRole($role);
-
-    $this->actingAs($user)
-        ->post(route('licensing.deactivate'), ['product_slug' => 'acme/paid'])
-        ->assertRedirect();
-
-    // Not merely unlicensed — switched off, so the Plugins page stops showing
-    // "Active" for something that can no longer load.
-    expect($record->fresh()->enabled)->toBeFalse()
-        ->and(app(LicenseStore::class)->get('acme/paid'))->toBeNull();
-});
+// The release-from-the-account-page case is gone with the release actions
+// themselves: seats are managed on the marketplace, never from a site's
+// admin. A seat revoked server-side still locks the plugin through the
+// verify path, which the tests above pin.

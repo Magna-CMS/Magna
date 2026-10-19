@@ -14,6 +14,11 @@
         <p class="text-sm text-gray-500 dark:text-gray-400">No licences on this account yet. Paid plugins you buy appear here automatically.</p>
     </div>
 @else
+    {{-- One section per product kind: a theme licence in the middle of a
+         plugin list read as a plugin nobody could find in the Plugins list.
+         Empty groups are dropped by the page, so no bare headings. --}}
+    @foreach ($licenseGroups as $groupHeading => $groupLicenses)
+    <h3 class="mt-6 mb-2 text-sm font-semibold text-gray-900 first:mt-0 dark:text-white">{{ $groupHeading }}</h3>
     <div class="overflow-x-auto">
         <table class="w-full border-collapse text-left text-sm">
             <thead>
@@ -27,7 +32,7 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-white/5">
-                @foreach ($licenses as $license)
+                @foreach ($groupLicenses as $license)
                     @php
                         $status = $license['status'] ?? 'unknown';
                         $expiresAt = ($license['license_expires_at'] ?? null)
@@ -140,8 +145,9 @@
                                          same product (an older one that was never released), and
                                          the marketplace reports each of those rows as active here.
                                          Updating through a cancelled key is refused, so only the
-                                         usable ones offer it; Release stays on every active row,
-                                         because releasing is how the stale activation is cleared. --}}
+                                         usable ones offer it. Seats are managed on the
+                                         marketplace, never from a site's admin — releasing from
+                                         here let one signed-in admin unlicense other domains. --}}
                                     {{-- Both buttons go through licensing.install: the wallet
                                          licence id mints a fresh activation token together with
                                          the download grant in one signed response. The old
@@ -163,12 +169,6 @@
                                             <button type="submit" class="text-xs font-semibold text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">Install here</button>
                                         </form>
                                     @endif
-                                    <form method="POST" action="{{ route('licensing.deactivate') }}"
-                                          onsubmit="return confirm('Release this licence from this site? The plugin is disabled here and the seat becomes free for another domain.');">
-                                        @csrf
-                                        <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
-                                        <button type="submit" class="text-xs font-semibold text-gray-500 transition-colors hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400">Release</button>
-                                    </form>
                                 @elseif ($installable)
                                     {{-- Full seats are refused by the licence server, not here:
                                          the refusal names the domains holding them, which is more
@@ -189,4 +189,5 @@
             </tbody>
         </table>
     </div>
+    @endforeach
 @endif

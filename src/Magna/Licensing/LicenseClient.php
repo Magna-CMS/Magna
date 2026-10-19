@@ -450,29 +450,8 @@ class LicenseClient
         return $response?->successful() ?? false;
     }
 
-    /**
-     * Release one activation of an account-owned licence, by id.
-     *
-     * The token path above needs the activation token this site stored — and a
-     * site whose store has drifted (the plugin was uninstalled, or the token
-     * went stale) has nothing to present, which left its seat permanently
-     * occupied: Release answered "no licence is active on this site" while the
-     * marketplace showed the seat as taken. The account owns the licence, so
-     * the seat can be freed through it instead.
-     */
-    public function deactivateSite(int $licenseId, string $activationId): bool
-    {
-        try {
-            $response = $this->accountRequest()?->post(
-                Marketplace::API_BASE.'/account/licenses/'.$licenseId.'/deactivate-site',
-                ['activation_id' => $activationId],
-            );
-        } catch (Throwable) {
-            return false;
-        }
-
-        return $response?->successful() ?? false;
-    }
+    // deactivateSite() is deliberately gone, with the admin's release
+    // actions: seats are managed on the marketplace, never from a site.
 
     /**
      * Short-lived cache for the three calls that render the Magna Account

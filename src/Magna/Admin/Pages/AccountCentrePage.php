@@ -70,7 +70,15 @@ class AccountCentrePage extends Page
             'accountEmail' => $settings->accountEmail,
             'connectedAt' => $settings->connectedAt,
             'otherSites' => $otherSites,
-            'licenses' => $settings->connected ? $this->licenses() : [],
+            'licenses' => $licenses = $settings->connected ? $this->licenses() : [],
+            // Plugins and themes as separate sections: one mixed table made
+            // a theme licence read as a plugin you could not find in the
+            // Plugins list. Empty groups are dropped, not rendered as bare
+            // headings.
+            'licenseGroups' => array_filter([
+                'Plugins' => array_values(array_filter($licenses, fn (array $l): bool => ($l['licensable_type'] ?? 'plugin') !== 'theme')),
+                'Themes' => array_values(array_filter($licenses, fn (array $l): bool => ($l['licensable_type'] ?? 'plugin') === 'theme')),
+            ], fn (array $group): bool => $group !== []),
             'localLicenses' => app(LicenseStore::class)->all(),
             // Which installed products actually have a newer entitled version.
             // Without this the row offered "Update" for every licence active

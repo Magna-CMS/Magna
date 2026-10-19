@@ -30,11 +30,11 @@ it('refuses licence installs to a read-only settings role', function (): void {
         ->assertForbidden();
 });
 
-it('refuses licence deactivation to a settings administrator without licensing.manage', function (): void {
+it('refuses a licence update to a settings administrator without licensing.manage', function (): void {
     $user = userWithPermissions(['settings.view', 'settings.manage']);
 
     $this->actingAs($user)
-        ->post(route('licensing.deactivate'), ['product_slug' => 'acme/crm'])
+        ->post(route('licensing.update'), ['product_slug' => 'acme/crm'])
         ->assertForbidden();
 });
 
@@ -44,7 +44,7 @@ it('allows a holder of licensing.manage through the gate', function (): void {
     // Past authorisation: no licence for that slug is stored, so the action
     // reports that rather than a 403.
     $this->actingAs($user)
-        ->post(route('licensing.deactivate'), ['product_slug' => 'acme/crm'])
+        ->post(route('licensing.update'), ['product_slug' => 'acme/crm'])
         ->assertRedirect()
         ->assertSessionHas('account_centre_error');
 });

@@ -15,13 +15,9 @@ Route::prefix('licensing')->name('licensing.')->middleware('auth')->group(functi
     Route::post('/start-trial', [LicenseController::class, 'startTrial'])->name('start-trial');
     Route::post('/install', [LicenseController::class, 'install'])->name('install');
     Route::post('/update', [LicenseController::class, 'update'])->name('update');
-    Route::post('/deactivate', [LicenseController::class, 'deactivate'])->name('deactivate');
-
-    // Releasing a seat held by a DIFFERENT site. The seat in the way is
-    // usually a staging address or a migrated-from domain, not the site the
-    // admin happens to be signed into, so the wallet's own activation id is
-    // what this takes.
-    Route::post('/release-site', [LicenseController::class, 'releaseSite'])->name('release-site');
+    // There is deliberately no release/deactivate route: seats are managed on
+    // the marketplace, and a route here let one signed-in admin unlicense
+    // every other domain on the key.
     Route::post('/verify', [LicenseController::class, 'verifyNow'])->name('verify');
 
     // A GET, because it is a download and a link has to work. Safe as one:

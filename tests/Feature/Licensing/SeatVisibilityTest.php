@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Admin\Pages\AccountCentrePage;
@@ -121,38 +122,42 @@ it('says nothing about releasing when the licence still has room', function (): 
         ->assertDontSee('Buy another licence');
 });
 
-it('releases another site seat through the account endpoint', function (): void {
+it('offers no release action anywhere on the page', function (): void {
+    // Seats are managed on the marketplace, never from a site's admin — a
+    // release action here let one signed-in admin unlicense every other
+    // domain on the key. The routes are gone with the buttons.
     config(['app.url' => 'https://example.com']);
 
     Http::fake([
-        '*/account/licenses/7/deactivate-site' => Http::response(['ok' => true]),
+        '*/account/licenses' => Http::response(['licenses' => [seatWallet()]]),
         '*' => Http::response([], 200),
     ]);
 
-    $this->actingAs(seatAdmin())
-        ->post(route('licensing.release-site'), [
-            'license_id' => 7,
-            'activation_id' => 'act-dev',
-            'product_slug' => 'magna/blog',
-            'domain' => 'magna-cms.test',
-        ])->assertRedirect();
+    $this->actingAs(seatAdmin());
 
-    Http::assertSent(fn ($request) => str_contains($request->url(), '/account/licenses/7/deactivate-site')
-        && $request['activation_id'] === 'act-dev');
+    Livewire::test(AccountCentrePage::class)
+        ->assertSee('example.com')
+        ->assertDontSee('Release');
+
+    expect(Route::has('licensing.release-site'))->toBeFalse()
+        ->and(Route::has('licensing.deactivate'))->toBeFalse();
 });
 
-it('refuses to release a seat without licensing.manage', function (): void {
-    $role = Role::factory()->create(['handle' => 'editor', 'name' => 'Editor']);
-    $user = User::factory()->create(['two_factor_confirmed_at' => now()]);
-    $user->assignRole($role);
+it('lists plugin and theme licences as separate sections', function (): void {
+    // One mixed table made a theme licence read as a plugin nobody could
+    // find in the Plugins list.
+    Http::fake([
+        '*/account/licenses' => Http::response(['licenses' => [
+            seatWallet(),
+            seatWallet(['id' => 8, 'product_slug' => 'lekha/billing', 'licensable_type' => 'theme', 'key' => 'MAGNA-1111-2222-3333-4444-5555-6666']),
+        ]]),
+        '*' => Http::response([], 200),
+    ]);
 
-    $this->actingAs($user)
-        ->post(route('licensing.release-site'), [
-            'license_id' => 7,
-            'activation_id' => 'act-dev',
-            'product_slug' => 'magna/blog',
-            'domain' => 'magna-cms.test',
-        ])->assertForbidden();
+    $this->actingAs(seatAdmin());
+
+    Livewire::test(AccountCentrePage::class)
+        ->assertSeeInOrder(['Plugins', 'magna/blog', 'Themes', 'lekha/billing']);
 });
 
 it('points a full licence at the product it is sold on', function (): void {

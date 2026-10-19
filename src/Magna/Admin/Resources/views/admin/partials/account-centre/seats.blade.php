@@ -17,15 +17,15 @@
             'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' => ! $seatsFull,
         ])>{{ $seatsUsed }} of {{ $seatLimit }}</span>
         @if ($seatsFull)
-            {{-- Adding a site and moving one are different problems. Lead with
-                 the purchase, because that is the commoner of the two, and keep
-                 release within reach so a migration is not a support ticket. --}}
+            {{-- Seats are managed on the marketplace, never from a site's
+                 admin: releasing from here let one signed-in admin unlicense
+                 every other domain on the key. --}}
             <p class="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
                 @if (($license['store_url'] ?? null) !== null)
                     <a href="{{ $license['store_url'] }}" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Buy another licence</a>
-                    to add a site, or release one below to move it.
+                    to add a site. Seats are moved from your Magna Account.
                 @else
-                    Buy another licence to add a site, or release one below to move it.
+                    Buy another licence to add a site. Seats are moved from your Magna Account.
                 @endif
             </p>
         @endif
@@ -45,17 +45,6 @@
                              run on every .test address its owner had. --}}
                         <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-white/10 dark:text-gray-400" title="Development host. It holds a seat like any other domain.">dev</span>
                     @endif
-                    @can('licensing.manage')
-                        <form method="POST" action="{{ route('licensing.release-site') }}" class="shrink-0"
-                              onsubmit="return confirm('Release the seat held by {{ $seat['domain'] }}? That site stops being licensed and the seat becomes free for another domain.');">
-                            @csrf
-                            <input type="hidden" name="license_id" value="{{ $license['id'] }}">
-                            <input type="hidden" name="activation_id" value="{{ $seat['id'] }}">
-                            <input type="hidden" name="product_slug" value="{{ $license['product_slug'] }}">
-                            <input type="hidden" name="domain" value="{{ $seat['domain'] }}">
-                            <button type="submit" class="text-[11px] font-semibold text-gray-400 transition-colors hover:text-rose-600 dark:hover:text-rose-400">Release</button>
-                        </form>
-                    @endcan
                 </li>
             @endforeach
         </ul>

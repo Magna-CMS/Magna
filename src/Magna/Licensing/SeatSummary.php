@@ -46,10 +46,8 @@ final class SeatSummary
      * This site's domain as the licence server records it — the host of
      * APP_URL.
      *
-     * The single place that answer is derived. LicenseDeactivator matches an
-     * activation by the same value when it has no token to present, and the
-     * two disagreeing would mean the page marking one row "this site" while
-     * the release released another.
+     * The single place that answer is derived, so everything comparing a
+     * wallet activation to "this site" marks the same row.
      */
     public static function thisSiteDomain(): ?string
     {
