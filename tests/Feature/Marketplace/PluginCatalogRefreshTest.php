@@ -21,6 +21,9 @@ use Livewire\Livewire;
 use Magna\Admin\Pages\PluginsPage;
 use Magna\Auth\Role;
 use Magna\Marketplace\Marketplace;
+use Magna\Updater\UpdateCheck;
+use Magna\Updater\UpdateCheckClient;
+use Magna\Updater\UpdateCheckResult;
 use Magna\Users\User;
 use Tests\TestCase;
 
@@ -105,4 +108,52 @@ it('says so when the marketplace cannot be reached, and keeps what it knows', fu
     Livewire::test(PluginsPage::class)
         ->call('refreshCatalog')
         ->assertSet('marketplaceUnreachable', true);
+});
+
+/*
+ * The "Update now" banners on Installed read update_checks rows, and only a
+ * check-in writes those — on a 12-hour schedule. The button therefore checks
+ * in too; without it, a plugin version published to the marketplace stayed
+ * invisible until the next scheduled check-in, which is the same complaint
+ * the Themes page had (MarketplaceCatalogRefreshTest).
+ */
+
+it('checks in and reports the plugin updates it found', function (): void {
+    Http::fake([Marketplace::API_BASE.'/*' => Http::response([])]);
+
+    // The row the (mocked) check-in would have written.
+    $client = Mockery::mock(UpdateCheckClient::class);
+    $client->shouldReceive('checkIn')->once()->andReturnUsing(function () {
+        UpdateCheck::query()->create([
+            'type' => 'plugin',
+            'slug' => 'acme/forum',
+            'current_version' => '1.0.0',
+            'latest_version' => '1.1.0',
+            'update_available' => true,
+            'checked_at' => now(),
+        ]);
+
+        return UpdateCheckResult::fromArray([]);
+    });
+    app()->instance(UpdateCheckClient::class, $client);
+
+    $this->actingAs(catalogRefreshAdmin());
+
+    Livewire::test(PluginsPage::class)
+        ->call('refreshCatalog')
+        ->assertNotified('Catalog refreshed — 0 available to install.');
+});
+
+it('degrades to a warning when the check-in cannot reach the manager', function (): void {
+    Http::fake([Marketplace::API_BASE.'/*' => Http::response([])]);
+
+    $client = Mockery::mock(UpdateCheckClient::class);
+    $client->shouldReceive('checkIn')->once()->andReturnNull();
+    app()->instance(UpdateCheckClient::class, $client);
+
+    $this->actingAs(catalogRefreshAdmin());
+
+    Livewire::test(PluginsPage::class)
+        ->call('refreshCatalog')
+        ->assertNotified('Could not reach the marketplace — showing what is known.');
 });

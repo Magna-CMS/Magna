@@ -23,6 +23,20 @@
         </p>
     </div>
     <div class="flex items-center gap-2 shrink-0">
+        {{-- One button, both tabs: re-fetches the hour-cached catalog AND runs
+             an update check-in, because the "Update now" banners on Installed
+             read update_checks rows the scheduled check-in may not have
+             written yet. --}}
+        <button
+            wire:click="refreshCatalog"
+            wire:loading.attr="disabled"
+            wire:target="refreshCatalog"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+        >
+            <svg class="w-4 h-4" wire:loading.class="animate-spin" wire:target="refreshCatalog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>
+            <span wire:loading.remove wire:target="refreshCatalog">Check for updates</span>
+            <span wire:loading wire:target="refreshCatalog">Checking…</span>
+        </button>
         @if ($this->activeTab === 'installed')
             <button
                 wire:click="setTab('addnew')"
@@ -32,19 +46,6 @@
                 Add New Plugin
             </button>
         @else
-            {{-- The catalog is cached for an hour, so a plugin published just
-                 now is absent until the TTL lapses. This is how an admin says
-                 "ask the marketplace again" instead of waiting it out. --}}
-            <button
-                wire:click="refreshCatalog"
-                wire:loading.attr="disabled"
-                wire:target="refreshCatalog"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
-            >
-                <svg class="w-4 h-4" wire:loading.class="animate-spin" wire:target="refreshCatalog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg>
-                <span wire:loading.remove wire:target="refreshCatalog">Refresh catalog</span>
-                <span wire:loading wire:target="refreshCatalog">Refreshing…</span>
-            </button>
             <button
                 wire:click="setTab('installed')"
                 class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"

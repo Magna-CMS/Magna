@@ -316,12 +316,7 @@ class AdminPanelProvider extends PanelProvider
                 ->group('Settings')
                 ->icon($icon)
                 ->sort($i + 1)
-                // Through getUrl(), not a literal path: the panel may live at
-                // /admin (Pages owning the root), and a root-relative
-                // '/settings' falls through to the Pages 404. A closure,
-                // because routes do not exist yet while the panel is being
-                // configured — same as the profile link above.
-                ->url(fn (): string => SettingsPage::getUrl().'#settings-'.$id)
+                ->url(fn (): string => SettingsPage::getUrl().'#settings-'.$id) // never a literal '/settings' — at /admin that path is the Pages 404
                 ->isActiveWhen(fn (): bool => false);
         }
 

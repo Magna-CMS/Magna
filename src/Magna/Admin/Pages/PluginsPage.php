@@ -24,6 +24,7 @@ use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\Exceptions\PluginNotFoundException;
 use Magna\Plugins\PluginManager;
 use Magna\Updater\UpdateCheck;
+use Magna\Updater\UpdateCheckClient;
 use Throwable;
 
 class PluginsPage extends Page
@@ -573,22 +574,26 @@ class PluginsPage extends Page
     }
 
     /**
-     * Drop the cached catalog and ask the marketplace again.
-     *
-     * The catalog is cached for an hour, so a plugin published minutes ago is
-     * simply absent from Add New until the TTL lapses — with nothing on the
-     * page saying the list is a cached one, which reads as "the marketplace
-     * only has four plugins". A site that had just published one counted the
-     * catalog and found it short, exactly that way. The cache stays, because
-     * the catalog is fetched on every render of this page; this is the way to
-     * say "ask again now".
+     * Drop the cached catalog, ask the marketplace again, and check for
+     * updates. The catalog is cached for an hour (a plugin published minutes
+     * ago is absent until the TTL lapses), and the "Update now" banners read
+     * update_checks rows that only a check-in writes — on its 12-hour
+     * schedule. This button is how an admin says "ask again now" for both.
      */
-    public function refreshCatalog(MarketplaceClient $marketplace): void
+    public function refreshCatalog(MarketplaceClient $marketplace, UpdateCheckClient $updates): void
     {
         $marketplace->clearCache();
         $this->refreshPlugins();
 
-        if ($this->marketplaceUnreachable) {
+        // A dead network or a throttled manager degrades to a catalog-only
+        // refresh with a warning — never a broken page.
+        try {
+            $checkedIn = $updates->checkIn() !== null;
+        } catch (Throwable) {
+            $checkedIn = false;
+        }
+
+        if ($this->marketplaceUnreachable || ! $checkedIn) {
             Notification::make()
                 ->title('Could not reach the marketplace — showing what is known.')
                 ->warning()
@@ -597,8 +602,15 @@ class PluginsPage extends Page
             return;
         }
 
+        $updatesFound = UpdateCheck::pluginsWithUpdates()->count();
+
         Notification::make()
             ->title('Catalog refreshed — '.count($this->available).' available to install.')
+            ->body(match (true) {
+                $updatesFound === 1 => 'One installed plugin has an update.',
+                $updatesFound > 1 => $updatesFound.' installed plugins have updates.',
+                default => 'All installed plugins are up to date.',
+            })
             ->success()
             ->send();
     }
