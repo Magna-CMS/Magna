@@ -15,6 +15,17 @@
 @if($ctaUrl !== null)
     <a class="fixture-theme-cta" href="{{ $ctaUrl }}">Download</a>
 @endif
+{{-- The menu closure: chrome that needs a second navigation asks for it by
+     handle. Rendered only when that menu has items, so every other test of
+     this layout sees exactly the markup it did before. --}}
+@php($drawerLinks = $menu('secondary'))
+@if($drawerLinks !== [])
+    <nav class="fixture-theme-drawer">
+        @foreach($drawerLinks as $link)
+            <a href="{{ $link['url'] }}">{{ $link['label'] }}</a>
+        @endforeach
+    </nav>
+@endif
 <main>
     @include('magna-pages::partials.sections')
 </main>
