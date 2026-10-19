@@ -7,8 +7,10 @@ namespace Magna\Admin;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\Widget;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Magna\Admin\Console\NotificationsPruneCommand;
@@ -48,6 +50,7 @@ class AdminServiceProvider extends ServiceProvider
         // Wire plugin contracts after all providers have booted.
         $this->app->booted(function (): void {
             $this->wirePluginContracts();
+            $this->registerErrorExperience();
         });
 
         $this->commands([NotificationsPruneCommand::class, PanelPathCommand::class]);
@@ -226,6 +229,41 @@ class AdminServiceProvider extends ServiceProvider
             ...array_values($byLabel),
             ...array_map(static fn (string $label): NavigationGroup => NavigationGroup::make($label), $core),
         ];
+    }
+
+    /**
+     * What a failed admin request tells the operator.
+     *
+     * In production (the toasts only exist with debug off) every failed
+     * Livewire request showed Filament's one generic "Error while loading
+     * page", whatever actually happened. The two causes an operator can do
+     * something about get their own words: an expired session (419 — the tab
+     * sat open past the session lifetime) explains itself and reloads to the
+     * login screen via the BODY_END script; maintenance (503 — a core update
+     * applying) says the site is briefly down rather than broken. Everything
+     * else keeps the generic toast.
+     *
+     * Registered here, not in AdminPanelProvider::panel(): the notifications
+     * and render hooks are read at page render, so post-boot registration is
+     * equivalent — and the provider file sits against its line pin.
+     */
+    private function registerErrorExperience(): void
+    {
+        Filament::getPanel('magna')
+            ->registerErrorNotification(
+                title: 'Your session expired',
+                body: 'Reloading so you can sign in again…',
+                statusCode: 419,
+            )
+            ->registerErrorNotification(
+                title: 'Updating — back in a moment',
+                body: 'The site is briefly in maintenance while an update finishes.',
+                statusCode: 503,
+            )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): ViewContract => view('magna::filament.session-expired-reload'),
+            );
     }
 
     /**
