@@ -20,6 +20,8 @@ declare(strict_types=1);
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
+use Magna\Admin\AdminPanelProvider;
+use Magna\Admin\Pages\SettingsPage;
 use Magna\Admin\PanelPath;
 use Magna\Admin\PanelPathSwitcher;
 use Magna\Admin\PanelSettings;
@@ -125,4 +127,25 @@ it('shows and moves the path from the console', function (): void {
 
 it('refuses a console call that asks for both paths at once', function (): void {
     $this->artisan('magna:panel:path --root --admin')->assertFailed();
+});
+
+it('builds the settings child links from the settings page URL, never a literal path', function (): void {
+    // The nine Settings children once carried '/settings#…' verbatim. With the
+    // panel moved to /admin (the root handed to Pages), that path belongs to
+    // the frontend and lands on the Pages 404. Deriving from getUrl() keeps
+    // them wherever the panel answers; the test above ("hands the panel
+    // provider the path it resolves") pins the other half of that chain. The
+    // panel's path is fixed at boot, so this cannot assert the /admin form
+    // in-process — it asserts the derivation instead.
+    $provider = new AdminPanelProvider(app());
+
+    $items = (fn (): array => $this->settingsNavigationItems())->call($provider);
+
+    $expected = SettingsPage::getUrl();
+
+    expect($items)->not->toBeEmpty();
+
+    foreach ($items as $item) {
+        expect($item->getUrl())->toStartWith($expected.'#settings-');
+    }
 });
