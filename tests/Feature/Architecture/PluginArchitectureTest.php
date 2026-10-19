@@ -125,9 +125,9 @@ it('keeps plugin classes under the god-class ceiling', function (): void {
     // Splitting one is the same treatment PluginManager got in core.
     $pins = [
         'embhas/embhas/src/Console/Demo/DemoSeeder.php' => 716,
-        'magna/blog/src/Editor/EditorJsSanitizer.php' => 876,
+        'magna/blog/src/Editor/EditorJsSanitizer.php' => 851,
         'magna/blog/src/Filament/Resources/PostResource/Pages/EditsPostInBuilder.php' => 700,
-        'magna/blog/src/Support/BlockRenderer.php' => 992,
+        'magna/blog/src/Support/BlockRenderer.php' => 980,
         'magna/defence/src/Filament/Pages/DefenceDashboardPage.php' => 1025,
         'magna/defence/src/Filament/Pages/DefenceSettingsPage.php' => 1002,
         'magna/marketplace/src/Filament/Pages/MarketplaceSettingsPage.php' => 712,
@@ -213,6 +213,8 @@ it('keeps every adopted quality kit whole, and its analysis level a one-way ratc
     // (2026-09-26) — docs and marketplace both sit at 0 today, with level 1
     // reporting 9 and 10 errors respectively: the next rungs to earn.
     $levelFloors = [
+        // Probed 2026-10-19 at adoption; level 9 reports 110 errors.
+        'magna/blog' => 8,
         'magna/docs' => 0,
         'magna/forms' => 8,
         'magna/marketplace' => 0,
@@ -223,6 +225,8 @@ it('keeps every adopted quality kit whole, and its analysis level a one-way ratc
     ];
 
     $excludePins = [
+        // The optional-SEO bridge: its interface is absent without magna/seo.
+        'magna/blog' => 2,
         'magna/marketplace' => 2,
     ];
 
