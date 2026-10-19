@@ -21,6 +21,9 @@ use Livewire\Livewire;
 use Magna\Admin\Pages\ThemesPage;
 use Magna\Auth\Role;
 use Magna\Marketplace\Marketplace;
+use Magna\Updater\UpdateCheck;
+use Magna\Updater\UpdateCheckClient;
+use Magna\Updater\UpdateCheckResult;
 use Magna\Users\User;
 use Tests\TestCase;
 
@@ -90,4 +93,87 @@ it('leaves the cached catalog alone when the page is merely opened', function ()
         ->assertSee('Cached Theme');
 
     expect(Cache::get(THEME_CATALOG_KEY))->toEqual($cached);
+});
+
+/*
+ * The Installed tab's "Update now" banner reads update_checks rows, and only
+ * a check-in writes those — on a 12-hour schedule. The Refresh button used to
+ * rebuild Browse alone, so a theme version published to the marketplace never
+ * surfaced as an update until the next scheduled check-in: the one thing the
+ * button was pressed for, it did not do. Seen live on a site after a 1.8.1
+ * theme release sat invisible behind the schedule.
+ */
+
+it('runs an update check-in when the Refresh button is pressed', function (): void {
+    $this->actingAs(catalogAdmin());
+
+    Http::fake([
+        Marketplace::API_BASE.'/*' => Http::response([]),
+    ]);
+
+    $client = Mockery::mock(UpdateCheckClient::class);
+    $client->shouldReceive('checkIn')->once()->andReturn(UpdateCheckResult::fromArray([]));
+    app()->instance(UpdateCheckClient::class, $client);
+
+    Livewire::test(ThemesPage::class)
+        ->call('refreshCatalog', true)
+        ->assertNotified();
+});
+
+it('reports a found theme update in the refresh notification', function (): void {
+    $this->actingAs(catalogAdmin());
+
+    Http::fake([
+        Marketplace::API_BASE.'/*' => Http::response([]),
+    ]);
+
+    // The row the (mocked) check-in would have written.
+    $client = Mockery::mock(UpdateCheckClient::class);
+    $client->shouldReceive('checkIn')->once()->andReturnUsing(function () {
+        UpdateCheck::query()->create([
+            'type' => 'theme',
+            'slug' => 'testv/fixture',
+            'current_version' => '1.0.0',
+            'latest_version' => '1.8.1',
+            'update_available' => true,
+            'checked_at' => now(),
+        ]);
+
+        return UpdateCheckResult::fromArray([]);
+    });
+    app()->instance(UpdateCheckClient::class, $client);
+
+    Livewire::test(ThemesPage::class)
+        ->call('refreshCatalog', true)
+        ->assertNotified('Catalog refreshed — 0 themes in the marketplace.');
+});
+
+it('degrades to a warning when the check-in cannot reach the manager', function (): void {
+    $this->actingAs(catalogAdmin());
+
+    Http::fake([
+        Marketplace::API_BASE.'/*' => Http::response([]),
+    ]);
+
+    $client = Mockery::mock(UpdateCheckClient::class);
+    $client->shouldReceive('checkIn')->once()->andReturnNull();
+    app()->instance(UpdateCheckClient::class, $client);
+
+    Livewire::test(ThemesPage::class)
+        ->call('refreshCatalog', true)
+        ->assertNotified('Could not reach the marketplace — showing what is known.');
+});
+
+it('never checks in on a mere page load', function (): void {
+    $this->actingAs(catalogAdmin());
+
+    Cache::put(THEME_CATALOG_KEY, catalogEntry('cached/theme', 'Cached Theme'), 3600);
+
+    $client = Mockery::mock(UpdateCheckClient::class);
+    $client->shouldReceive('checkIn')->never();
+    app()->instance(UpdateCheckClient::class, $client);
+
+    Http::preventStrayRequests();
+
+    Livewire::test(ThemesPage::class)->assertOk();
 });

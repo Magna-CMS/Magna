@@ -16,6 +16,7 @@ use Magna\Marketplace\PluginListing;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
 use Magna\Updater\UpdateCheck;
+use Magna\Updater\UpdateCheckClient;
 use Throwable;
 
 /**
@@ -61,7 +62,7 @@ class ThemesPage extends Page
 
     public function mount(): void
     {
-        $this->refreshCatalog();
+        $this->loadCatalog(false);
     }
 
     // The blade renders its own header, same as the Plugins page.
@@ -141,7 +142,8 @@ class ThemesPage extends Page
     }
 
     /**
-     * Pull the marketplace's theme catalog.
+     * Pull the marketplace's theme catalog — and, on a button press, run an
+     * update check-in too.
      *
      * `$fresh` is what the Refresh button passes and what a page load does
      * not. A catalog response stands for an hour, so without it the button
@@ -150,8 +152,58 @@ class ThemesPage extends Page
      * Browse, and there was no way to correct that short of waiting out the
      * TTL or clearing the cache from a shell. A page load still reads the
      * cache, because opening a screen is not a request to re-fetch.
+     *
+     * The check-in matters because the Installed tab's "Update now" banner
+     * reads update_checks rows, and only UpdateCheckClient::checkIn() writes
+     * those — on its 12-hour schedule. Without it, Refresh rebuilt Browse and
+     * left the banner stale, which is the one thing the button is pressed
+     * for; and since Browse hides installed themes, the click looked like a
+     * no-op. A page load still never checks in, for the same reason it never
+     * re-fetches.
      */
-    public function refreshCatalog(bool $fresh = false): void
+    public function refreshCatalog(UpdateCheckClient $updates, bool $fresh = false): void
+    {
+        $this->loadCatalog($fresh);
+
+        if (! $fresh) {
+            return;
+        }
+
+        // A dead network or a throttled manager (the check-in endpoint is
+        // rate-limited server-side) degrades to a catalog-only refresh with a
+        // warning — never a broken page.
+        try {
+            $checkedIn = $updates->checkIn() !== null;
+        } catch (Throwable) {
+            $checkedIn = false;
+        }
+
+        if ($this->marketplaceUnreachable || ! $checkedIn) {
+            Notification::make()
+                ->title('Could not reach the marketplace — showing what is known.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $updatesFound = UpdateCheck::query()
+            ->where('type', 'theme')
+            ->where('update_available', true)
+            ->count();
+
+        Notification::make()
+            ->title('Catalog refreshed — '.count($this->available).' theme'.(count($this->available) === 1 ? '' : 's').' in the marketplace.')
+            ->body(match (true) {
+                $updatesFound === 1 => 'One installed theme has an update.',
+                $updatesFound > 1 => $updatesFound.' installed themes have updates.',
+                default => null,
+            })
+            ->success()
+            ->send();
+    }
+
+    private function loadCatalog(bool $fresh): void
     {
         $client = app(MarketplaceClient::class);
 
