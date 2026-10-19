@@ -267,7 +267,18 @@ class ThemesPage extends Page
     {
         try {
             $message = app(LicenseInstaller::class)->update($name);
-            Notification::make()->title($message)->success()->send();
+
+            // The installer puts anything the operator has to ACT on after a
+            // newline — today, that a theme shipping site content needs its
+            // kit applied as a second step. A toast whose title is three
+            // sentences long is a toast nobody reads to the end.
+            // "\n", not PHP_EOL: the installer writes a literal \n, and
+            // PHP_EOL is "\r\n" on Windows — which would match nothing and
+            // print the whole notice as the title on exactly the machines
+            // this is developed on.
+            [$title, $body] = array_pad(explode("\n", $message, 2), 2, null);
+
+            Notification::make()->title($title)->body($body)->success()->send();
         } catch (Throwable $e) {
             // Logged as well as shown, for the same reason as the Plugins
             // page: a toast leaves no server-side trace of a refused grant.

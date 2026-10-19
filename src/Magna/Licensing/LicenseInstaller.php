@@ -16,6 +16,7 @@ use Magna\Plugins\PluginPackageName;
 use Magna\Plugins\PluginRecord;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
+use Magna\Themes\ThemeSiteKit;
 use Magna\Updater\InstalledVersionRecorder;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -414,9 +415,19 @@ class LicenseInstaller
         // page kept offering the version just installed.
         $this->versions->record($manifest->name, $manifest->version, 'theme');
 
-        return $isUpdate
-            ? $manifest->displayName.' updated to '.$manifest->version.'.'
-            : $manifest->displayName.' installed. Activate it from Themes.';
+        if (! $isUpdate) {
+            return $manifest->displayName.' installed. Activate it from Themes.';
+        }
+
+        // An update swaps files and nothing else, which is silently inert for a
+        // theme whose release is a menu or a page rather than CSS. Said out
+        // loud here because every other signal says success: new files, new
+        // version, a site reporting itself up to date, and a page that looks
+        // exactly as before. The second line becomes the notification's body.
+        $notice = ThemeSiteKit::updateNotice($targetDir, $manifest->name);
+
+        return $manifest->displayName.' updated to '.$manifest->version.'.'
+            .($notice === '' ? '' : "\n".$notice);
     }
 
     /**
