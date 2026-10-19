@@ -136,3 +136,100 @@ it('keeps row keys out of the section and column vocabularies', function (): voi
         // the columns with rowAlign. Two names, because two meanings.
         ->and($rowKeys)->not->toContain('alignItems');
 });
+
+/*
+ * Exact column widths (settings.row.columnTemplate).
+ *
+ * `span` is twelfths, and twelfths cannot say 1.15 / 0.85. Until this key
+ * existed the only way to render that ratio was a theme class switching the
+ * row to grid behind the document's back — so the builder went on showing
+ * `6, 6` for a band the page drew unequal, with nothing on screen admitting
+ * the override. A real design hit it 26 times. The tests below are about the
+ * two things that make the key worth having: what the document stores is what
+ * the page renders, and a row that stores nothing renders exactly as before.
+ */
+
+it('renders a row ratio the span field could never hold', function (): void {
+    $author = rowLayoutUser();
+    rowLayoutPage($author, 'row-tracks', ['columnTemplate' => '1.15fr 0.85fr']);
+
+    $html = $this->get('/row-tracks')->assertOk()->getContent();
+
+    expect($html)->toContain('.magna-n-sec-row .magna-columns{')
+        ->and($html)->toContain('grid-template-columns:1.15fr 0.85fr');
+});
+
+it('makes the row a grid, because nothing else would make the template apply', function (): void {
+    $author = rowLayoutUser();
+    rowLayoutPage($author, 'row-grid', ['columnTemplate' => '1.15fr 0.85fr']);
+
+    $html = $this->get('/row-grid')->assertOk()->getContent();
+
+    // Derived, never asked for: a row is flex and each column carries an
+    // inline `flex: N N 0%` that a grid template would otherwise lose to.
+    // Under grid that inline value stops applying on its own — which is why
+    // there is no `!important` here and the span stays written as the
+    // fallback for a row whose template is later removed.
+    expect($html)->toContain('display:grid')
+        ->and($html)->toContain('flex: 6 6 0%');
+});
+
+it('collapses on a phone only because the document says to', function (): void {
+    $author = rowLayoutUser();
+    rowLayoutPage($author, 'row-tracks-mobile', [
+        'columnTemplate' => ['$responsive' => ['base' => '1.15fr 0.85fr', 'mobile' => '1fr']],
+    ]);
+
+    $html = $this->get('/row-tracks-mobile')->assertOk()->getContent();
+
+    // A grid row does not inherit the one-column collapse the shell gives a
+    // flex row, so the narrow value is stored rather than assumed. Assumed,
+    // the builder could not show it, and the disagreement would be back.
+    expect($html)->toContain('grid-template-columns:1.15fr 0.85fr')
+        ->and($html)->toContain('@media (max-width: 767.98px)')
+        ->and($html)->toContain('grid-template-columns:1fr !important');
+});
+
+it('refuses a track this row could not show the editor', function (string $template): void {
+    // FR numbers only, by the rule the whole style table follows: a control
+    // is offered when setting it will matter, and a track the column control
+    // cannot display is the very disagreement the key exists to end.
+    $css = ResponsiveStyles::rulesFor(
+        'sec-1',
+        ['columnTemplate' => $template],
+        StyleDescriptors::ROW,
+        withBase: true,
+        within: '.magna-columns',
+    );
+
+    expect($css)->toBe('');
+})->with([
+    'a keyword track' => 'auto 1fr',
+    'a percentage' => '1.15fr 20%',
+    'numbers with no unit' => '1.15 0.85',
+    'a zero track' => '0fr 1fr',
+    'more tracks than the grid has columns' => '1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr',
+    'anything with a function in it' => 'minmax(0, 1fr) 1fr',
+]);
+
+it('leaves a row that stores no template exactly as it was', function (): void {
+    $author = rowLayoutUser();
+    rowLayoutPage($author, 'row-no-tracks', ['gap' => '3rem']);
+
+    $html = $this->get('/row-no-tracks')->assertOk()->getContent();
+
+    expect($html)->toContain('gap:3rem')
+        ->and($html)->not->toContain('display:grid')
+        ->and($html)->not->toContain('grid-template-columns')
+        ->and($html)->toContain('flex: 6 6 0%');
+});
+
+it('does not offer the template as one more field in the style panel', function (): void {
+    // Its value is one number per COLUMN, and that panel does not know how
+    // many columns a row has. It is drawn beside the column list, where a
+    // width sits next to the column it belongs to.
+    $rowKeys = array_column(StyleDescriptors::forKind(StyleDescriptors::ROW), 'key');
+
+    expect($rowKeys)->not->toContain('columnTemplate')
+        ->and($rowKeys)->toContain('gap');
+});

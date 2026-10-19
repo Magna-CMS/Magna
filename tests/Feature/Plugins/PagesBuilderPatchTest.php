@@ -90,6 +90,17 @@ it('classifies operations by what they touch', function (): void {
         ->toBe(PatchKind::Condition);
 });
 
+it('calls the column widths on a row layout, not styling', function (): void {
+    // The key lives under settings, but it is the decision the span field
+    // makes — and it has to agree with span, which is structure. Classing it
+    // as styling would both split one gesture across two capabilities and
+    // let anyone who may recolour a heading redraw the page's columns.
+    expect(classify(['op' => 'add', 'path' => '/0/settings/row/columnTemplate', 'value' => '1.15fr 0.85fr']))
+        ->toBe(PatchKind::Structure)
+        ->and(classify(['op' => 'add', 'path' => '/0/settings/row/gap', 'value' => '3rem']))
+        ->toBe(PatchKind::Style);
+});
+
 it('denies paths it cannot classify', function (): void {
     expect(fn () => classify(['op' => 'replace', 'path' => '/0/somethingNew', 'value' => 'x']))
         ->toThrow(PatchException::class, 'unrecognised document key');
