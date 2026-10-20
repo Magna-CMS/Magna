@@ -40,6 +40,15 @@ it('hands out this visitor\'s token and forbids storing it', function (): void {
         ->and($response->headers->has('Access-Control-Allow-Origin'))->toBeFalse();
 });
 
+it('never becomes the page a failed post is sent back to', function (): void {
+    $this->get('/_magna/form-token', ['X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'application/json'])->assertOk();
+
+    expect(app('session.store')->previousUrl())->toBeNull();
+
+    $html = Blade::render('<form><x-magna::form-token/></form>');
+    expect($html)->toContain("'X-Requested-With': 'XMLHttpRequest'");
+});
+
 it('issues a token the real csrf check accepts', function (): void {
     $token = $this->getJson('/_magna/form-token')->json('token');
     $session = app('session.store')->getId();

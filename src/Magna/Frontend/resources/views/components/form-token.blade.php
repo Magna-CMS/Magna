@@ -14,7 +14,9 @@
     const fetchToken = () => {
         pending ??= fetch(endpoint, {
             credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
+            // Marked as XHR so the session does not record the endpoint as
+            // the visitor's previous URL, which back() would return them to.
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             cache: 'no-store',
         })
             .then((response) => (response.ok ? response.json() : Promise.reject(response.status)))
