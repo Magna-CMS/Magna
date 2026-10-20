@@ -6,10 +6,13 @@ namespace Magna\Marketplace;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Magna\Admin\AdminAssetPublisher;
+use Magna\Admin\Notifications\NotificationRecipients;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginDiscovery;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
+use Magna\Support\Version;
 use Magna\Updater\InstalledVersionRecorder;
 use Throwable;
 
@@ -26,6 +29,9 @@ use Throwable;
 class PluginInstaller
 {
     private const LOCK_KEY = 'magna.marketplace.install.lock';
+
+    /** Which kind of run is in progress, so every failure path words itself right. */
+    private bool $runningUpdate = false;
 
     public function __construct(
         private readonly MarketplaceClient $marketplace,
@@ -56,6 +62,7 @@ class PluginInstaller
 
     private function run(string $package, bool $update): InstallState
     {
+        $this->runningUpdate = $update;
         $this->setProgress($package, InstallState::Running, 'Starting…');
 
         if (! $this->composer->isAvailable()) {
@@ -129,6 +136,13 @@ class PluginInstaller
             }
 
             return $this->finishSuccess($package, $listing->version, $update);
+        } catch (Throwable $e) {
+            // Anything thrown above (the catalog call, Composer itself) used to
+            // escape with progress frozen at "Downloading…" and nothing told
+            // anyone. It is a failed run like any other.
+            report($e);
+
+            return $this->fail($package, 'The '.($update ? 'update' : 'installation').' stopped unexpectedly: '.$e->getMessage());
         } finally {
             $lock->release();
         }
@@ -229,7 +243,27 @@ class PluginInstaller
 
         $this->setProgress($package, InstallState::Completed, $update ? 'Updated.' : 'Installed.');
 
+        $this->tellAdmins(
+            $update ? "{$package} updated to ".Version::label($installedVersion) : "{$package} installed",
+            $update ? 'The new version is live.' : 'The plugin is installed and enabled.',
+            'success',
+        );
+
         return InstallState::Completed;
+    }
+
+    /**
+     * Installs and updates run in a queue worker, out of sight of the page
+     * that asked for them. The bell is where the outcome survives a closed
+     * tab — a failed update used to leave no trace an admin would ever see.
+     */
+    private function tellAdmins(string $title, string $body, string $status): void
+    {
+        try {
+            NotificationRecipients::notifyDashboard($title, $body, $status);
+        } catch (Throwable) {
+            // Best-effort: the progress record and the log carry the outcome.
+        }
     }
 
     /**
@@ -260,7 +294,7 @@ class PluginInstaller
     /**
      * Current install progress for a package.
      *
-     * @return array{state: string|null, message: string, waiting_seconds: int}
+     * @return array{state: string|null, message: string, waiting_seconds: int, kind: string}
      */
     public static function progress(string $package): array
     {
@@ -308,6 +342,12 @@ class PluginInstaller
     {
         InstallProgress::clearPending($package);
         $this->setProgress($package, InstallState::Failed, $message);
+
+        $this->tellAdmins(
+            "Couldn't ".($this->runningUpdate ? 'update' : 'install')." {$package}",
+            $message,
+            'danger',
+        );
 
         return InstallState::Failed;
     }

@@ -12,13 +12,12 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Magna\Admin\Concerns\SubmitsPluginFeedback;
+use Magna\Admin\Concerns\TracksPluginInstalls;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseInstaller;
 use Magna\Licensing\LicenseStore;
-use Magna\Marketplace\InstallState;
 use Magna\Marketplace\MarketplaceClient;
 use Magna\Marketplace\PluginCatalogView;
-use Magna\Marketplace\PluginInstaller;
 use Magna\Marketplace\PluginInstallStarter;
 use Magna\Plugins\Exceptions\PluginCompatibilityException;
 use Magna\Plugins\Exceptions\PluginNotFoundException;
@@ -33,6 +32,7 @@ class PluginsPage extends Page
     // webhook. onOrderSettled() below is this page's half of it.
     use ChecksOutWithRazorpay;
     use SubmitsPluginFeedback;
+    use TracksPluginInstalls;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-puzzle-piece';
 
@@ -73,9 +73,6 @@ class PluginsPage extends Page
     // Confirmation target for modal actions
     public ?string $pendingPluginName = null;
 
-    /** @var list<string> Packages currently queued/installing from the marketplace. */
-    public array $installQueue = [];
-
     public static function canAccess(): bool
     {
         return auth()->user()?->can('settings.manage') ?? false;
@@ -115,10 +112,7 @@ class PluginsPage extends Page
         $allSelected = $filteredNames !== []
             && count(array_intersect($this->selectedPlugins, $filteredNames)) === count($filteredNames);
 
-        $installProgress = [];
-        foreach ($this->installQueue as $pkg) {
-            $installProgress[$pkg] = PluginInstaller::progress($pkg);
-        }
+        $installProgress = $this->installProgress();
 
         return compact('filteredInstalled', 'filteredAvailable', 'counts', 'filteredNames', 'allSelected', 'installProgress');
     }
@@ -256,9 +250,7 @@ class PluginsPage extends Page
                     return;
                 }
 
-                if (! in_array($name, $this->installQueue, true)) {
-                    $this->installQueue[] = $name;
-                }
+                $this->trackInstall($name);
 
                 Notification::make()->title("Queued {$name} for update…")->send();
 
@@ -356,9 +348,7 @@ class PluginsPage extends Page
                     return;
                 }
 
-                if (! in_array($package, $this->installQueue, true)) {
-                    $this->installQueue[] = $package;
-                }
+                $this->trackInstall($package);
 
                 Notification::make()->title("Queued {$package} for installation…")->send();
             });
@@ -376,54 +366,6 @@ class PluginsPage extends Page
     protected function trialNeedsAccountBecause(): ?string
     {
         return 'A trial is issued to your Magna Account, so connect one first.';
-    }
-
-    /** Poll install progress for the queued packages; notify + reload when done. */
-    public function pollInstalls(): void
-    {
-        if ($this->installQueue === []) {
-            return;
-        }
-
-        $stillGoing = [];
-        $anyFinished = false;
-        $starter = app(PluginInstallStarter::class);
-
-        foreach ($this->installQueue as $package) {
-            // No worker took the job. Run one stalled install per poll so a
-            // long request stays bounded to a single Composer run; anything
-            // else queued behind it is picked up by the following polls.
-            if (! $anyFinished && $starter->isStalled($package)) {
-                Notification::make()
-                    ->title('No background worker is running')
-                    ->body("Installing {$package} in this request instead — keep this page open until it finishes.")
-                    ->warning()
-                    ->send();
-
-                $starter->installStalledInline($package);
-            }
-
-            $state = PluginInstaller::progress($package)['state'];
-
-            if ($state === InstallState::Completed->value) {
-                Notification::make()->title("{$package} installed.")->success()->send();
-                $anyFinished = true;
-            } elseif ($state === InstallState::Failed->value) {
-                $message = PluginInstaller::progress($package)['message'];
-                Notification::make()->title("Couldn't install {$package}")->body($message)->danger()->send();
-                $anyFinished = true;
-            } else {
-                $stillGoing[] = $package;
-            }
-        }
-
-        $this->installQueue = $stillGoing;
-
-        // When everything finishes, reload so the installed list reflects reality.
-        if ($anyFinished && $this->installQueue === []) {
-            $url = static::getUrl();
-            $this->replaceUrl($url);
-        }
     }
 
     private function pendingDisplayName(): string

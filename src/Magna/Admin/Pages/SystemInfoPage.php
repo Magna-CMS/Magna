@@ -15,6 +15,7 @@ use Magna\Admin\Concerns\ResolvesIncompatiblePlugins;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\Runtime;
+use Magna\Support\Version;
 use Magna\System\SystemHealthCollector;
 use Magna\Updater\Footprint\FootprintCheck;
 use Magna\Updater\UpdateCheck;
@@ -94,7 +95,7 @@ class SystemInfoPage extends Page
 
                     if ($result->core?->updateAvailable) {
                         Notification::make()
-                            ->title('Update available: v'.$result->core->latestVersion)
+                            ->title('Update available: '.Version::label($result->core->latestVersion))
                             ->body("Running v{$current}.".($pending !== '' ? " {$pending} also available." : ''))
                             ->warning()
                             ->send();

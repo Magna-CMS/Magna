@@ -4,7 +4,7 @@ namespace Tests;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
-use Magna\Marketplace\AdminAssetPublisher;
+use Magna\Admin\AdminAssetPublisher;
 use Tests\Support\GuardsTheDevelopmentDatabase;
 
 abstract class TestCase extends BaseTestCase
@@ -28,6 +28,10 @@ abstract class TestCase extends BaseTestCase
         $this->app->instance(AdminAssetPublisher::class, new class extends AdminAssetPublisher
         {
             public function publish(): void {}
+
+            public function requestPublish(): void {}
+
+            public function publishIfRequested(): void {}
         });
     }
 }

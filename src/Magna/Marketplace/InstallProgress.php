@@ -19,6 +19,8 @@ final class InstallProgress
 {
     private const TTL = 900;
 
+    private const ACTIVE_KEY = 'magna.marketplace.install.active';
+
     public static function set(string $package, InstallState $state, string $message): void
     {
         $current = self::raw($package);
@@ -27,6 +29,7 @@ final class InstallProgress
             'state' => $state->value,
             'message' => $message,
             'queued_at' => is_int($current['queued_at'] ?? null) ? $current['queued_at'] : null,
+            'kind' => is_string($current['kind'] ?? null) ? $current['kind'] : null,
         ], self::TTL);
     }
 
@@ -54,10 +57,17 @@ final class InstallProgress
             'state' => InstallState::Queued->value,
             'message' => $message ?? 'Queued — waiting for a background worker.',
             'queued_at' => now()->getTimestamp(),
+            'kind' => $update ? 'update' : 'install',
         ], self::TTL);
+
+        $active = self::active();
+        if (! in_array($package, $active, true)) {
+            $active[] = $package;
+        }
+        Cache::put(self::ACTIVE_KEY, $active, self::TTL);
     }
 
-    /** @return array{state: string|null, message: string, waiting_seconds: int} */
+    /** @return array{state: string|null, message: string, waiting_seconds: int, kind: string} */
     public static function read(string $package): array
     {
         $value = self::raw($package);
@@ -68,7 +78,39 @@ final class InstallProgress
             'state' => is_string($value['state'] ?? null) ? $value['state'] : null,
             'message' => is_string($value['message'] ?? null) ? $value['message'] : '',
             'waiting_seconds' => $queuedAt === null ? 0 : max(0, now()->getTimestamp() - $queuedAt),
+            'kind' => ($value['kind'] ?? null) === 'update' ? 'update' : 'install',
         ];
+    }
+
+    /**
+     * Packages queued from the panel whose outcome no one has seen yet.
+     *
+     * The Plugins page kept its watch list in a Livewire property, so a reload
+     * — or opening the page in another tab — forgot an install still running,
+     * and its result was never shown. The list lives here instead; a package
+     * leaves it when a page acknowledges the finished result, or when its
+     * progress record expires.
+     *
+     * @return list<string>
+     */
+    public static function active(): array
+    {
+        $stored = Cache::get(self::ACTIVE_KEY);
+
+        return array_values(array_filter(
+            is_array($stored) ? $stored : [],
+            fn (mixed $package): bool => is_string($package) && Cache::has(self::key($package)),
+        ));
+    }
+
+    /** A page has shown this package's finished outcome; stop watching it. */
+    public static function acknowledge(string $package): void
+    {
+        Cache::put(
+            self::ACTIVE_KEY,
+            array_values(array_diff(self::active(), [$package])),
+            self::TTL,
+        );
     }
 
     public static function isPending(string $package): bool

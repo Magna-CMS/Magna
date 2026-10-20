@@ -75,6 +75,9 @@
     >Add New Plugin</button>
 </div>
 
+{{-- Install/update queue — polled on both tabs. --}}
+@include('magna::admin.partials.plugins.install-queue')
+
 {{-- ═══════════════════════════════════════════════════════════════════════════
      INSTALLED PANEL
      ═══════════════════════════════════════════════════════════════════════════ --}}

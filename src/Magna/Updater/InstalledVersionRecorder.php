@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Magna\Updater;
 
+use Magna\Support\Version;
+
 /**
  * Marks a plugin's or theme's recorded update as taken.
  *
@@ -32,17 +34,14 @@ final class InstalledVersionRecorder
             return;
         }
 
-        $latest = $check->latest_version;
-
         // A newer version may exist beyond the one installed (a site can be two
         // releases behind), so this does not blindly clear the flag: it answers
-        // "is there still something newer than what is now on disk".
-        $stillBehind = is_string($latest) && $latest !== ''
-            && version_compare($installedVersion, $latest, '<');
-
+        // "is there still something newer than what is now on disk". Through
+        // Version, because the installer passes the catalog's tag (v1.1.0) and
+        // a raw version_compare against a bare latest got the answer backwards.
         $check->forceFill([
-            'current_version' => $installedVersion,
-            'update_available' => $stillBehind,
+            'current_version' => Version::bare($installedVersion) ?? $installedVersion,
+            'update_available' => Version::isNewer($check->latest_version, $installedVersion),
             'license_required' => false,
             'checked_at' => now(),
         ])->save();

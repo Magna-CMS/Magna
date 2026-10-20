@@ -7,6 +7,7 @@ namespace Magna\Admin\Concerns;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Magna\MagnaServiceProvider;
+use Magna\Support\Version;
 use Magna\Updater\CoreUpdateProgress;
 use Magna\Updater\CoreUpdater;
 use Magna\Updater\CoreUpdateStarter;
@@ -41,13 +42,13 @@ trait DrivesCoreUpdate
     public function updateNowAction(): Action
     {
         return Action::make('updateNow')
-            ->label(fn (): string => 'Update to v'.(UpdateCheck::core()->latest_version ?? ''))
+            ->label(fn (): string => 'Update to '.Version::label(UpdateCheck::core()?->latest_version))
             ->icon('heroicon-o-rocket-launch')
             ->color('warning')
             ->visible(fn (): bool => (UpdateCheck::core()->update_available ?? false) && ! $this->updating)
             ->authorize(fn (): bool => auth()->user()?->can('settings.manage') ?? false)
             ->requiresConfirmation()
-            ->modalHeading(fn (): string => 'Update Magna CMS to v'.(UpdateCheck::core()->latest_version ?? '').'?')
+            ->modalHeading(fn (): string => 'Update Magna CMS to '.Version::label(UpdateCheck::core()?->latest_version).'?')
             ->modalDescription('The site goes into maintenance mode during the update. The release is staged beside the live files and switched in; the previous files stay until the new release has proven it boots.')
             ->modalSubmitActionLabel('Update now')
             ->action(function (CoreUpdater $updater, CoreUpdateStarter $starter, UpdatePreflight $preflight): void {
@@ -63,7 +64,7 @@ trait DrivesCoreUpdate
                 // enforced regardless once it is on disk.
                 $hints = $preflight->hintProblems($core->requires_php, $core->min_upgrade_from);
                 if ($hints !== []) {
-                    Notification::make()->title("Can't update to v{$core->latest_version}")->body(implode(' ', array_map(static fn (PreflightProblem $p): string => $p->message, $hints)))->danger()->send();
+                    Notification::make()->title("Can't update to ".Version::label($core->latest_version))->body(implode(' ', array_map(static fn (PreflightProblem $p): string => $p->message, $hints)))->danger()->send();
 
                     return;
                 }

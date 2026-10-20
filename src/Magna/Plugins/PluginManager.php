@@ -198,7 +198,7 @@ class PluginManager
 
         // Enabling a plugin adds resources/pages/widgets to the admin panel. If the
         // Filament component cache is warm it would hide them, so invalidate it.
-        $this->cacheInvalidator->invalidate();
+        $this->cacheInvalidator->afterEnable();
 
         $this->commandRegistrar->register($plugin);
     }

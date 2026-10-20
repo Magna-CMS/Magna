@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Magna\MagnaServiceProvider;
+use Magna\Support\Version;
 
 /**
  * @property int $id
@@ -83,12 +84,9 @@ class UpdateCheck extends Model
         // already running. If the code's version no longer matches the
         // row, recompute against what is actually running now.
         if ($check !== null && $check->current_version !== MagnaServiceProvider::VERSION) {
-            $latest = ltrim((string) $check->latest_version, 'vV');
-
             $check->forceFill([
                 'current_version' => MagnaServiceProvider::VERSION,
-                'update_available' => $latest !== ''
-                    && version_compare($latest, MagnaServiceProvider::VERSION, '>'),
+                'update_available' => Version::isNewer($check->latest_version, MagnaServiceProvider::VERSION),
             ])->saveQuietly();
         }
 

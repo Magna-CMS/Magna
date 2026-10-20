@@ -47,6 +47,14 @@ class AdminServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__.'/Resources/views', 'magna');
         $this->loadRoutesFrom(__DIR__.'/routes/web.php');
 
+        // A core update or a plugin enable asks for admin assets to be
+        // republished; honour it once the request is over, when every enabled
+        // plugin has booted and registered its assets. Resolved at terminate
+        // time so a test's stub is the one asked.
+        $this->app->terminating(function (): void {
+            $this->app->make(AdminAssetPublisher::class)->publishIfRequested();
+        });
+
         // Wire plugin contracts after all providers have booted.
         $this->app->booted(function (): void {
             $this->wirePluginContracts();

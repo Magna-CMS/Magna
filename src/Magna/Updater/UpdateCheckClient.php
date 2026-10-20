@@ -12,6 +12,7 @@ use Magna\Marketplace\MarketplaceHttp;
 use Magna\Notices\DashboardNotice;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\InstallFingerprint;
+use Magna\Support\Version;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
 use Magna\Updater\Engine\EngineLoader;
@@ -103,7 +104,12 @@ class UpdateCheckClient
                 'download_url' => $result->core->downloadUrl,
                 'download_sha256' => $result->core->downloadSha256,
                 'download_sha256_signature' => $result->core->downloadSha256Signature,
-                'update_available' => $result->core->updateAvailable,
+                // Both must agree: the hub's flag also carries installability
+                // (PHP floor, minimum upgrade-from) this side cannot judge, and
+                // the local comparison stops a hub that compares versions badly
+                // from offering the release already running.
+                'update_available' => $result->core->updateAvailable
+                    && Version::isNewer($result->core->latestVersion, MagnaServiceProvider::VERSION),
                 'checked_at' => $now,
             ];
 
@@ -127,7 +133,7 @@ class UpdateCheckClient
                     $check,
                     ['latest_version', 'update_available'],
                     'Core update available',
-                    "Magna v{$check->latest_version} is available (currently running v{$check->current_version}).",
+                    'Magna '.Version::label($check->latest_version).' is available (currently running '.Version::label($check->current_version).').',
                 );
             }
         }
@@ -139,14 +145,27 @@ class UpdateCheckClient
             // page and the Plugins page each read only their own.
             $isTheme = ! array_key_exists($slug, $installedPlugins) && array_key_exists($slug, $installedThemes);
 
+            $current = ($isTheme ? $installedThemes : $installedPlugins)[$slug] ?? 'unknown';
+
+            // Whether a newer release exists is decided HERE, from the hub's
+            // latest version and what is actually installed — not from the
+            // hub's own flag. That flag once compared a git tag ("v1.1.0")
+            // against a bare installed version and answered "no update" for
+            // every tagged plugin; trusting it hid real updates on every site.
+            // The hub stays authoritative for what it alone knows: which
+            // version is latest (and compatible) and whether this site's
+            // licence covers it. The two flags stay mutually exclusive.
+            $isNewer = Version::isNewer($plugin->latestVersion, $current);
+            $licenseRequired = $isNewer && $plugin->licenseRequired;
+
             $check = UpdateCheck::query()->updateOrCreate(
                 ['type' => $isTheme ? 'theme' : 'plugin', 'slug' => $slug],
                 [
-                    'current_version' => ($isTheme ? $installedThemes : $installedPlugins)[$slug] ?? 'unknown',
+                    'current_version' => $current,
                     'latest_version' => $plugin->latestVersion,
                     'changelog_url' => $plugin->changelogUrl,
-                    'update_available' => $plugin->updateAvailable,
-                    'license_required' => $plugin->licenseRequired,
+                    'update_available' => $isNewer && ! $licenseRequired,
+                    'license_required' => $licenseRequired,
                     'checked_at' => $now,
                 ]
             );
@@ -156,7 +175,7 @@ class UpdateCheckClient
                     $check,
                     ['latest_version', 'update_available'],
                     $isTheme ? 'Theme update available' : 'Plugin update available',
-                    "{$slug} v{$check->latest_version} is available (currently running v{$check->current_version}).",
+                    $slug.' '.Version::label($check->latest_version).' is available (currently running '.Version::label($check->current_version).').',
                 );
             }
         }

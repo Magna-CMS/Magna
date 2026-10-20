@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Magna\Marketplace\AdminAssetPublisher;
+use Magna\Admin\AdminAssetPublisher;
 use Magna\Marketplace\ComposerResult;
 use Magna\Marketplace\ComposerRunner;
 use Magna\Marketplace\InstallState;

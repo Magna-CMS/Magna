@@ -63,6 +63,7 @@ chdir($root);
 require_once __DIR__.'/support/release-composer.php';
 // The release manifest and its assembly, same arrangement.
 require_once __DIR__.'/support/release-manifest.php';
+require_once __DIR__.'/support/release-public.php';
 // The quality gates a release must pass before it is staged; see there for
 // what runs and why `--skip-gates` is an emergency, not a shortcut.
 require_once __DIR__.'/support/release-gates.php';
@@ -225,7 +226,7 @@ rrmdir($stage);
 mkdir($stage, 0755, true);
 
 // Directories copied verbatim (runtime code + assets).
-$copyDirs = ['app', 'bootstrap', 'config', 'database', 'lang', 'public', 'resources', 'routes', 'schemas', 'src'];
+$copyDirs = ['app', 'bootstrap', 'config', 'database', 'lang', 'resources', 'routes', 'schemas', 'src'];
 // Individual files needed at runtime / for the install.
 $copyFiles = ['artisan', 'composer.json', 'composer.lock', '.env.example'];
 
@@ -248,6 +249,22 @@ foreach ($copyDirs as $dir) {
     say("  copy {$dir}/");
     copy_tree($src, $stage.'/'.$dir, $excludeNames, $excludeExt);
 }
+
+// public/ ships what the repository tracks, never the build machine's working
+// tree: a dev checkout's published plugin assets and compiled app front ends
+// live there too. public/build (gitignored) is copied explicitly further down.
+try {
+    $publicFiles = release_tracked_public($root);
+} catch (RuntimeException $e) {
+    fail($e->getMessage());
+}
+foreach ($publicFiles as $file) {
+    if (! is_dir(dirname($stage.'/'.$file))) {
+        mkdir(dirname($stage.'/'.$file), 0755, true);
+    }
+    copy($root.'/'.$file, $stage.'/'.$file);
+}
+say('  copy public/ ('.count($publicFiles).' tracked files)');
 
 foreach ($copyFiles as $file) {
     if (is_file($root.'/'.$file)) {

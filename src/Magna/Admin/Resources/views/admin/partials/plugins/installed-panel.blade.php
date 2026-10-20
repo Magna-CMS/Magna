@@ -151,7 +151,11 @@
                                         <div class="mt-2.5 inline-flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 text-amber-800 dark:text-amber-400 text-[12.5px] rounded-lg px-3 py-2">
                                             <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
                                             Version {{ $p['update_version'] }} is available.
-                                            <button wire:click="update('{{ $p['name'] }}')" class="font-semibold underline hover:no-underline transition-all">Update now</button>
+                                            @if (in_array($p['name'], $installQueue, true))
+                                                <span class="font-semibold">Updating… {{ $installProgress[$p['name']]['message'] ?? '' }}</span>
+                                            @else
+                                                <button wire:click="update('{{ $p['name'] }}')" class="font-semibold underline hover:no-underline transition-all">Update now</button>
+                                            @endif
                                         </div>
                                     @elseif ($p['license_blocked_version'] ?? null)
                                         {{-- A newer version exists that this site's licence does not

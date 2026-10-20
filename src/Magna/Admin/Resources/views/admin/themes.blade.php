@@ -62,7 +62,7 @@
                         <div class="min-w-0">
                             <div class="font-semibold text-gray-900 dark:text-white">{{ $theme['display_name'] }}</div>
                             <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                                v{{ $theme['version'] }}@if ($theme['author'] !== '') · {{ $theme['author'] }}@endif
+                                {{ $theme['version_label'] }}@if ($theme['author'] !== '') · {{ $theme['author'] }}@endif
                             </div>
                         </div>
                         @if ($theme['active'])
@@ -145,7 +145,7 @@
                         <div class="flex items-start justify-between gap-2">
                             <div class="min-w-0">
                                 <div class="font-semibold text-gray-900 dark:text-white">{{ $addon['display_name'] }}</div>
-                                <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">v{{ $addon['version'] }}</div>
+                                <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ $addon['version_label'] }}</div>
                             </div>
                             @if ($addon['applies'])
                                 <span class="shrink-0 rounded-full bg-primary-50 dark:bg-primary-500/10 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:text-primary-400">Applies</span>
@@ -208,7 +208,7 @@
                         @endif
                         <div class="min-w-0">
                             <div class="font-semibold text-gray-900 dark:text-white">{{ $t['display_name'] }}</div>
-                            <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">v{{ $t['version'] }}@if ($t['author'] !== '') · {{ $t['author'] }}@endif</div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ $t['version_label'] ?? '' }}@if ($t['author'] !== '') · {{ $t['author'] }}@endif</div>
                         </div>
                     </div>
 

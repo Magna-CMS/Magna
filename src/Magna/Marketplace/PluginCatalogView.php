@@ -9,6 +9,7 @@ use Magna\Contracts\RegistersSettingsPages;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
+use Magna\Support\Version;
 use Magna\Updater\UpdateCheck;
 use Throwable;
 
@@ -170,11 +171,7 @@ class PluginCatalogView
     /** Versions render bare — "1.2.0", never "v1.2.0" — wherever they appear. */
     public static function displayVersion(?string $version): ?string
     {
-        if ($version === null) {
-            return null;
-        }
-
-        return ltrim($version, 'vV');
+        return Version::bare($version);
     }
 
     /**

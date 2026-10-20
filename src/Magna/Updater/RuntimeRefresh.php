@@ -6,6 +6,7 @@ namespace Magna\Updater;
 
 use Illuminate\Support\Facades\Artisan;
 use Laravel\Octane\OctaneServiceProvider;
+use Magna\Admin\AdminAssetPublisher;
 use Magna\Support\Runtime;
 use Throwable;
 
@@ -23,7 +24,10 @@ use Throwable;
  */
 final class RuntimeRefresh
 {
-    public function __construct(private readonly UpdateRunLog $log) {}
+    public function __construct(
+        private readonly UpdateRunLog $log,
+        private readonly AdminAssetPublisher $assets,
+    ) {}
 
     /** Everything, in the order the old apply did it. */
     public function refresh(): void
@@ -44,6 +48,14 @@ final class RuntimeRefresh
         // bootstrap/cache; a release that adds or removes a page must not
         // leave the old list answering.
         $this->call('filament:clear-cached-components');
+
+        // A release can bump vendor/filament, and public/js|css/filament are
+        // not core-owned paths, so the panel would run new PHP against old
+        // JavaScript. Only REQUESTED here: this runs during provider boot,
+        // before plugins register their assets — publishing now would copy
+        // Filament's and drop every plugin's. The request terminates with
+        // all of them booted, and publishes then.
+        $this->assets->requestPublish();
     }
 
     public function restartWorkers(): void

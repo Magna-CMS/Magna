@@ -9,6 +9,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Locked;
 use Magna\Plugins\PluginManager;
+use Magna\Support\Version;
 use Magna\Updater\CoreUpdater;
 use Magna\Updater\CoreUpdateStarter;
 use Magna\Updater\IncompatiblePlugin;
@@ -58,7 +59,7 @@ trait ResolvesIncompatiblePlugins
             ->requiresConfirmation()
             ->modalIcon('heroicon-o-exclamation-triangle')
             ->modalIconColor('danger')
-            ->modalHeading(fn (): string => count($this->incompatiblePlugins).' plugin(s) are incompatible with v'.($this->pendingUpdateVersion ?? ''))
+            ->modalHeading(fn (): string => count($this->incompatiblePlugins).' plugin(s) are incompatible with '.Version::label($this->pendingUpdateVersion))
             ->modalDescription(fn (): HtmlString => $this->incompatiblePluginsModalBody())
             ->modalSubmitActionLabel('Force update anyway')
             ->modalCancelActionLabel('Cancel')
@@ -202,7 +203,7 @@ trait ResolvesIncompatiblePlugins
         ) {
             Notification::make()
                 ->title("Can't update")
-                ->body('The recorded release for v'.$version.' has changed or is missing its verified checksum. Re-check for updates and try again.')
+                ->body('The recorded release for '.Version::label($version).' has changed or is missing its verified checksum. Re-check for updates and try again.')
                 ->danger()
                 ->send();
 

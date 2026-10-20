@@ -13,6 +13,7 @@ use Magna\Licensing\LicenseInstaller;
 use Magna\Marketplace\MarketplaceClient;
 use Magna\Marketplace\PluginCatalogView;
 use Magna\Marketplace\PluginListing;
+use Magna\Support\Version;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
 use Magna\Updater\UpdateCheck;
@@ -95,7 +96,7 @@ class ThemesPage extends Page
             // backup. Re-asking the question against the manifest this page is
             // already holding is what stops a stale row offering an update to
             // a version the site has, or has since moved past.
-            if ($check === null || ! self::isAheadOfDisk($check->latest_version, $t->version)) {
+            if ($check === null || ! Version::isNewer($check->latest_version, $t->version)) {
                 return ['update_version' => null, 'license_blocked_version' => null];
             }
 
@@ -116,6 +117,7 @@ class ThemesPage extends Page
                     'display_name' => $t->displayName,
                     'description' => $t->description,
                     'version' => $t->version,
+                    'version_label' => Version::label($t->version),
                     'author' => $t->author,
                     'tags' => $t->tags,
                     'homepage' => $t->homepage,
@@ -131,6 +133,7 @@ class ThemesPage extends Page
                     'display_name' => $a->displayName,
                     'description' => $a->description,
                     'version' => $a->version,
+                    'version_label' => Version::label($a->version),
                     'extends' => (string) $a->extends,
                     'pairs_with' => $a->pairsWith,
                     'applies' => in_array($a->name, $activeAddonNames, true),
@@ -144,21 +147,6 @@ class ThemesPage extends Page
             )),
             'activeName' => $activeName,
         ];
-    }
-
-    /**
-     * Is the recorded version genuinely ahead of the one on disk?
-     *
-     * Same comparison `UpdateCheck::core()` makes when it self-heals after a
-     * core update, and for the same reason: the stored flag describes a moment
-     * that has passed. A missing or empty `latest_version` is not ahead of
-     * anything.
-     */
-    private static function isAheadOfDisk(?string $latest, string $installed): bool
-    {
-        $latest = ltrim((string) $latest, 'vV');
-
-        return $latest !== '' && version_compare($latest, ltrim($installed, 'vV'), '>');
     }
 
     public function setTab(string $tab): void
@@ -246,6 +234,7 @@ class ThemesPage extends Page
             'description' => $l->shortDescription,
             'author' => $l->author ?? '',
             'version' => $l->version,
+            'version_label' => Version::label($l->version),
             'icon' => $l->icon,
             'is_paid' => $l->isPaid(),
             'currency' => $l->currency,

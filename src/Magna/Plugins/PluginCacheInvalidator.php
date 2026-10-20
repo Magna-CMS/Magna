@@ -7,6 +7,7 @@ namespace Magna\Plugins;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Application as LaravelApplication;
 use Illuminate\Support\Facades\Artisan;
+use Magna\Admin\AdminAssetPublisher;
 use Throwable;
 
 /**
@@ -20,6 +21,25 @@ use Throwable;
 class PluginCacheInvalidator
 {
     public function __construct(private readonly Application $app) {}
+
+    /**
+     * Everything enabling a plugin makes stale: the caches above, plus the
+     * plugin's admin assets, which are only served once copied into public/.
+     * Every enable path ends here — the panel, a licence install, the zip
+     * installer and updater, the CLI — so none of them can leave a plugin
+     * whose admin scripts 404. Requested rather than run: the plugin has
+     * only just booted, and the copy happens when the request terminates.
+     */
+    public function afterEnable(): void
+    {
+        $this->invalidate();
+
+        try {
+            $this->app->make(AdminAssetPublisher::class)->requestPublish();
+        } catch (Throwable) {
+            // Never block the enable that asked for this.
+        }
+    }
 
     /**
      * Drop Filament's cached component manifest so a plugin's admin

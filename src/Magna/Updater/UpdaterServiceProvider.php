@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Updater;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Magna\Support\ConfigDrift;
 use Magna\Updater\Console\CheckForUpdatesCommand;
@@ -12,6 +13,8 @@ use Magna\Updater\Console\CoreRepairCommand;
 use Magna\Updater\Console\CoreResumeCommand;
 use Magna\Updater\Console\CoreRollbackCommand;
 use Magna\Updater\Console\CoreStatusCommand;
+use Magna\Updater\Events\CoreUpdateFailed;
+use Magna\Updater\Listeners\NotifyCoreUpdateFailed;
 use Magna\Updater\Run\FirstRequestFinalizer;
 use Magna\Updater\Run\UpdateJournal;
 use Symfony\Component\Filesystem\Filesystem;
@@ -58,6 +61,8 @@ class UpdaterServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Event::listen(CoreUpdateFailed::class, NotifyCoreUpdateFailed::class);
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 CheckForUpdatesCommand::class,
