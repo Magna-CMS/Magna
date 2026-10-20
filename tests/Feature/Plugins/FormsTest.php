@@ -10,7 +10,9 @@ declare(strict_types=1);
  */
 
 use Filament\Facades\Filament;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Magna\Auth\Role;
@@ -26,6 +28,15 @@ use Magna\Testing\PluginTestCase;
 use Magna\Users\User;
 
 uses(PluginTestCase::class);
+
+/** The real CSRF check — the framework skips its own under unit tests. */
+final class FormsStrictCsrf extends PreventRequestForgery
+{
+    protected function runningUnitTests(): bool
+    {
+        return false;
+    }
+}
 
 function formsSetup(): User
 {
@@ -124,6 +135,74 @@ it('renders the form on a page and accepts a valid submission', function (): voi
         ->and($submission->ip_hash)->not->toBeNull()
         ->and($submission->ip_hash)->not->toContain('127.0.0.1');
 
+    Mail::assertSent(SubmissionMail::class);
+});
+
+/*
+ * Pages caches a guest's render and serves those bytes to every guest after
+ * them. A form that baked @csrf into the page handed the first visitor's
+ * token to everybody — a token no later session ever issued, so every later
+ * post was a 419, and the first visitor's token was public. The form now
+ * renders an empty field and each visitor fetches their own.
+ */
+it('submits from a cached page with the later visitor\'s own token', function (): void {
+    $author = formsSetup();
+    contactForm()->update(['success_message' => 'Got it, thanks.']);
+    formPage($author, 'contact-us');
+    Mail::fake();
+
+    // Every web route — the forms endpoint included — runs the real check.
+    $this->app->bind(PreventRequestForgery::class, FormsStrictCsrf::class);
+
+    // First guest: the render Pages stores.
+    $this->get('/contact-us')->assertOk()->assertHeader('X-Magna-Cache', 'miss');
+    $firstToken = app('session.store')->token();
+    $cached = (string) DB::table('pages_cache')->where('url', '/contact-us')->value('body');
+
+    expect($firstToken)->toBeString()->not->toBe('')
+        ->and($cached)->toContain('name="fields[email]"')
+        ->and($cached)->toContain('<input type="hidden" name="_token" value="" data-magna-form-token>')
+        ->and($cached)->not->toContain($firstToken);
+
+    // Second guest: a session of their own (no cookie, nothing carried
+    // over, so a fresh id and a fresh token), served the cached bytes.
+    app('session.store')->flush();
+
+    $html = (string) $this->get('/contact-us')
+        ->assertOk()
+        ->assertHeader('X-Magna-Cache', 'hit')
+        ->getContent();
+    $session = app('session.store')->getId();
+    $cookie = (string) config('session.cookie');
+
+    // The stamp is the one the cached render carried.
+    expect(preg_match('/name="_ts" value="([^"]+)"/', $html, $stamp))->toBe(1);
+
+    $token = $this->withCookie($cookie, $session)
+        ->getJson('/_magna/form-token')
+        ->assertOk()
+        ->json('token');
+
+    expect($token)->toBeString()->not->toBe($firstToken);
+
+    $this->travel(3)->seconds();
+    $payload = ['_ts' => $stamp[1], 'fields' => validPayload()['fields']];
+
+    // The first visitor's token, had it leaked, is still refused...
+    $this->withCookie($cookie, $session)
+        ->withHeader('Referer', url('/contact-us'))
+        ->post('/forms/contact', [...$payload, '_token' => $firstToken])
+        ->assertStatus(419);
+    expect(Submission::query()->count())->toBe(0);
+
+    // ...and this visitor's own one goes through.
+    $this->withCookie($cookie, $session)
+        ->withHeader('Referer', url('/contact-us'))
+        ->post('/forms/contact', [...$payload, '_token' => $token])
+        ->assertRedirect(url('/contact-us'))
+        ->assertSessionHas('magna_form_sent.contact', 'Got it, thanks.');
+
+    expect(Submission::query()->count())->toBe(1);
     Mail::assertSent(SubmissionMail::class);
 });
 
