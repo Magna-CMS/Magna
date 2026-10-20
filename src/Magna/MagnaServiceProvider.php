@@ -15,6 +15,7 @@ use Magna\Backup\BackupServiceProvider;
 use Magna\Blocks\BlocksServiceProvider;
 use Magna\Content\ContentServiceProvider;
 use Magna\Delivery\DeliveryServiceProvider;
+use Magna\Frontend\FrontendServiceProvider;
 use Magna\Install\EnvWriter;
 use Magna\Install\InstallServiceProvider;
 use Magna\Licensing\LicensingServiceProvider;
@@ -75,6 +76,7 @@ class MagnaServiceProvider extends ServiceProvider
         $this->app->register(BackupServiceProvider::class);
         $this->app->register(ContentServiceProvider::class);
         $this->app->register(BlocksServiceProvider::class);
+        $this->app->register(FrontendServiceProvider::class);
         $this->app->register(MediaServiceProvider::class);
         $this->app->register(DeliveryServiceProvider::class);
         $this->app->register(PluginsServiceProvider::class);
