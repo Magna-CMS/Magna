@@ -150,7 +150,22 @@ return [
     |     types are the deliberate exception (public-delivery correctness).
     */
 
+    /*
+    | The defaults are spread in, not assumed: ApplicationFactory::warm() reads
+    | this list INSTEAD of Octane's own, not in addition to it. This file once
+    | listed only FieldTypeRegistry, which silently stopped `auth` (and router,
+    | session, cache…) being pre-resolved into the base container at worker
+    | boot. The Gate's user resolver holds the container that built it — the
+    | base — so on any worker where no boot-time code happened to touch `auth`,
+    | the gate asked a second, userless AuthManager while the request carried a
+    | signed-in user, and every policy answered "This action is unauthorized."
+    | to people who plainly held the ability, a core super admin included.
+    | Per-worker, healed by recycling, reproduced across three accounts and
+    | five routes on one install before a Gate::after probe caught the gate
+    | judging a signed-in request as a guest.
+    */
     'warm' => [
+        ...Octane::defaultServicesToWarm(),
         FieldTypeRegistry::class,
     ],
 
