@@ -47,7 +47,10 @@ final class RenderContext
         $this->locale = $locale;
         $this->path = '/'.trim($request->path(), '/');
         $this->page = self::parsePage($request->query('page'));
-        $this->outOfRange = $this->page > self::MAX_PAGE;
+        // Out of range only once something paginates: `?page=101` on a page
+        // with no listing is that page, not a missing one.
+        $this->paginated = false;
+        $this->outOfRange = false;
     }
 
     /** The locale being served — the fallback locale when unprefixed. */

@@ -77,7 +77,26 @@ it('treats a page past the cap as out of range without a huge offset', function 
     $context = contextFor('/blog?page=99999999999999999999');
 
     expect($context->page())->toBe(RenderContext::MAX_PAGE)
-        ->and($context->outOfRange())->toBeTrue();
+        ->and($context->outOfRange())->toBeFalse();
+
+    $context->paginate(total: 10_000, perPage: 1);
+
+    expect($context->outOfRange())->toBeTrue();
+});
+
+it('leaves a page with nothing paginated in range, whatever ?page says', function (): void {
+    expect(contextFor('/about?page=101')->outOfRange())->toBeFalse();
+});
+
+it('starts every request it is handed afresh', function (): void {
+    $context = contextFor('/blog?page=9');
+    $context->paginate(total: 20, perPage: 10);
+
+    $context->setRequest(Request::create('/blog?page=2'));
+
+    expect($context->paginated())->toBeFalse()
+        ->and($context->outOfRange())->toBeFalse()
+        ->and($context->page())->toBe(2);
 });
 
 it('is scoped to one request', function (): void {
