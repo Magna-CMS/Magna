@@ -29,6 +29,7 @@ use Magna\Settings\SettingsServiceProvider;
 use Magna\Support\ComposerLoader;
 use Magna\Support\ConfigDefaults;
 use Magna\Support\DebugWindow;
+use Magna\Support\OctaneWarmList;
 use Magna\Support\StaleClassMap;
 use Magna\Updater\UpdaterServiceProvider;
 use Magna\Webhooks\WebhookServiceProvider;
@@ -55,6 +56,12 @@ class MagnaServiceProvider extends ServiceProvider
          * factory closure, which is not resolved until boot().
          */
         $this->backfillCoreDefaults();
+
+        // Same delivery problem, one list further: the backfill above never
+        // touches lists, and `octane.warm` is the list whose missing entries
+        // cost a site its authorization — see OctaneWarmList for the whole
+        // story. Before anything warms, which happens on the bootstrapped app.
+        OctaneWarmList::ensureDefaults($this->app->make('config'));
 
         // Right after, and before anything can ask class_exists() of a name a
         // release deleted: Filament's discovery, plugin boot, cached panel

@@ -6,6 +6,7 @@ use Laravel\Octane\Contracts\OperationTerminated;
 use Laravel\Octane\Events\RequestReceived;
 use Laravel\Octane\Octane;
 use Magna\Content\FieldTypeRegistry;
+use Magna\Support\OctaneWarmList;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -56,4 +57,43 @@ it('octane warms its own service defaults plus the immutable registry, and flush
     expect($warm)->toContain('auth')
         ->and($warm)->toContain(FieldTypeRegistry::class)
         ->and(config('octane.flush'))->toBe([]);
+});
+
+/*
+ * The half that reaches EXISTING installs.
+ *
+ * An update never overwrites config/*.php (the release manifest protects
+ * them), and ConfigDefaults backfills only missing KEYS, never lists - so the
+ * corrected warm list above ships to fresh installs only. OctaneWarmList is
+ * the delivery for everyone else: it runs in register(), under src/Magna,
+ * which an update does overlay, and merges Octane's own defaults back into
+ * whatever the site's file says.
+ */
+it('restores octane warm defaults over a stale site config file', function (): void {
+    // The exact shape the bug wore: a site file whose list replaced the
+    // defaults with only its own addition.
+    config(['octane.warm' => [FieldTypeRegistry::class]]);
+
+    OctaneWarmList::ensureDefaults(app('config'));
+
+    $warm = config('octane.warm');
+
+    expect($warm)->toContain('auth')
+        ->and($warm)->toContain(FieldTypeRegistry::class);
+
+    foreach (Octane::defaultServicesToWarm() as $service) {
+        expect($warm)->toContain($service);
+    }
+});
+
+it('leaves a complete warm list exactly alone', function (): void {
+    $complete = [...Octane::defaultServicesToWarm(), FieldTypeRegistry::class];
+
+    config(['octane.warm' => $complete]);
+
+    OctaneWarmList::ensureDefaults(app('config'));
+
+    // Same entries, same order - the guard adds what is missing and reorders
+    // nothing, so a deliberate ordering survives it.
+    expect(config('octane.warm'))->toBe($complete);
 });
