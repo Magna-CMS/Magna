@@ -126,7 +126,7 @@ it('keeps plugin classes under the god-class ceiling', function (): void {
     $pins = [
         'embhas/embhas/src/Console/Demo/DemoSeeder.php' => 716,
         'magna/blog/src/Editor/EditorJsSanitizer.php' => 836,
-        'magna/blog/src/Filament/Resources/PostResource/Pages/EditsPostInBuilder.php' => 700,
+        'magna/blog/src/Filament/Resources/PostResource/Pages/EditsPostInBuilder.php' => 453,
         'magna/blog/src/Support/BlockRenderer.php' => 969,
         'magna/defence/src/Filament/Pages/DefenceDashboardPage.php' => 1025,
         'magna/defence/src/Filament/Pages/DefenceSettingsPage.php' => 1002,
