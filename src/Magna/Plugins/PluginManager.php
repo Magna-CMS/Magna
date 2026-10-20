@@ -68,7 +68,7 @@ class PluginManager
         // "no entry" means the licence is gone rather than never needed.
         $records = $records->reject(
             fn (PluginRecord $record): bool => app(LicenseGate::class)
-                ->isLocked($record->name, (bool) $record->requires_license)
+                ->refusesBoot($record->name, (bool) $record->requires_license)
         );
 
         // Register/boot in dependency order (a plugin's dependencies boot first).

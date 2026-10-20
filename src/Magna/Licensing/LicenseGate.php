@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Magna\Licensing;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The boot-time licence check — deliberately OFFLINE.
@@ -32,6 +33,32 @@ class LicenseGate
     public function isLocked(string $productSlug, bool $requiresLicense = false): bool
     {
         return $this->stateOf($productSlug, $requiresLicense) === LicenseState::Locked;
+    }
+
+    /**
+     * isLocked(), said out loud — the answer bootEnabledPlugins() filters on.
+     *
+     * The skip used to be the only silent one in the boot path, and silence
+     * here is expensive. Under Octane the filter runs once per WORKER, so a
+     * worker that boots while the licence cache reads empty — mid-rewrite by
+     * the verify, a torn settings-cache read — serves without the plugin for
+     * its whole life. With cached routes the plugin's routes still resolve,
+     * and every policy-gated request answers a bare "This action is
+     * unauthorized." with nothing anywhere saying why: a licensed site spent
+     * a day chasing transient 403s that were this skip declining to name
+     * itself.
+     */
+    public function refusesBoot(string $productSlug, bool $requiresLicense = false): bool
+    {
+        if (! $this->isLocked($productSlug, $requiresLicense)) {
+            return false;
+        }
+
+        Log::warning("Plugin [{$productSlug}] not booted: licence state is locked.", [
+            'requires_license' => $requiresLicense,
+        ]);
+
+        return true;
     }
 
     /**
