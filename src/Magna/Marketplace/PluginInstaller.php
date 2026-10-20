@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Magna\Marketplace;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Magna\MagnaServiceProvider;
+use Magna\Plugins\PluginDiscovery;
 use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
 use Magna\Updater\InstalledVersionRecorder;
@@ -29,7 +31,9 @@ class PluginInstaller
         private readonly MarketplaceClient $marketplace,
         private readonly PluginManager $plugins,
         private readonly ComposerRunner $composer,
+        private readonly PluginDiscovery $discovery,
         private readonly InstalledVersionRecorder $versions = new InstalledVersionRecorder,
+        private readonly AdminAssetPublisher $assets = new AdminAssetPublisher,
     ) {}
 
     public function install(string $package): InstallState
@@ -96,7 +100,7 @@ class PluginInstaller
             $previous = $update ? $this->findInstalled($package)?->manifest->version : null;
 
             $this->setProgress($package, InstallState::Running, 'Downloading…');
-            $required = $this->composer->run(['require', $package.':'.$listing->version], 600);
+            $required = $this->changeTree(['require', $package.':'.$listing->version]);
             if (! $required->successful()) {
                 return $this->fail(
                     $package,
@@ -177,8 +181,32 @@ class PluginInstaller
     private function rollBack(string $package, ?string $previousVersion): void
     {
         $previousVersion === null
-            ? $this->composer->run(['remove', $package], 600)
-            : $this->composer->run(['require', $package.':'.$previousVersion], 600);
+            ? $this->changeTree(['remove', $package])
+            : $this->changeTree(['require', $package.':'.$previousVersion]);
+    }
+
+    /**
+     * Run a Composer command that changes what is installed, then forget the
+     * memoized plugin scan.
+     *
+     * PluginDiscovery memoizes its scan, and it is a container singleton. An
+     * update reads the installed version BEFORE Composer runs — it is the
+     * version a failure rolls back to — which primed that memo with the old
+     * manifest. The post-install manifest check, and enable() after it, then
+     * saw the release Composer had just replaced: every update of a
+     * Composer-delivered plugin failed "expected v1.1.0, found manifest
+     * 1.0.0" and rolled itself back, while installs worked only because
+     * nothing had scanned first. A queue worker outlives one job, so a stale
+     * memo would also have leaked into the next.
+     *
+     * @param  list<string>  $args
+     */
+    private function changeTree(array $args): ComposerResult
+    {
+        $result = $this->composer->run($args, 600);
+        $this->discovery->reset();
+
+        return $result;
     }
 
     private function finishSuccess(string $package, string $installedVersion, bool $update = false): InstallState
@@ -197,9 +225,36 @@ class PluginInstaller
         // nothing updated it until the next 12-hourly check.
         $this->versions->record($package, $installedVersion);
 
+        $this->publishAssets($package);
+
         $this->setProgress($package, InstallState::Completed, $update ? 'Updated.' : 'Installed.');
 
         return InstallState::Completed;
+    }
+
+    /**
+     * Copy the plugin's admin assets into public/.
+     *
+     * Nothing did after a Composer install or update: on a site whose plugins
+     * all arrived through the marketplace, the blog's editor script 404'd, its
+     * post editor showed a title field and no body, and no post could be
+     * written. Run after enable(), when the plugin has booted in this process
+     * and registered its assets; an update re-copies the files Composer just
+     * replaced.
+     *
+     * The plugin is installed and enabled by now, so a failed copy is logged,
+     * never turned into a failed install.
+     */
+    private function publishAssets(string $package): void
+    {
+        try {
+            $this->assets->publish();
+        } catch (Throwable $e) {
+            Log::warning('Plugin installed, but its admin assets could not be published.', [
+                'package' => $package,
+                'reason' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

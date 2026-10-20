@@ -4,6 +4,7 @@ namespace Tests;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Magna\Marketplace\AdminAssetPublisher;
 use Tests\Support\GuardsTheDevelopmentDatabase;
 
 abstract class TestCase extends BaseTestCase
@@ -19,5 +20,14 @@ abstract class TestCase extends BaseTestCase
         $this->assertNotUsingTheDevelopmentDatabase();
 
         Model::preventLazyLoading();
+
+        // The real publisher copies every Filament asset into public/, and
+        // those are tracked files: a suite that installs a plugin would
+        // rewrite the checkout it runs in, release gates included. Tests that
+        // need to see it run bind their own.
+        $this->app->instance(AdminAssetPublisher::class, new class extends AdminAssetPublisher
+        {
+            public function publish(): void {}
+        });
     }
 }

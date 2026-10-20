@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Magna\Marketplace\AdminAssetPublisher;
+use Magna\Marketplace\ComposerResult;
 use Magna\Marketplace\ComposerRunner;
 use Magna\Marketplace\InstallState;
 use Magna\Marketplace\Marketplace;
 use Magna\Marketplace\PluginInstaller;
+use Magna\Plugins\PluginDiscovery;
+use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
 use Tests\Support\FakeComposerRunner;
 use Tests\TestCase;
@@ -226,4 +232,121 @@ it('does not report an update as a fresh install', function (): void {
     app(PluginInstaller::class)->update('magna-cms/docs');
 
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/installed'));
+});
+
+// Every update of a Composer-delivered plugin rolled itself back on a real
+// site. The update reads the installed version BEFORE Composer runs (it is
+// what a failure rolls back to), and PluginDiscovery memoized that scan — so
+// the post-install manifest check read the release Composer had just
+// replaced: "expected v1.1.0, found manifest 1.0.0". The tests above never
+// saw it because their fake Composer changes nothing on disk. This one swaps
+// the manifest the way a real `composer require` does.
+it('checks the manifest Composer just installed on an update, not the one it replaced', function (): void {
+    $fixture = sys_get_temp_dir().'/magna_update_scan_'.uniqid();
+    $pkgDir = $fixture.'/vendor/acme/widget';
+    mkdir($fixture.'/vendor/composer', 0777, true);
+    mkdir($pkgDir, 0777, true);
+    file_put_contents($fixture.'/vendor/composer/installed.json', json_encode([
+        'packages' => [['name' => 'acme/widget', 'type' => 'magna-plugin']],
+    ]));
+    $manifest = fn (string $version): string => (string) json_encode([
+        'name' => 'acme/widget', 'displayName' => 'Widget', 'description' => 'x',
+        'version' => $version, 'author' => 'Acme', 'license' => 'MIT',
+        'compat' => ['magna' => '^1.0'], 'entry' => 'Acme\Widget\WidgetPlugin', 'permissions' => [],
+    ]);
+    file_put_contents($pkgDir.'/magna.json', $manifest('1.0.0'));
+
+    // The installer and the manager it enables through must share the
+    // fixture's scan, exactly as they share the real singleton.
+    app()->instance(PluginDiscovery::class, new PluginDiscovery($fixture));
+    app()->forgetInstance(PluginManager::class);
+
+    $runner = new class extends FakeComposerRunner
+    {
+        /** @var (Closure(list<string>): void)|null */
+        public ?Closure $onRun = null;
+
+        public function run(array $args, int $timeout = 300): ComposerResult
+        {
+            ($this->onRun)($args);
+
+            return parent::run($args, $timeout);
+        }
+    };
+    $runner->onRun = function (array $args) use ($pkgDir, $manifest): void {
+        if ($args[0] === 'require' && str_starts_with($args[1], 'acme/widget:')) {
+            file_put_contents($pkgDir.'/magna.json', $manifest(ltrim(substr($args[1], strlen('acme/widget:')), 'vV')));
+        }
+    };
+    app()->instance(ComposerRunner::class, $runner);
+
+    fakeMarket([['package' => 'acme/widget', 'name' => 'Widget', 'version' => 'v1.1.0', 'compat' => '^1.0']]);
+
+    try {
+        app(PluginInstaller::class)->update('acme/widget');
+
+        // The fixture has no entry class, so enable() fails after the manifest
+        // check — which is the point: getting that far proves the check read
+        // the swapped 1.1.0 manifest. A stale scan stops one step earlier.
+        $message = PluginInstaller::progress('acme/widget')['message'];
+
+        expect($message)->not->toContain('did not match the approved listing')
+            ->and($message)->toContain('failed to enable')
+            ->and($runner->commands)->toContain(['require', 'acme/widget:v1.1.0'])
+            // The rollback still pins the version that was working, read
+            // before Composer ran — the scan was only reset AFTER it.
+            ->and($runner->commands)->toContain(['require', 'acme/widget:1.0.0']);
+    } finally {
+        File::deleteDirectory($fixture);
+    }
+});
+
+// A plugin's admin scripts are only served once `filament:assets` copies them
+// out of vendor/, and nothing ran it after an install: on a site whose plugins
+// all came from the marketplace, the blog editor's script 404'd, its post
+// editor showed a title and no body, and no post could ever be written.
+it('publishes Filament assets once a plugin is installed', function (): void {
+    skipWithoutDevPlugin('magna-cms/docs');
+
+    $version = devPluginVersion('magna-cms/docs');
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
+    fakeRunner();
+    $publisher = new class extends AdminAssetPublisher
+    {
+        public int $runs = 0;
+
+        public function publish(): void
+        {
+            $this->runs++;
+        }
+    };
+    app()->instance(AdminAssetPublisher::class, $publisher);
+
+    expect(app(PluginInstaller::class)->install('magna-cms/docs'))->toBe(InstallState::Completed)
+        ->and($publisher->runs)->toBe(1);
+});
+
+// The plugin is installed and enabled before assets are copied, so a copy
+// that fails (a read-only public/, say) is a warning — reporting the whole
+// install as failed would invite a retry of something that already worked.
+it('does not fail an install because its assets could not be published', function (): void {
+    skipWithoutDevPlugin('magna-cms/docs');
+
+    $version = devPluginVersion('magna-cms/docs');
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
+    fakeRunner();
+    app()->instance(AdminAssetPublisher::class, new class extends AdminAssetPublisher
+    {
+        public function publish(): void
+        {
+            throw new RuntimeException('public/ is read-only');
+        }
+    });
+    Log::spy();
+
+    expect(app(PluginInstaller::class)->install('magna-cms/docs'))->toBe(InstallState::Completed);
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn (string $message): bool => str_contains($message, 'admin assets'))
+        ->once();
 });
