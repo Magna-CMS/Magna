@@ -204,6 +204,14 @@ it('submits from a cached page with the later visitor\'s own token', function ()
 
     expect(Submission::query()->count())->toBe(1);
     Mail::assertSent(SubmissionMail::class);
+
+    // Back on the page, the message is shown: a session carrying flash data
+    // is never answered from the cache, which would show the bare form.
+    $this->withCookie($cookie, $session)
+        ->get('/contact-us')
+        ->assertOk()
+        ->assertHeader('X-Magna-Cache', 'bypass')
+        ->assertSee('Got it, thanks.');
 });
 
 it('validates from the definition and ignores undeclared keys', function (): void {
