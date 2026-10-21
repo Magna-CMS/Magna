@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Themes;
 
+use Magna\Frontend\RenderedOutputRefresher;
 use Magna\MagnaServiceProvider;
 use Symfony\Component\Filesystem\Filesystem;
 use Throwable;
@@ -24,6 +25,7 @@ class ThemeManager
     public function __construct(
         private readonly Filesystem $files,
         private readonly EnabledPluginVersions $pluginVersions = new EnabledPluginVersions,
+        private readonly RenderedOutputRefresher $rendered = new RenderedOutputRefresher,
     ) {}
 
     /** Absolute path of the themes directory. */
@@ -177,6 +179,12 @@ class ThemeManager
         $settings->active = $theme->name;
         $settings->save();
 
+        // A theme's files can reach themes/ by routes core never sees — a copy
+        // into the directory, a restored backup — still carrying old mtimes,
+        // and activation is the last moment before they render. Every public
+        // page changes with the theme, too. See RenderedOutputRefresher.
+        $this->rendered->filesReplaced($this->pathFor($theme->name), $theme->name);
+
         return $theme;
     }
 
@@ -235,8 +243,11 @@ class ThemeManager
     public function deactivate(): void
     {
         $settings = ThemeSettings::get();
+        $previous = $settings->active;
         $settings->active = null;
         $settings->save();
+
+        $this->rendered->outputChanged($previous ?? 'theme');
     }
 
     /**

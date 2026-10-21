@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Magna\Admin\AdminAssetPublisher;
 use Magna\Admin\Notifications\NotificationRecipients;
+use Magna\Frontend\RenderedOutputRefresher;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginDiscovery;
 use Magna\Plugins\PluginInfo;
@@ -40,6 +41,7 @@ class PluginInstaller
         private readonly PluginDiscovery $discovery,
         private readonly InstalledVersionRecorder $versions = new InstalledVersionRecorder,
         private readonly AdminAssetPublisher $assets = new AdminAssetPublisher,
+        private readonly RenderedOutputRefresher $rendered = new RenderedOutputRefresher,
     ) {}
 
     public function install(string $package): InstallState
@@ -240,6 +242,17 @@ class PluginInstaller
         $this->versions->record($package, $installedVersion);
 
         $this->publishAssets($package);
+
+        // Composer extracts with the archive's mtimes, so the new views were
+        // older than those compiled from the release they replaced, and every
+        // cached public page still held the old output. See
+        // RenderedOutputRefresher.
+        $installed = $this->findInstalled($package);
+        if ($installed !== null) {
+            $this->rendered->filesReplaced($installed->basePath, $package);
+        } else {
+            $this->rendered->outputChanged($package);
+        }
 
         $this->setProgress($package, InstallState::Completed, $update ? 'Updated.' : 'Installed.');
 

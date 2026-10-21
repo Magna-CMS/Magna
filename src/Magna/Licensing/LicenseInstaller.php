@@ -7,6 +7,7 @@ namespace Magna\Licensing;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Magna\Frontend\RenderedOutputRefresher;
 use Magna\MagnaServiceProvider;
 use Magna\Marketplace\Marketplace;
 use Magna\Plugins\Manifest;
@@ -56,6 +57,7 @@ class LicenseInstaller
         private readonly ThemeManager $themes,
         private readonly PluginDiscovery $discovery,
         private readonly InstalledVersionRecorder $versions = new InstalledVersionRecorder,
+        private readonly RenderedOutputRefresher $rendered = new RenderedOutputRefresher,
     ) {}
 
     /**
@@ -299,6 +301,11 @@ class LicenseInstaller
                 $this->files->rename($contentRoot, $targetDir);
             }
 
+            // The extracted views carry the package's build-time mtimes, older
+            // than anything compiled from the previous release; without this
+            // the site kept rendering that release. See RenderedOutputRefresher.
+            $this->rendered->filesReplaced($targetDir, $manifest->name);
+
             // Recorded from the manifest just validated, rather than left to
             // discovery to find. plugins-dev/ is not a tree discovery reads in
             // production — discoverFromDev() returns nothing there, and even
@@ -409,6 +416,11 @@ class LicenseInstaller
             $this->files->mkdir(dirname($targetDir), 0755);
             $this->files->rename($contentRoot, $targetDir);
         }
+
+        // An updated layout older than its compiled view, and every cached
+        // page drawn by the old one, went on serving the old theme — the
+        // lekha/billing update on core 1.6.2. See RenderedOutputRefresher.
+        $this->rendered->filesReplaced($targetDir, $manifest->name);
 
         // Same reasoning as the plugin branch: the Themes page reads the
         // check-in row, which this install never touched, so without this the

@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Magna\Admin\AdminAssetPublisher;
+use Magna\Frontend\Events\PublicContentChanged;
 use Magna\Marketplace\ComposerResult;
 use Magna\Marketplace\ComposerRunner;
 use Magna\Marketplace\InstallState;
 use Magna\Marketplace\Marketplace;
 use Magna\Marketplace\PluginInstaller;
 use Magna\Plugins\PluginDiscovery;
+use Magna\Plugins\PluginInfo;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginRecord;
 use Tests\Support\FakeComposerRunner;
@@ -184,6 +187,37 @@ it('updates by installing the version the marketplace now advertises', function 
     expect($state)->toBe(InstallState::Completed)
         ->and($runner->commands)->toContain(['require', 'magna-cms/docs:'.$version])
         ->and(PluginRecord::query()->where('name', 'magna-cms/docs')->where('enabled', true)->exists())->toBeTrue();
+});
+
+// Composer extracts with the archive's mtimes too, so a plugin view updated
+// this way was older than the view compiled from the previous release, and
+// Blade kept serving that one — the same failure RenderedOutputRefreshTest
+// pins for a licensed update. The cached public pages answered for the old
+// release as well.
+it('marks an updated plugin view fresh and purges the public caches', function (): void {
+    skipWithoutDevPlugin('magna-cms/docs');
+
+    $version = devPluginVersion('magna-cms/docs');
+
+    fakeMarket([['package' => 'magna-cms/docs', 'name' => 'Magna Docs', 'version' => $version, 'compat' => '^1.0']]);
+    fakeRunner();
+
+    $installed = collect(app(PluginManager::class)->discover())
+        ->first(fn (PluginInfo $info): bool => $info->manifest->name === 'magna-cms/docs');
+    $view = collect(File::allFiles($installed->basePath.'/resources/views'))
+        ->first(fn (SplFileInfo $file): bool => str_ends_with($file->getFilename(), '.blade.php'))
+        ->getPathname();
+
+    $builtAt = strtotime('2026-01-01 00:00:00');
+    touch($view, $builtAt);
+
+    Event::fake([PublicContentChanged::class]);
+
+    expect(app(PluginInstaller::class)->update('magna-cms/docs'))->toBe(InstallState::Completed);
+
+    clearstatcache(true, $view);
+    expect(filemtime($view))->toBeGreaterThan($builtAt);
+    Event::assertDispatched(PublicContentChanged::class, fn (PublicContentChanged $e): bool => $e->everything);
 });
 
 // The one difference that matters. `composer remove` is the right rollback for
