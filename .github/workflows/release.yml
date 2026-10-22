@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  # Also runnable by hand against an existing tag (Actions → Release → Run
+  # workflow → pick the tag), for a tag whose push did not start a run.
+  workflow_dispatch:
   push:
     tags:
       # Stable tags, and pre-release tags such as v1.3.0-beta. A filter pattern
@@ -229,10 +232,31 @@ jobs:
         run: |
           if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::A release for ${GITHUB_REF_NAME} already exists; publishing is skipped."
+            assets=$(gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets | length')
+            if [ "${assets}" = "0" ]; then
+              echo "attach=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::A release for ${GITHUB_REF_NAME} exists without files; attaching the archive and its sidecar."
+            else
+              echo "attach=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::A release for ${GITHUB_REF_NAME} already exists; publishing is skipped."
+            fi
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "attach=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # A release published from the GitHub web UI creates its tag and the
+      # release together, so by the time this run starts the release exists
+      # and the step below skips. Such a release has no files yet: attach the
+      # built pair. A release that already carries files (hand-published with
+      # bin/publish-release.php) is never touched, and --clobber is not used.
+      - name: Attach the archive to a release published without files
+        if: steps.existing.outputs.attach == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+            downloads/magna-cms-v*.zip downloads/magna-cms-v*.zip.sha256
 
       - name: Create GitHub release
         if: steps.existing.outputs.exists == 'false'
