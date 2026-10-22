@@ -198,69 +198,45 @@
     @if (count($available) > 0)
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             @foreach ($available as $t)
-                @php
-                    $symbol = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£'][$t['currency'] ?? 'INR'] ?? (($t['currency'] ?? '').' ');
-                @endphp
-                <div class="bg-white dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-white/10 p-4 flex flex-col">
-                    <div class="flex gap-3">
-                        @if ($t['icon'] ?? null)
-                            <img src="{{ $t['icon'] }}" alt="" class="w-11 h-11 rounded-lg object-cover shrink-0 border border-gray-100 dark:border-white/10">
-                        @endif
-                        <div class="min-w-0">
-                            <div class="font-semibold text-gray-900 dark:text-white">{{ $t['display_name'] }}</div>
-                            <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ $t['version_label'] ?? '' }}@if ($t['author'] !== '') · {{ $t['author'] }}@endif</div>
-                        </div>
-                    </div>
-
-                    @if ($t['description'] !== '')
-                        <p class="text-[13px] text-gray-500 dark:text-gray-400 flex-1 leading-relaxed mt-3">{{ $t['description'] }}</p>
-                    @endif
-
-                    <div class="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-white/5">
-                        @if ($t['is_paid'])
-                            @if ($t['trial_enabled'])
-                                <button
-                                    wire:click="startTrial('{{ $t['name'] }}')"
-                                    wire:loading.attr="disabled"
-                                    class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
-                                >Try {{ $t['trial_days'] ?? 14 }} days</button>
-                            @endif
-                            <span class="contents" x-data="{ autoRenew: false }">
-                                @foreach ($t['prices'] ?? [] as $term => $price)
-                                    <button
-                                        @if ($term === 'annual')
-                                            x-on:click="$wire.buy('{{ $t['name'] }}', 'annual', autoRenew)"
-                                        @else
-                                            wire:click="buy('{{ $t['name'] }}', '{{ $term }}')"
-                                        @endif
-                                        wire:loading.attr="disabled"
-                                        class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-60"
-                                    >
-                                        {{ $symbol }}{{ number_format(((int) $price) / 100, ((int) $price) % 100 === 0 ? 0 : 2) }}{{ $term === 'annual' ? '/yr' : '' }}
-                                    </button>
-                                @endforeach
-                                @if (isset(($t['prices'] ?? [])['annual']))
-                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 cursor-pointer select-none">
-                                        <input type="checkbox" x-model="autoRenew" class="h-3 w-3 rounded border-gray-300 dark:border-white/20">
-                                        Auto-renew
-                                    </label>
-                                @endif
-                            </span>
+                <div class="group bg-white dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden flex flex-col transition-shadow hover:shadow-md">
+                    {{-- Preview: the listing's lead screenshot, so a theme is judged
+                         by how it looks. Clicking it opens the full listing. --}}
+                    <button type="button" wire:click="showDetails('{{ $t['name'] }}')" class="relative block aspect-[16/10] w-full overflow-hidden bg-gray-100 dark:bg-white/5 text-left" aria-label="See more about {{ $t['display_name'] }}">
+                        @if ($t['cover'] ?? null)
+                            <img src="{{ $t['cover'] }}" alt="" loading="lazy" class="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]">
                         @else
-                            @if (($t['claimable'] ?? null) === true)
-                                <span class="text-xs text-gray-400 dark:text-gray-500 mr-auto">Free</span>
-                                <button
-                                    wire:click="getFree('{{ $t['name'] }}')"
-                                    wire:loading.attr="disabled"
-                                    class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-60"
-                                >Get &amp; install</button>
-                            @elseif (($t['claimable'] ?? null) === false)
-                                <span class="text-xs text-gray-400 dark:text-gray-500">Free — not available to install yet</span>
-                            @else
-                                {{-- A marketplace that predates free-theme claims. --}}
-                                <span class="text-xs text-gray-400 dark:text-gray-500">Free — install from your Magna Account</span>
-                            @endif
+                            <div class="flex h-full w-full items-center justify-center text-gray-300 dark:text-gray-600">
+                                <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z"/></svg>
+                            </div>
                         @endif
+                    </button>
+
+                    <div class="p-4 flex flex-col flex-1">
+                        <div class="flex gap-3">
+                            @if ($t['icon'] ?? null)
+                                <img src="{{ $t['icon'] }}" alt="" class="w-11 h-11 rounded-lg object-cover shrink-0 border border-gray-100 dark:border-white/10">
+                            @endif
+                            <div class="min-w-0">
+                                <button type="button" wire:click="showDetails('{{ $t['name'] }}')" class="font-semibold text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 text-left">{{ $t['display_name'] }}</button>
+                                <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ $t['version_label'] ?? '' }}@if ($t['author'] !== '') · {{ $t['author'] }}@endif</div>
+                                @if (! empty($t['rating']))
+                                    <div class="mt-0.5 inline-flex items-center gap-1 text-xs text-amber-500">
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.28 3.94a1 1 0 00.95.69h4.15c.97 0 1.37 1.24.59 1.81l-3.36 2.44a1 1 0 00-.36 1.12l1.28 3.94c.3.92-.75 1.69-1.54 1.12l-3.36-2.44a1 1 0 00-1.18 0l-3.36 2.44c-.79.57-1.84-.2-1.54-1.12l1.28-3.94a1 1 0 00-.36-1.12L2.83 9.37c-.78-.57-.38-1.81.59-1.81h4.15a1 1 0 00.95-.69l1.28-3.94z"/></svg>
+                                        <span class="font-semibold text-gray-500 dark:text-gray-400">{{ number_format((float) $t['rating'], 1) }}</span>
+                                        <span class="text-gray-400 dark:text-gray-500">({{ $t['ratings_count'] ?? 0 }})</span>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+
+                        @if ($t['description'] !== '')
+                            <p class="text-[13px] text-gray-500 dark:text-gray-400 flex-1 leading-relaxed mt-3 line-clamp-3">{{ $t['description'] }}</p>
+                        @endif
+
+                        <div class="flex flex-wrap items-center justify-end gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-white/5">
+                            <button type="button" wire:click="showDetails('{{ $t['name'] }}')" wire:loading.attr="disabled" class="mr-auto text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline">See more</button>
+                            @include('magna::admin.partials.themes.browse-actions', ['t' => $t])
+                        </div>
                     </div>
                 </div>
             @endforeach
@@ -277,6 +253,12 @@
     @endif
 
 @endif
+
+@include('magna::admin.partials.marketplace.details-modal', [
+    'detailsRow' => $this->details !== null ? collect($available)->firstWhere('name', $this->details['package']) : null,
+    'actionsView' => 'magna::admin.partials.themes.browse-actions',
+    'actionsVar' => 't',
+])
 
 @include('magna::admin.partials.checkout')
 

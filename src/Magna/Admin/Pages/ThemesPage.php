@@ -8,6 +8,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
+use Magna\Admin\Concerns\ShowsMarketplaceDetails;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseInstaller;
@@ -35,6 +36,9 @@ use Throwable;
 class ThemesPage extends Page
 {
     use ChecksOutWithRazorpay;
+
+    // "See more" on a Browse card: the full store listing in a modal.
+    use ShowsMarketplaceDetails;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-swatch';
 
@@ -237,6 +241,9 @@ class ThemesPage extends Page
             'version' => $l->version,
             'version_label' => Version::label($l->version),
             'icon' => $l->icon,
+            'cover' => $l->cover,
+            'rating' => $l->rating,
+            'ratings_count' => $l->ratingsCount,
             'is_paid' => $l->isPaid(),
             'currency' => $l->currency,
             'prices' => $l->prices,

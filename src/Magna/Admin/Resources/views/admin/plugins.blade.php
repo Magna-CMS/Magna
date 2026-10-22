@@ -98,6 +98,12 @@
 
 @endif
 
+@include('magna::admin.partials.marketplace.details-modal', [
+    'detailsRow' => $this->details !== null ? collect($this->available)->firstWhere('name', $this->details['package']) : null,
+    'actionsView' => 'magna::admin.partials.plugins.catalog-actions',
+    'actionsVar' => 'p',
+])
+
 @include('magna::admin.partials.checkout')
 
 <x-filament-actions::modals />

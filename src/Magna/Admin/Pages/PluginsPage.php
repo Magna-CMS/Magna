@@ -11,6 +11,7 @@ use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
+use Magna\Admin\Concerns\ShowsMarketplaceDetails;
 use Magna\Admin\Concerns\SubmitsPluginFeedback;
 use Magna\Admin\Concerns\TracksPluginInstalls;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
@@ -31,6 +32,9 @@ class PluginsPage extends Page
     // Buying a paid plugin: open the order, show the gateway, wait for the
     // webhook. onOrderSettled() below is this page's half of it.
     use ChecksOutWithRazorpay;
+
+    // "See more" on a catalog card: the full store listing in a modal.
+    use ShowsMarketplaceDetails;
     use SubmitsPluginFeedback;
     use TracksPluginInstalls;
 

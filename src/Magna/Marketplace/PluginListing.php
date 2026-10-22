@@ -56,6 +56,9 @@ final class PluginListing
         // when the marketplace predates the field (and so has no claim
         // endpoint) — "unknown", never read as yes.
         public readonly ?bool $claimable = null,
+        // The lead screenshot — a theme card's preview image. Null when the
+        // listing has none or the marketplace predates the field.
+        public readonly ?string $cover = null,
     ) {}
 
     /**
@@ -141,6 +144,7 @@ final class PluginListing
             official: ($data['official'] ?? null) === true,
             verified: ($data['verified'] ?? null) === true,
             claimable: is_bool($data['claimable'] ?? null) ? $data['claimable'] : null,
+            cover: is_string($data['cover'] ?? null) && preg_match('#^https?://#i', $data['cover']) === 1 ? $data['cover'] : null,
         );
     }
 
