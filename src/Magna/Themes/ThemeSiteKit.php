@@ -28,6 +28,12 @@ namespace Magna\Themes;
  * deterministic node id, so a kit re-applied over a page an editor has since
  * rewritten would overwrite their work. That decision belongs to the person
  * who knows what the editors have been doing, which is never the updater.
+ *
+ * Since then the contract exists — ThemeContentImporter, implemented by the
+ * page builder — and ThemeContent uses it for "install with demo data". It
+ * answers the second reason by adding only what a site lacks and never
+ * updating an existing entry. Updates still only say so: re-applying a
+ * changed kit over edited pages remains a decision for a person.
  */
 final class ThemeSiteKit
 {

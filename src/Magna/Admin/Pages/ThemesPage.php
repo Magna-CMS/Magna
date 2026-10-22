@@ -8,12 +8,15 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
+use Magna\Admin\Concerns\ShowsMarketplaceDetails;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
+use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseInstaller;
 use Magna\Marketplace\MarketplaceClient;
 use Magna\Marketplace\PluginCatalogView;
 use Magna\Marketplace\PluginListing;
 use Magna\Support\Version;
+use Magna\Themes\ThemeContent;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
 use Magna\Updater\UpdateCheck;
@@ -33,7 +36,14 @@ use Throwable;
  */
 class ThemesPage extends Page
 {
-    use ChecksOutWithRazorpay;
+    use ChecksOutWithRazorpay {
+        // Kept under an alias: this page's onOrderSettled() runs it, then
+        // imports demo content if "Include demo content" was ticked.
+        onOrderSettled as installSettledOrder;
+    }
+
+    // "See more" on a Browse card: the full store listing in a modal.
+    use ShowsMarketplaceDetails;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-swatch';
 
@@ -55,6 +65,15 @@ class ThemesPage extends Page
     public array $available = [];
 
     public bool $marketplaceUnreachable = false;
+
+    /**
+     * "Include demo content" ticked per marketplace theme, keyed by
+     * ThemesPage::demoKey(package). Read once the theme is installed — by a
+     * free claim, a trial or a purchase — to import its starter content.
+     *
+     * @var array<string, bool>
+     */
+    public array $withDemo = [];
 
     public static function canAccess(): bool
     {
@@ -110,7 +129,10 @@ class ThemesPage extends Page
             ];
         };
 
+        $content = $themes->content();
+
         return [
+            'demoSupported' => $content->supported(),
             'installed' => array_map(
                 fn (ThemeManifest $t): array => [
                     'name' => $t->name,
@@ -122,6 +144,7 @@ class ThemesPage extends Page
                     'tags' => $t->tags,
                     'homepage' => $t->homepage,
                     'active' => $t->name === $activeName,
+                    'has_demo' => $content->available($t->name),
                 ] + $updateFields($t),
                 array_values(array_filter($installed, fn (ThemeManifest $t): bool => ! $t->isAddon())),
             ),
@@ -236,10 +259,14 @@ class ThemesPage extends Page
             'version' => $l->version,
             'version_label' => Version::label($l->version),
             'icon' => $l->icon,
+            'cover' => $l->cover,
+            'rating' => $l->rating,
+            'ratings_count' => $l->ratingsCount,
             'is_paid' => $l->isPaid(),
             'currency' => $l->currency,
             'prices' => $l->prices,
             'trial_enabled' => $l->trialEnabled && $l->isPaid(),
+            'claimable' => $l->claimable,
             'trial_days' => $l->trialDays,
         ], $catalog);
     }
@@ -269,10 +296,156 @@ class ThemesPage extends Page
     }
 
     /**
+     * Get a free theme from the Browse tab: claim its zero-cost licence into
+     * the connected Magna Account, then install it — one click, the same
+     * signed archive pipe a purchase uses.
+     *
+     * Services arrive by Livewire method injection rather than container
+     * lookups: this file's lookup count is pinned by the architecture ratchet.
+     */
+    public function getFree(string $package, LicenseClient $client, LicenseInstaller $installer, MarketplaceClient $marketplace): void
+    {
+        if (! $this->requireConnectedAccount('A free theme is still added to your Magna Account, so connect one first.')) {
+            return;
+        }
+
+        $result = $client->claimFree($package);
+
+        if ($result['ok'] !== true) {
+            Notification::make()
+                ->title('Could not get this theme')
+                ->body(is_string($result['message'] ?? null) ? $result['message'] : 'The marketplace refused this request.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $client->forgetCache();
+
+        // The licence the claim returned — idempotent, so on a repeat claim
+        // it is the usable one the account already holds, not merely the
+        // newest wallet row (which could be an older, revoked one). The
+        // wallet is the fallback for a reply without an id.
+        $license = is_array($result['license'] ?? null) ? $result['license'] : [];
+        $claimedId = $license['id'] ?? null;
+        $licenseId = is_numeric($claimedId) ? (int) $claimedId : $this->walletLicenseIdFor($package);
+
+        if ($licenseId === null) {
+            Notification::make()
+                ->title('Added to your Magna Account')
+                ->body('Install it from the Account Centre.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $message = $installer->installLicense($licenseId, $package);
+        } catch (Throwable $e) {
+            Notification::make()
+                ->title('Added to your account — but the install did not finish')
+                ->body($e->getMessage().' Install it from the Account Centre.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $marketplace->clearCache();
+
+        Notification::make()->title($message)->body($this->afterInstall($package) ?? 'Activate it under Installed when you are ready.')->success()->send();
+
+        $this->replaceUrl(static::getUrl(), 800);
+    }
+
+    /**
+     * The theme page's half of a settled purchase or started trial: install,
+     * then — if "Include demo content" was ticked — import its demo content.
+     * Replaces ChecksOutWithRazorpay's default, which knows nothing of demos.
+     */
+    protected function onOrderSettled(int $licenseId, string $productSlug): void
+    {
+        $this->installSettledOrder($licenseId, $productSlug);
+
+        // Only once the theme is really on disk: a failed install has already
+        // said so, and its demo content has nothing to belong to.
+        if ($this->themes()->find($productSlug) === null) {
+            return;
+        }
+
+        $note = $this->afterInstall($productSlug);
+
+        if ($note !== null) {
+            Notification::make()->title('Demo content')->body($note)->info()->send();
+        }
+    }
+
+    /**
+     * Import an installed theme's demo content on request — the Installed
+     * card's button, and what "Include demo content" does after an install.
+     * Adds only what the site lacks; never changes existing content.
+     */
+    public function importDemoContent(string $name): void
+    {
+        try {
+            $totals = $this->themes()->content()->import($name, $this->actorId());
+        } catch (Throwable $e) {
+            Notification::make()->title('Demo content was not imported')->body($e->getMessage())->danger()->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Demo content imported')
+            ->body(ThemeContent::summary($totals).' Activate the theme to see it.')
+            ->success()
+            ->send();
+    }
+
+    /** The withDemo key for a package — Livewire model paths cannot carry a slash. */
+    public static function demoKey(string $package): string
+    {
+        return str_replace('/', '__', $package);
+    }
+
+    /**
+     * After an install: import the demo content if it was asked for. Returns
+     * a line for the success notification, or null when nothing was asked.
+     * A failed import never reads as a failed install — the theme is in.
+     */
+    private function afterInstall(string $package): ?string
+    {
+        $key = self::demoKey($package);
+
+        if (($this->withDemo[$key] ?? false) !== true) {
+            return null;
+        }
+
+        unset($this->withDemo[$key]);
+
+        try {
+            $totals = $this->themes()->content()->import($package, $this->actorId());
+        } catch (Throwable $e) {
+            return 'The theme is installed, but its demo content was not: '.$e->getMessage();
+        }
+
+        return 'Demo content: '.ThemeContent::summary($totals).' Activate the theme to see it.';
+    }
+
+    private function actorId(): ?string
+    {
+        $id = auth()->id();
+
+        return $id === null ? null : (string) $id;
+    }
+
+    /**
      * Fetch and apply the newer version the check-in reported.
      *
-     * A theme only ever arrives through a licence grant (free themes install
-     * from the Magna Account too), so unlike PluginsPage::update() there is
+     * A theme only ever arrives through a licence grant — bought, trialled,
+     * or claimed for free with getFree() — so unlike PluginsPage::update() there is
      * no re-enable fallback: the licence is the single route to the bytes,
      * and LicenseInstaller::update() already does the in-place swap that
      * keeps the active theme active.

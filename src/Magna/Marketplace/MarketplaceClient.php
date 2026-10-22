@@ -100,6 +100,37 @@ class MarketplaceClient
     }
 
     /**
+     * The full listing a details view shows — description, screenshots,
+     * reviews, star spread, links — for a plugin or theme, or null when the
+     * marketplace does not know it or cannot be reached.
+     *
+     * Cached briefly per package: opening the same details twice while
+     * browsing should not cost a round trip each time, and a review posted
+     * minutes ago is allowed to appear on the next visit.
+     */
+    public function details(string $package): ?ListingDetails
+    {
+        if (preg_match('#^[a-z0-9]([a-z0-9_-]*[a-z0-9])?/[a-z0-9]([a-z0-9_-]*[a-z0-9])?$#', $package) !== 1) {
+            return null;
+        }
+
+        $key = Marketplace::CACHE_KEY.'.details.'.$package;
+        $raw = Cache::get($key);
+
+        if (! is_array($raw)) {
+            $raw = $this->fetch('/plugins/'.$package);
+
+            if (! is_array($raw)) {
+                return null;
+            }
+
+            Cache::put($key, $raw, 600);
+        }
+
+        return ListingDetails::fromArray($raw);
+    }
+
+    /**
      * Available published version strings for a package (as ordered by the API).
      *
      * @return list<string>
