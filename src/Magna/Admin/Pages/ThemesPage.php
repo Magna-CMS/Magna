@@ -314,7 +314,7 @@ class ThemesPage extends Page
         if ($result['ok'] !== true) {
             Notification::make()
                 ->title('Could not get this theme')
-                ->body($result['message'] ?? 'The marketplace refused this request.')
+                ->body(is_string($result['message'] ?? null) ? $result['message'] : 'The marketplace refused this request.')
                 ->danger()
                 ->send();
 
@@ -327,7 +327,8 @@ class ThemesPage extends Page
         // it is the usable one the account already holds, not merely the
         // newest wallet row (which could be an older, revoked one). The
         // wallet is the fallback for a reply without an id.
-        $claimedId = $result['license']['id'] ?? null;
+        $license = is_array($result['license'] ?? null) ? $result['license'] : [];
+        $claimedId = $license['id'] ?? null;
         $licenseId = is_numeric($claimedId) ? (int) $claimedId : $this->walletLicenseIdFor($package);
 
         if ($licenseId === null) {

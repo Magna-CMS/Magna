@@ -113,6 +113,7 @@ final class ThemeContent
                 throw new RuntimeException(basename($path).' is not valid JSON.');
             }
 
+            /** @var array<string, mixed> $kit */
             try {
                 $counts = $this->importer->importMissing($kit, $actorId);
             } catch (\InvalidArgumentException $e) {
