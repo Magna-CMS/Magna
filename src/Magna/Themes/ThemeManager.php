@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Themes;
 
+use Illuminate\Contracts\Container\Container;
 use Magna\Frontend\RenderedOutputRefresher;
 use Magna\MagnaServiceProvider;
 use Symfony\Component\Filesystem\Filesystem;
@@ -26,7 +27,25 @@ class ThemeManager
         private readonly Filesystem $files,
         private readonly EnabledPluginVersions $pluginVersions = new EnabledPluginVersions,
         private readonly RenderedOutputRefresher $rendered = new RenderedOutputRefresher,
+        // Where a plugin's ThemeContentImporter is found (the page builder
+        // binds one). Null when constructed by hand, as some tests do — a
+        // manager without it simply reports no demo content.
+        private readonly ?Container $container = null,
     ) {}
+
+    /**
+     * Demo content for installed themes — what "install with demo data"
+     * imports. Reached through the manager so callers that already hold one
+     * (the Themes page) need no second container lookup.
+     */
+    public function content(): ThemeContent
+    {
+        $importer = $this->container !== null && $this->container->bound(ThemeContentImporter::class)
+            ? $this->container->make(ThemeContentImporter::class)
+            : null;
+
+        return new ThemeContent($this, $importer instanceof ThemeContentImporter ? $importer : null);
+    }
 
     /** Absolute path of the themes directory. */
     public function directory(): string

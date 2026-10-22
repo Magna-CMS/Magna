@@ -1,0 +1,16 @@
+{
+  "format": "magna-site-kit",
+  "version": 1,
+  "pages": [
+    {
+      "title": "Optional",
+      "slug": "optional-only",
+      "status": "published",
+      "blocks_data": []
+    }
+  ],
+  "templates": [],
+  "menus": [],
+  "patterns": [],
+  "settings": {}
+}

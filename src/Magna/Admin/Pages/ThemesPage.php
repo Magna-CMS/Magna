@@ -16,6 +16,7 @@ use Magna\Marketplace\MarketplaceClient;
 use Magna\Marketplace\PluginCatalogView;
 use Magna\Marketplace\PluginListing;
 use Magna\Support\Version;
+use Magna\Themes\ThemeContent;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
 use Magna\Updater\UpdateCheck;
@@ -35,7 +36,11 @@ use Throwable;
  */
 class ThemesPage extends Page
 {
-    use ChecksOutWithRazorpay;
+    use ChecksOutWithRazorpay {
+        // Kept under an alias: this page's onOrderSettled() runs it, then
+        // imports demo content if "Include demo content" was ticked.
+        onOrderSettled as installSettledOrder;
+    }
 
     // "See more" on a Browse card: the full store listing in a modal.
     use ShowsMarketplaceDetails;
@@ -60,6 +65,15 @@ class ThemesPage extends Page
     public array $available = [];
 
     public bool $marketplaceUnreachable = false;
+
+    /**
+     * "Include demo content" ticked per marketplace theme, keyed by
+     * ThemesPage::demoKey(package). Read once the theme is installed — by a
+     * free claim, a trial or a purchase — to import its starter content.
+     *
+     * @var array<string, bool>
+     */
+    public array $withDemo = [];
 
     public static function canAccess(): bool
     {
@@ -115,7 +129,10 @@ class ThemesPage extends Page
             ];
         };
 
+        $content = $themes->content();
+
         return [
+            'demoSupported' => $content->supported(),
             'installed' => array_map(
                 fn (ThemeManifest $t): array => [
                     'name' => $t->name,
@@ -127,6 +144,7 @@ class ThemesPage extends Page
                     'tags' => $t->tags,
                     'homepage' => $t->homepage,
                     'active' => $t->name === $activeName,
+                    'has_demo' => $content->available($t->name),
                 ] + $updateFields($t),
                 array_values(array_filter($installed, fn (ThemeManifest $t): bool => ! $t->isAddon())),
             ),
@@ -336,9 +354,90 @@ class ThemesPage extends Page
 
         $marketplace->clearCache();
 
-        Notification::make()->title($message)->body('Activate it under Installed when you are ready.')->success()->send();
+        Notification::make()->title($message)->body($this->afterInstall($package) ?? 'Activate it under Installed when you are ready.')->success()->send();
 
         $this->replaceUrl(static::getUrl(), 800);
+    }
+
+    /**
+     * The theme page's half of a settled purchase or started trial: install,
+     * then — if "Include demo content" was ticked — import its demo content.
+     * Replaces ChecksOutWithRazorpay's default, which knows nothing of demos.
+     */
+    protected function onOrderSettled(int $licenseId, string $productSlug): void
+    {
+        $this->installSettledOrder($licenseId, $productSlug);
+
+        // Only once the theme is really on disk: a failed install has already
+        // said so, and its demo content has nothing to belong to.
+        if ($this->themes()->find($productSlug) === null) {
+            return;
+        }
+
+        $note = $this->afterInstall($productSlug);
+
+        if ($note !== null) {
+            Notification::make()->title('Demo content')->body($note)->info()->send();
+        }
+    }
+
+    /**
+     * Import an installed theme's demo content on request — the Installed
+     * card's button, and what "Include demo content" does after an install.
+     * Adds only what the site lacks; never changes existing content.
+     */
+    public function importDemoContent(string $name): void
+    {
+        try {
+            $totals = $this->themes()->content()->import($name, $this->actorId());
+        } catch (Throwable $e) {
+            Notification::make()->title('Demo content was not imported')->body($e->getMessage())->danger()->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('Demo content imported')
+            ->body(ThemeContent::summary($totals).' Activate the theme to see it.')
+            ->success()
+            ->send();
+    }
+
+    /** The withDemo key for a package — Livewire model paths cannot carry a slash. */
+    public static function demoKey(string $package): string
+    {
+        return str_replace('/', '__', $package);
+    }
+
+    /**
+     * After an install: import the demo content if it was asked for. Returns
+     * a line for the success notification, or null when nothing was asked.
+     * A failed import never reads as a failed install — the theme is in.
+     */
+    private function afterInstall(string $package): ?string
+    {
+        $key = self::demoKey($package);
+
+        if (($this->withDemo[$key] ?? false) !== true) {
+            return null;
+        }
+
+        unset($this->withDemo[$key]);
+
+        try {
+            $totals = $this->themes()->content()->import($package, $this->actorId());
+        } catch (Throwable $e) {
+            return 'The theme is installed, but its demo content was not: '.$e->getMessage();
+        }
+
+        return 'Demo content: '.ThemeContent::summary($totals).' Activate the theme to see it.';
+    }
+
+    private function actorId(): ?string
+    {
+        $id = auth()->id();
+
+        return $id === null ? null : (string) $id;
     }
 
     /**

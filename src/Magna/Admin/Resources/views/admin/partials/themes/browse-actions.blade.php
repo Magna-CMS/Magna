@@ -6,7 +6,18 @@
 --}}
 @php
     $symbol = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£'][$t['currency'] ?? 'INR'] ?? (($t['currency'] ?? '').' ');
+    // Offered whenever this site can import demo content (the page builder is
+    // enabled) and the theme can actually be installed from here.
+    $offersDemo = ($demoSupported ?? false)
+        && ($t['is_paid'] || ($t['claimable'] ?? null) === true);
 @endphp
+@if ($offersDemo)
+    <label class="mr-1 inline-flex cursor-pointer select-none items-center gap-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400"
+           title="Also add the theme's demo pages, menus and posts — only what your site does not have yet. Nothing you made is changed.">
+        <input type="checkbox" wire:model="withDemo.{{ \Magna\Admin\Pages\ThemesPage::demoKey($t['name']) }}" class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-white/20">
+        Include demo content
+    </label>
+@endif
 @if ($t['is_paid'])
     @if ($t['trial_enabled'])
         <button

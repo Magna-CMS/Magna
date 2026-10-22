@@ -103,6 +103,14 @@
                     <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-white/5">
                         <span class="font-mono text-[11px] text-gray-400 dark:text-gray-500">{{ $theme['name'] }}</span>
                         <div class="flex items-center gap-3">
+                            @if ($theme['has_demo'] ?? false)
+                                <button
+                                    wire:click="importDemoContent('{{ $theme['name'] }}')"
+                                    wire:confirm="Add this theme's demo pages, menus and posts? Only what your site does not have yet is added — nothing you made is changed."
+                                    wire:loading.attr="disabled"
+                                    class="text-xs font-semibold text-primary-600 hover:underline dark:text-primary-400"
+                                >Import demo content</button>
+                            @endif
                             <button
                                 wire:click="remove('{{ $theme['name'] }}')"
                                 wire:confirm="Delete this theme's files from the site?"

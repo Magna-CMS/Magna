@@ -1,0 +1,10 @@
+{
+    "name": "testv/demo",
+    "displayName": "Demo Theme",
+    "description": "Test-only theme that ships demo content.",
+    "version": "1.0.0",
+    "compat": {
+        "magna": "^1.0"
+    },
+    "demoContent": ["starter/demo.json", "starter/../theme.json"]
+}
