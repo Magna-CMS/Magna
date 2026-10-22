@@ -241,6 +241,7 @@ class ThemesPage extends Page
             'currency' => $l->currency,
             'prices' => $l->prices,
             'trial_enabled' => $l->trialEnabled && $l->isPaid(),
+            'claimable' => $l->claimable,
             'trial_days' => $l->trialDays,
         ], $catalog);
     }
@@ -297,9 +298,12 @@ class ThemesPage extends Page
 
         $client->forgetCache();
 
-        // The claim reply carries the licence, but the wallet is what the
-        // installer is keyed on — reading it back also proves it landed.
-        $licenseId = $this->walletLicenseIdFor($package);
+        // The licence the claim returned — idempotent, so on a repeat claim
+        // it is the usable one the account already holds, not merely the
+        // newest wallet row (which could be an older, revoked one). The
+        // wallet is the fallback for a reply without an id.
+        $claimedId = $result['license']['id'] ?? null;
+        $licenseId = is_numeric($claimedId) ? (int) $claimedId : $this->walletLicenseIdFor($package);
 
         if ($licenseId === null) {
             Notification::make()

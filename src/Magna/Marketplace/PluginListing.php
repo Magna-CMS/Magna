@@ -52,6 +52,10 @@ final class PluginListing
         // listing rather than claiming trust it never asserted.
         public readonly bool $official = false,
         public readonly bool $verified = false,
+        // A free theme the account can claim and install right now. Null
+        // when the marketplace predates the field (and so has no claim
+        // endpoint) — "unknown", never read as yes.
+        public readonly ?bool $claimable = null,
     ) {}
 
     /**
@@ -136,6 +140,7 @@ final class PluginListing
             seatLimit: is_numeric($data['seatLimit'] ?? null) ? max(1, (int) $data['seatLimit']) : 1,
             official: ($data['official'] ?? null) === true,
             verified: ($data['verified'] ?? null) === true,
+            claimable: is_bool($data['claimable'] ?? null) ? $data['claimable'] : null,
         );
     }
 

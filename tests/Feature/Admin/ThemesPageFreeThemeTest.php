@@ -15,12 +15,14 @@ declare(strict_types=1);
  */
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 use Magna\AccountCentre\AccountCentreSettings;
 use Magna\Admin\Pages\ThemesPage;
 use Magna\Auth\Role;
 use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseInstaller;
+use Magna\Marketplace\Marketplace;
 use Magna\Users\User;
 use Tests\TestCase;
 
@@ -82,4 +84,56 @@ it('asks for a Magna Account before claiming anything', function (): void {
     $client->shouldNotReceive('claimFree');
 
     Livewire::test(ThemesPage::class)->call('getFree', 'magna-cms/eva');
+});
+
+it('installs the licence the claim returned, not merely the newest wallet row', function (): void {
+    $this->actingAs(freeThemeAdmin());
+
+    // A repeat claim: the marketplace returns the usable licence the account
+    // already holds (7) while an older, revoked one (9) sits first in the wallet.
+    $client = $this->mock(LicenseClient::class);
+    $client->shouldReceive('claimFree')->once()
+        ->andReturn(['ok' => true, 'created' => false, 'license' => ['id' => 7, 'product_slug' => 'magna-cms/eva']]);
+    $client->shouldReceive('forgetCache');
+    $client->shouldReceive('wallet')->andReturn([
+        ['id' => 9, 'product_slug' => 'magna-cms/eva', 'status' => 'revoked'],
+        ['id' => 7, 'product_slug' => 'magna-cms/eva', 'status' => 'active'],
+    ]);
+
+    $installer = $this->mock(LicenseInstaller::class);
+    $installer->shouldReceive('installLicense')->once()->with(7, 'magna-cms/eva')->andReturn('Eva installed.');
+
+    Livewire::test(ThemesPage::class)->call('getFree', 'magna-cms/eva');
+});
+
+it('offers Get & install only for a theme the marketplace says can be claimed', function (): void {
+    $this->actingAs(freeThemeAdmin());
+    Cache::flush();
+
+    $entry = fn (string $package, string $name, ?bool $claimable): array => array_filter([
+        'package' => $package, 'name' => $name, 'shortDescription' => 'A theme.', 'version' => '1.0.0',
+        'compat' => '^1.0', 'productType' => 'theme', 'pricingModel' => 'free', 'claimable' => $claimable,
+    ], fn ($v) => $v !== null);
+
+    Cache::put(Marketplace::CACHE_KEY.'.themes', [
+        $entry('acme/ready', 'Ready Theme', true),
+    ], 3600);
+
+    Livewire::test(ThemesPage::class)->call('setTab', 'browse')
+        ->assertSee('Ready Theme')->assertSee('Get &amp; install', false);
+
+    Cache::put(Marketplace::CACHE_KEY.'.themes', [
+        $entry('acme/waiting', 'Waiting Theme', false),
+    ], 3600);
+
+    Livewire::test(ThemesPage::class)->call('setTab', 'browse')
+        ->assertSee('Waiting Theme')->assertSee('not available to install yet')->assertDontSee('Get &amp; install', false);
+
+    // A marketplace that predates claims: keep the old wording, no button.
+    Cache::put(Marketplace::CACHE_KEY.'.themes', [
+        $entry('acme/legacy', 'Legacy Theme', null),
+    ], 3600);
+
+    Livewire::test(ThemesPage::class)->call('setTab', 'browse')
+        ->assertSee('install from your Magna Account')->assertDontSee('Get &amp; install', false);
 });

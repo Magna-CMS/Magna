@@ -181,11 +181,11 @@ class LicenseClient
      * archive pipe as a paid one. Idempotent on the marketplace: claiming
      * one already held returns that licence.
      *
-     * @return array{ok: bool, error?: ?string, message?: ?string}
+     * @return array<string, mixed> ok/error/message plus the reply's `license`
      */
     public function claimFree(string $productSlug): array
     {
-        return $this->postAccountJson('/account/products/'.$productSlug.'/claim', []);
+        return $this->postAccountPassthrough('/account/products/'.$productSlug.'/claim', []);
     }
 
     /**
