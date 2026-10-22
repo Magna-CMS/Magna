@@ -247,7 +247,12 @@
                                 @endif
                             </span>
                         @else
-                            <span class="text-xs text-gray-400 dark:text-gray-500">Free — install from your Magna Account</span>
+                            <span class="text-xs text-gray-400 dark:text-gray-500 mr-auto">Free</span>
+                            <button
+                                wire:click="getFree('{{ $t['name'] }}')"
+                                wire:loading.attr="disabled"
+                                class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors disabled:opacity-60"
+                            >Get &amp; install</button>
                         @endif
                     </div>
                 </div>

@@ -9,6 +9,7 @@ use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
+use Magna\Licensing\LicenseClient;
 use Magna\Licensing\LicenseInstaller;
 use Magna\Marketplace\MarketplaceClient;
 use Magna\Marketplace\PluginCatalogView;
@@ -269,10 +270,71 @@ class ThemesPage extends Page
     }
 
     /**
+     * Get a free theme from the Browse tab: claim its zero-cost licence into
+     * the connected Magna Account, then install it — one click, the same
+     * signed archive pipe a purchase uses.
+     *
+     * Services arrive by Livewire method injection rather than container
+     * lookups: this file's lookup count is pinned by the architecture ratchet.
+     */
+    public function getFree(string $package, LicenseClient $client, LicenseInstaller $installer, MarketplaceClient $marketplace): void
+    {
+        if (! $this->requireConnectedAccount('A free theme is still added to your Magna Account, so connect one first.')) {
+            return;
+        }
+
+        $result = $client->claimFree($package);
+
+        if ($result['ok'] !== true) {
+            Notification::make()
+                ->title('Could not get this theme')
+                ->body($result['message'] ?? 'The marketplace refused this request.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $client->forgetCache();
+
+        // The claim reply carries the licence, but the wallet is what the
+        // installer is keyed on — reading it back also proves it landed.
+        $licenseId = $this->walletLicenseIdFor($package);
+
+        if ($licenseId === null) {
+            Notification::make()
+                ->title('Added to your Magna Account')
+                ->body('Install it from the Account Centre.')
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $message = $installer->installLicense($licenseId, $package);
+        } catch (Throwable $e) {
+            Notification::make()
+                ->title('Added to your account — but the install did not finish')
+                ->body($e->getMessage().' Install it from the Account Centre.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $marketplace->clearCache();
+
+        Notification::make()->title($message)->body('Activate it under Installed when you are ready.')->success()->send();
+
+        $this->replaceUrl(static::getUrl(), 800);
+    }
+
+    /**
      * Fetch and apply the newer version the check-in reported.
      *
-     * A theme only ever arrives through a licence grant (free themes install
-     * from the Magna Account too), so unlike PluginsPage::update() there is
+     * A theme only ever arrives through a licence grant — bought, trialled,
+     * or claimed for free with getFree() — so unlike PluginsPage::update() there is
      * no re-enable fallback: the licence is the single route to the bytes,
      * and LicenseInstaller::update() already does the in-place swap that
      * keeps the active theme active.

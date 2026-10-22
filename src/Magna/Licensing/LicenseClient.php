@@ -176,6 +176,19 @@ class LicenseClient
     }
 
     /**
+     * Claim a free theme into the connected account's wallet — a zero-cost
+     * lifetime licence, so it installs and updates through the same signed
+     * archive pipe as a paid one. Idempotent on the marketplace: claiming
+     * one already held returns that licence.
+     *
+     * @return array{ok: bool, error?: ?string, message?: ?string}
+     */
+    public function claimFree(string $productSlug): array
+    {
+        return $this->postAccountJson('/account/products/'.$productSlug.'/claim', []);
+    }
+
+    /**
      * POST to an account endpoint and normalise the reply.
      *
      * Unlike the signed licence calls, these carry a human-facing outcome:
