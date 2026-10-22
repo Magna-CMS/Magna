@@ -6,6 +6,7 @@
                      license_blocked_version) attached
       $addons      — theme addons on disk, same update fields
       $available   — marketplace themes not yet installed
+      $filteredAvailable — $available narrowed by the Browse search box
       $activeName  — vendor/name of the active theme, or null
 --}}
 
@@ -203,9 +204,20 @@
 
 @else
 
-    @if (count($available) > 0)
+    {{-- Search --}}
+    <div class="relative w-full sm:w-80 mb-6">
+        <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/></svg>
+        <input
+            wire:model.live="searchAvailable"
+            type="text"
+            placeholder="Search available themes…"
+            class="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        >
+    </div>
+
+    @if (count($filteredAvailable) > 0)
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            @foreach ($available as $t)
+            @foreach ($filteredAvailable as $t)
                 <div class="group bg-white dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden flex flex-col transition-shadow hover:shadow-md">
                     {{-- Preview: the listing's lead screenshot, so a theme is judged
                          by how it looks. Clicking it opens the full listing. --}}
@@ -251,7 +263,9 @@
         </div>
     @else
         <div class="text-center py-16 bg-white dark:bg-gray-900/40 rounded-xl border border-dashed border-gray-300 dark:border-white/10">
-            @if ($this->marketplaceUnreachable)
+            @if ($this->searchAvailable !== '' && count($available) > 0)
+                <p class="text-sm text-gray-500 dark:text-gray-400">No themes match your search.</p>
+            @elseif ($this->marketplaceUnreachable)
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Couldn't reach the marketplace</p>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">The connection may be temporary — try refreshing in a moment.</p>
             @else

@@ -175,6 +175,31 @@ class PluginCatalogView
     }
 
     /**
+     * Case-insensitive search over the fields a catalog card shows — one rule
+     * for the Plugins page's lists and the Themes page's Browse tab.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public static function matchesSearch(array $row, string $query): bool
+    {
+        $query = strtolower(trim($query));
+
+        if ($query === '') {
+            return true;
+        }
+
+        foreach (['display_name', 'description', 'author'] as $key) {
+            $value = $row[$key] ?? null;
+
+            if (is_string($value) && str_contains(strtolower($value), $query)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * slug => latest_version for the given update-check scope, with honest
      * string types (pluck() would hand back mixed on both sides).
      *

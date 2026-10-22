@@ -102,7 +102,7 @@ class PluginsPage extends Page
         $searchAvail = strtolower(trim($this->searchAvailable));
         $filteredAvailable = $searchAvail === '' ? $this->available : array_values(array_filter(
             $this->available,
-            fn (array $p): bool => $this->matchesSearch($p, $searchAvail),
+            fn (array $p): bool => PluginCatalogView::matchesSearch($p, $searchAvail),
         ));
 
         $counts = [
@@ -588,27 +588,9 @@ class PluginsPage extends Page
                     return $statusOk;
                 }
 
-                return $this->matchesSearch($p, $search);
+                return PluginCatalogView::matchesSearch($p, $search);
             },
         ));
-    }
-
-    /**
-     * Case-insensitive search over the fields both plugin lists show.
-     *
-     * @param  array<string, mixed>  $plugin
-     */
-    private function matchesSearch(array $plugin, string $query): bool
-    {
-        foreach (['display_name', 'description', 'author'] as $key) {
-            $value = $plugin[$key] ?? null;
-
-            if (is_string($value) && str_contains(strtolower($value), $query)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

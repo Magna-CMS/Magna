@@ -66,6 +66,9 @@ class ThemesPage extends Page
 
     public bool $marketplaceUnreachable = false;
 
+    /** The Browse tab's search box — same matching as the Plugins page. */
+    public string $searchAvailable = '';
+
     /**
      * "Include demo content" ticked per marketplace theme, keyed by
      * ThemesPage::demoKey(package). Read once the theme is installed — by a
@@ -131,6 +134,12 @@ class ThemesPage extends Page
 
         $content = $themes->content();
 
+        // Anything already on disk is not for sale again.
+        $available = array_values(array_filter(
+            $this->available,
+            fn (array $t): bool => ! (is_string($t['name'] ?? null) && isset($installed[$t['name']])),
+        ));
+
         return [
             'demoSupported' => $content->supported(),
             'installed' => array_map(
@@ -163,10 +172,13 @@ class ThemesPage extends Page
                 ] + $updateFields($a),
                 array_values(array_filter($installed, fn (ThemeManifest $t): bool => $t->isAddon())),
             ),
-            // Anything already on disk is not for sale again.
-            'available' => array_values(array_filter(
-                $this->available,
-                fn (array $t): bool => ! (is_string($t['name'] ?? null) && isset($installed[$t['name']])),
+            'available' => $available,
+            // The cards on the Browse tab. The details modal keeps looking
+            // rows up in the unfiltered list, so typing in the search box
+            // never pulls an open listing out from under it.
+            'filteredAvailable' => array_values(array_filter(
+                $available,
+                fn (array $t): bool => PluginCatalogView::matchesSearch($t, $this->searchAvailable),
             )),
             'activeName' => $activeName,
         ];
