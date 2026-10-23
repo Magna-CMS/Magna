@@ -240,18 +240,20 @@ A Magna plugin is a **Composer package** with a `magna.json` manifest:
 
 ```json
 {
-  "id": "magna/docs",
-  "name": "Magna Docs",
-  "version": "1.0.0",
+  "name": "magna-cms/docs",
+  "displayName": "Magna Docs",
   "description": "Hierarchical documentation with a delivery API.",
+  "version": "1.1.1",
   "author": "Magna Team",
-  "requires": {
-    "magna/magna": "^1.0"
+  "license": "MIT",
+  "compat": {
+    "magna": "^1.0",
+    "php": "^8.3"
   },
+  "entry": "Magna\\Docs\\DocsPlugin",
   "permissions": [
-    "content:read",
-    "content:write",
-    "media:read"
+    "docs.pages.view",
+    "docs.pages.manage"
   ]
 }
 ```
@@ -267,19 +269,19 @@ A Magna plugin is a **Composer package** with a `magna.json` manifest:
 
 ```bash
 # Scaffold a new plugin
-php artisan magna:plugin:make my-plugin
+php artisan magna:plugin:make acme/reviews
 
 # Plugin structure
-plugins-dev/vendor/my-plugin/
+plugins-dev/acme/reviews/
 ├── magna.json            # manifest
 ├── composer.json
 ├── src/
-│   ├── MyPluginServiceProvider.php
-│   └── Models/           # Eloquent models
+│   └── ReviewsPlugin.php # entry class (extends the SDK's Plugin)
+├── routes/
+│   └── api.php
 ├── database/
 │   └── migrations/
-└── resources/
-    └── views/
+└── tests/
 ```
 
 ### Official Plugins
