@@ -293,7 +293,7 @@ plugins-dev/acme/reviews/
 | **Magna Blog** | Headless blog with block editor, editorial workflow and JSON delivery API | [Blog](https://github.com/Magna-CMS/Blog) |
 | **Magna Forms** | Form builder and submission storage | [Magna-Forms](https://github.com/Magna-CMS/Magna-Forms) |
 | **Magna SEO** | SEO tooling for Magna content | [Magna-SEO](https://github.com/Magna-CMS/Magna-SEO) |
-| **Magna Defence** | Security hardening | [Magna-Defence](https://github.com/Magna-CMS/Magna-Defence) |
+| **Magna Defence** | Security hardening: login protection, request firewall, integrity scanning | Not yet public |
 | **Magna Commerce** | Product catalog, inventory, orders | Planned |
 
 Building a theme? Start from the [Magna Theme Starter Kit](https://github.com/Magna-CMS/Magna-Theme-Starter-Kit), or see the [Eva blog theme](https://github.com/Magna-CMS/Eva-Magna-Blog-Theme) for a complete example.
