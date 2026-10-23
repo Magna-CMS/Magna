@@ -5,12 +5,12 @@
 <h1 align="center">Magna CMS</h1>
 
 <p align="center">
-  <strong>The headless CMS built Simple for Laravel developers.</strong><br>
-  The Ultimate Operating Sytem for Websites and Applications — with a real plugin ecosystem and a website out of the box when you want one.
+  <strong>An open-source headless CMS for Laravel developers.</strong><br>
+  Model content visually, deliver it through a scoped REST API, and extend it with Composer-based plugins — with an optional website when you want one.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.3.2-orange?style=for-the-badge" alt="v1.3.2">
+  <a href="https://github.com/Magna-CMS/Magna/releases/latest"><img src="https://img.shields.io/github/v/release/Magna-CMS/Magna?style=for-the-badge&color=orange" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP 8.3+">
   <img src="https://img.shields.io/badge/Laravel-13-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel 13">
   <img src="https://img.shields.io/badge/Filament-5-purple?style=for-the-badge" alt="Filament 5">
@@ -86,17 +86,15 @@
 
 ## 🚧 Status
 
-**Magna is in active development — currently in public beta (v1.3.2).** We are building in public, spec-first: every subsystem is fully specified *before* it is coded, and the specifications live in this repository. Star the repo to follow the road to stable 1.0.
+**Magna is in active development and currently in public beta.** We build in public and spec-first: every subsystem is specified *before* it is coded. Star the repo to follow along.
 
-**Working today:**  You Can install & try Magna CMS in your sever using Web Installer or CLI .
+**Working today:** you can install Magna on your own server with the browser installer or from the command line.
 
 ## Download Magna
 
-Ready to try Magna CMS? Grab the latest release — download it, run the installer, and you're ready to go.
+Download the latest release ZIP, extract it to your web root, open the site in a browser, and the installer takes it from there.
 
-[![Download Magna CMS](https://img.shields.io/badge/Download-Magna%20CMS%20v1.3.2-7c3aed?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Magna-CMS/Magna/releases)
-
-**[⬇ Download Magna CMS v1.3.2](https://github.com/Magna-CMS/Magna/releases)**
+[![Download Magna CMS](https://img.shields.io/badge/Download-Latest%20release-7c3aed?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Magna-CMS/Magna/releases/latest)
 
 
 ---
@@ -118,7 +116,7 @@ Everything else is a plugin — blog, SEO, forms, e-commerce, documentation, AI.
 
 ## 🚀 Why Magna is Different
 
-The headless CMS space is crowded. Here is exactly what Magna does that others don't
+The headless CMS space is crowded. Here is what Magna does differently.
 
 ### 🐘 1. Laravel-Native, PHP-Hosting-Friendly
 
@@ -157,17 +155,17 @@ Plugins are **Composer packages** — versioning, dependency resolution, and dis
 
 ### 🛡️ 6. Fault-Tolerant Plugin Runtime
 
-Every plugin hook runs through a guarded dispatcher: a crashing plugin costs its own widget, not your page. A **circuit breaker** auto-disables repeat offenders. A shutdown handler attributes even fatal errors to the responsible plugin. Heavy hooks run on queue workers. `MAGNA_SAFE_MODE=1` boots with all plugins off as a rescue hatch.
+A plugin that fails to register or boot is **automatically disabled** and the error is logged, so a broken plugin can't lock you out of the admin panel. Plugins pass a security guard at boot that stops them from overriding security-critical middleware and services, and `php artisan magna:plugin:doctor` diagnoses problem plugins from the CLI.
 
 ### ✍️ 7. Block Editor That Respects Your Time
 
-Content is composed from **portable JSON blocks** — rendered as Blade views by Pages, or as your own React/Vue components headlessly. Structured block list with live preview via signed draft URLs. Draft preview for Next.js/Nuxt is first-class. We deliberately did not clone Gutenberg — a great structured editor is 80 % of the value at 5 % of the cost.
+Content is composed from **portable JSON blocks** — rendered as Blade views by Pages, or as your own React/Vue components headlessly. Structured block list with live preview via signed draft URLs. Draft preview for Next.js/Nuxt is first-class. We deliberately did not clone Gutenberg — a good structured editor delivers most of the value at a fraction of the cost.
 
 ---
 
 ## 🖥️ Admin Panel
 
-The Magna admin panel is built on **Filament 5** — the most powerful admin framework in the PHP ecosystem. It ships with a beautiful, fully-responsive dark UI with global search, real-time notifications, and a keyboard-first workflow.
+The Magna admin panel is built on **Filament 5**, the popular Laravel admin framework. It ships with a responsive dark UI, global search, real-time notifications, and a keyboard-first workflow.
 
 ### Content Type Builder
 
@@ -263,9 +261,9 @@ A Magna plugin is a **Composer package** with a `magna.json` manifest:
 1. Drop the plugin into `/plugins-dev/` or install via Composer.
 2. Open **Admin → Plugins → Add New Plugin**.
 3. Enable it — Magna auto-runs its migrations, registers its routes, and adds its admin sections.
-4. Disable anytime with a single click. The circuit breaker auto-disables crashing plugins before they take your site down.
+4. Disable anytime with a single click. A plugin that fails to boot is auto-disabled so it can't take your admin panel down.
 
-**Building a plugin** — full guide in [plugin-development-guide.md](docs/plugin-development-guide.md):
+**Building a plugin** — see the [Magna Plugin SDK](https://github.com/Magna-CMS/Magna-Plugin-SDK) for contracts and the full guide:
 
 ```bash
 # Scaffold a new plugin
@@ -286,14 +284,17 @@ plugins-dev/vendor/my-plugin/
 
 ### Official Plugins
 
-| Plugin | Description | Status |
+| Plugin | Description | Repository |
 |---|---|---|
-| **[Magna Docs](https://github.com/Magna-CMS/Magna-Docs)** | Hierarchical documentation with Markdown editor, collections, multi-language, REST API | `v1.0.0` ✅ |
-| **Magna Pages** | Block editor, themes, live preview — turns Magna into a full website | Coming soon |
-| **Magna Blog** | Posts, categories, tags, RSS, SEO | Coming soon |
-| **Magna Forms** | Form builder, submission storage, email notifications | Coming soon |
-| **Magna SEO** | Meta tags, sitemaps, OpenGraph, structured data | Coming soon |
-| **Magna Commerce** | Product catalog, inventory, orders | Coming soon |
+| **Magna Docs** | Hierarchical documentation with Markdown editor, collections, multi-language, REST API | [Magna-Docs](https://github.com/Magna-CMS/Magna-Docs) |
+| **Magna Pages** | Visual page builder, templates, menus and global styles — turns Magna into a website | [Magna-Pages](https://github.com/Magna-CMS/Magna-Pages) |
+| **Magna Blog** | Headless blog with block editor, editorial workflow and JSON delivery API | [Blog](https://github.com/Magna-CMS/Blog) |
+| **Magna Forms** | Form builder and submission storage | [Magna-Forms](https://github.com/Magna-CMS/Magna-Forms) |
+| **Magna SEO** | SEO tooling for Magna content | [Magna-SEO](https://github.com/Magna-CMS/Magna-SEO) |
+| **Magna Defence** | Security hardening | [Magna-Defence](https://github.com/Magna-CMS/Magna-Defence) |
+| **Magna Commerce** | Product catalog, inventory, orders | Planned |
+
+Building a theme? Start from the [Magna Theme Starter Kit](https://github.com/Magna-CMS/Magna-Theme-Starter-Kit), or see the [Eva blog theme](https://github.com/Magna-CMS/Eva-Magna-Blog-Theme) for a complete example.
 
 ---
 
@@ -311,12 +312,13 @@ plugins-dev/vendor/my-plugin/
 ```bash
 git clone https://github.com/Magna-CMS/Magna.git my-cms
 cd my-cms
+cp .env.example .env
 composer install
 npm install && npm run build
 php artisan serve
 ```
 
-Open `http://localhost:8000` — every request lands on the **browser installer** until setup is complete.
+Open `http://localhost:8000` — every request lands on the **browser installer** until setup is complete. (Prefer not to build from source? Use the [release ZIP](https://github.com/Magna-CMS/Magna/releases/latest) instead: it bundles `vendor/` and compiled assets.)
 
 ---
 
@@ -412,22 +414,23 @@ Generate keys in **Admin → API → API Keys** — choose `Delivery` scope for 
 ### Endpoints
 
 ```
-GET    /api/v1/content/{type}           # list entries (paginated, filterable)
-GET    /api/v1/content/{type}/{id}      # single entry
-GET    /api/v1/content/{type}/{slug}    # single entry by slug
-GET    /api/v1/media                    # list media assets
-GET    /api/v1/media/{id}              # single media asset
+GET    /api/v1/content/{type}           # list entries (cursor-paginated, filterable)
+GET    /api/v1/content/{type}/{id}      # single entry, by ULID or slug
+GET    /api/v1/openapi.json             # OpenAPI document (management key)
+GET    /api/v1/health                   # health probe (no auth)
 ```
+
+Write operations (entries, media, content types, settings) live under the **management API** at `/api/v1/manage/…` and require a `Management` key.
 
 ### Query Parameters
 
 ```
-?page=1&per_page=20          # pagination (cursor-based option available)
-?filter[status]=published    # filter by field value
-?sort=created_at&dir=desc    # sort
-?fields=title,slug,body      # sparse fieldsets
-?locale=fr                   # localized content
-?include=author,category     # eager-load relations
+?per_page=20&cursor=…            # cursor pagination (use meta.next_cursor)
+?filter[title][like]=hello       # filter: eq, neq, lt, lte, gt, gte, like, in, nin
+?sort=-published_at              # sort ascending, or descending with a "-" prefix
+?fields=title,slug,body          # sparse fieldsets
+?locale=fr                       # localized content
+?with=author,category            # load relations
 ```
 
 ### Example Response
@@ -446,13 +449,11 @@ GET    /api/v1/media/{id}              # single media asset
     }
   ],
   "meta": {
-    "total": 142,
-    "per_page": 20,
-    "current_page": 1
+    "next_cursor": "eyJpZCI6...",
+    "has_more": true,
+    "per_page": 20
   },
-  "links": {
-    "next": "/api/v1/content/article?page=2"
-  }
+  "included": {}
 }
 ```
 
@@ -463,7 +464,7 @@ GET    /api/v1/media/{id}              # single media asset
 | Feature | **Magna** | Strapi | Directus | Payload | WordPress | Statamic |
 |---|---|---|---|---|---|---|
 | Runtime | **PHP / Laravel** | Node | Node | Node | PHP | PHP / Laravel |
-| License | **MIT** | MIT + EE | BSL + EE | MIT | GPL | Paid |
+| License | **MIT** | MIT + EE | BSL + EE | MIT | GPL | Free (Solo) / Paid (Pro) |
 | Headless-first API | ✅ | ✅ | ✅ | ✅ | ⚠️ bolt-on | ⚠️ add-on |
 | Visual content type builder | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Real database tables (no EAV) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ flat-file |
@@ -476,20 +477,21 @@ GET    /api/v1/media/{id}              # single media asset
 | Field-level encryption (schema) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Per-role enforceable 2FA | ✅ | ❌ | ✅ | ❌ | ❌ | ⚠️ add-on |
 | Scoped expiring API tokens | ✅ | ⚠️ | ✅ | ✅ | ❌ | ⚠️ |
-| Plugin circuit breaker + safe mode | ✅ | ❌ | ❌ | ❌ | ⚠️ recovery | ❌ |
+| Auto-disable plugins that fail to boot | ✅ | ❌ | ❌ | ❌ | ⚠️ recovery | ❌ |
 | Browser installer (unzip & go) | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | Ordinary PHP hosting | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | OWASP ASVS L2 target (with audit) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 *(Corrections welcome — open an issue. Comparisons reflect core capabilities at the time of writing.)*
 
----
+### Detailed comparisons
 
-## Magna CMS vs Strapi
+<details>
+<summary><strong>Magna CMS vs Strapi</strong></summary>
 
-**Looking for a Strapi alternative in PHP / Laravel?** Magna is the answer.
+**Looking for a Strapi alternative in PHP / Laravel?**
 
-Strapi is a popular Node-based headless CMS — but if your team runs PHP or Laravel, deploying and maintaining a Node service is friction you don't need. Magna gives you everything Strapi offers — visual content type builder, REST API, role-based access, plugin system — on the PHP stack your team already knows, deployable on any server that runs Laravel.
+Strapi is a popular Node-based headless CMS — but if your team runs PHP or Laravel, deploying and maintaining a Node service is friction you don't need. Magna gives you the core of what Strapi offers — visual content type builder, REST API, role-based access, plugin system — on the PHP stack your team already knows, deployable on any server that runs Laravel.
 
 | | **Magna** | Strapi |
 |---|---|---|
@@ -503,11 +505,12 @@ Strapi is a popular Node-based headless CMS — but if your team runs PHP or Lar
 
 If you know Laravel, you don't need to learn a new ecosystem. Magna is the **Strapi for Laravel**.
 
----
+</details>
 
-## Magna CMS vs Directus
+<details>
+<summary><strong>Magna CMS vs Directus</strong></summary>
 
-**Looking for a Directus alternative for PHP / self-hosted?** Magna was built for you.
+**Looking for a Directus alternative for PHP / self-hosted?**
 
 Directus is a powerful data platform that wraps any SQL database with an API. But it runs on Node, has a BSL licence for some features, and is intentionally database-agnostic rather than opinionated. Magna makes different trade-offs: Laravel-idiomatic, PHP-native, with a stronger plugin safety model and a performance contract Directus doesn't publish.
 
@@ -517,16 +520,17 @@ Directus is a powerful data platform that wraps any SQL database with an API. Bu
 | License | MIT | BSL (some features) |
 | Schema approach | Schema-as-code, real tables | Wraps existing DB |
 | Performance guarantees | Published CI benchmarks | None published |
-| Plugin safety | Circuit breaker + safe mode | None |
+| Plugin safety | Failing plugins auto-disabled, permissions manifest | Extension sandbox (opt-in) |
 | PHP ecosystem | ✅ native | ❌ |
 
 If your project lives in PHP and you want the safety and familiarity of the Laravel ecosystem, Magna is the **Directus for PHP**.
 
----
+</details>
 
-## Magna CMS vs Payload CMS
+<details>
+<summary><strong>Magna CMS vs Payload CMS</strong></summary>
 
-**Looking for a Payload CMS alternative that runs on PHP?** Magna is it.
+**Looking for a Payload CMS alternative that runs on PHP?**
 
 Payload is an excellent TypeScript/Next.js headless CMS — great if your entire stack is JS. But if you're a PHP or Laravel team, adopting Payload means adopting Node, TypeScript, and a completely different deployment story. Magna gives you the same developer-first experience (schema as code, typed APIs, RBAC, scoped tokens, draft/publish) on the PHP stack you already run.
 
@@ -535,59 +539,64 @@ Payload is an excellent TypeScript/Next.js headless CMS — great if your entire
 | Runtime | PHP / Laravel | Node.js / Next.js |
 | Schema definition | Visual builder + code export | TypeScript config |
 | Deployment | Any PHP server | Node / Vercel / Railway |
-| Database | MySQL, PostgreSQL, SQLite | MongoDB, PostgreSQL |
+| Database | MySQL, MariaDB, PostgreSQL, SQLite | MongoDB, PostgreSQL, SQLite |
 | Admin UI | Filament 5 (dark, responsive) | Custom React admin |
 | Plugin system | Composer | npm |
 
----
+</details>
 
-## Magna CMS vs WordPress
+<details>
+<summary><strong>Magna CMS vs WordPress</strong></summary>
 
 **Building a headless site and tired of WordPress?** Magna was designed from day one for the API-first world.
 
-WordPress is the world's most popular CMS — but it was built for server-rendered pages in 2003. Its headless story is a bolt-on REST API and WPGraphQL. The plugin ecosystem (ZIP upload, PHP anywhere) is the source of most WordPress security incidents. Magna is headless by design, secure by default, and runs on PHP hosting without WordPress's legacy baggage.
+WordPress is the world's most popular CMS — but it was built for server-rendered pages in 2003. Its headless story is a bolt-on REST API and WPGraphQL. Most reported WordPress vulnerabilities come from its plugin ecosystem (ZIP upload, PHP anywhere). Magna is headless by design, secure by default, and runs on PHP hosting without WordPress's legacy baggage.
 
 | | **Magna** | WordPress |
 |---|---|---|
 | Designed for headless | ✅ API-first | ❌ bolt-on WP REST API |
-| Plugin security model | Composer + manifest + review | ZIP upload, PHP anywhere |
+| Plugin security model | Composer + permissions manifest | ZIP upload, PHP anywhere |
 | Content schema | Real tables, typed fields | Custom post types + ACF meta |
 | Performance | CI-enforced budgets, edge cache built in | Plugin-dependent |
-| Security defaults | Argon2id, 2FA, scoped tokens, CORS | MD5 passwords (historically) |
+| Security defaults | Argon2id, enforceable 2FA, scoped tokens, default-deny CORS | 2FA and hardening via plugins |
 | Admin panel | Modern Filament 5 dark UI | Classic WP admin |
 
----
+</details>
 
-## Magna CMS vs Contentful / Sanity
+<details>
+<summary><strong>Magna CMS vs Contentful / Sanity</strong></summary>
 
-**Looking for an open-source Contentful alternative or Sanity alternative you can self-host?** Magna is your answer.
+**Looking for an open-source Contentful or Sanity alternative you can self-host?**
 
-Contentful and Sanity are excellent SaaS CMSs — but you pay per record, per API call, per seat. You can never fully own your data or your infrastructure. Magna is MIT-licensed, self-hosted, with no per-record fees, no seat limits, and no vendor lock-in. You run it on your own server and keep your data forever.
+Contentful and Sanity are excellent SaaS CMSs — but pricing scales with records, API usage and seats, and your content lives on their infrastructure. Magna is MIT-licensed, self-hosted, with no per-record fees, no seat limits, and no vendor lock-in. You run it on your own server and keep your data forever.
 
 | | **Magna** | Contentful | Sanity |
 |---|---|---|---|
-| Pricing | **Free, self-hosted** | From $300/mo | From $99/mo |
+| Pricing | **Free, self-hosted** | Free tier, then paid plans | Free tier, then paid plans |
 | Data ownership | **Full** | Vendor-hosted | Vendor-hosted |
-| Open source | **MIT** | Closed | Closed (Studio only) |
+| Open source | **MIT** | Closed | Studio only (backend is hosted) |
 | Self-host | ✅ | ❌ | ❌ |
 | Vendor lock-in | **None** | High | Medium |
 
----
+</details>
 
-## Magna CMS vs Statamic / Twill
+<details>
+<summary><strong>Magna CMS vs Statamic / Twill</strong></summary>
 
 **Already a Laravel developer choosing between Magna, Statamic, and Twill?**
 
-Statamic is a great Laravel CMS — but it's flat-file by default, paid for commercial use, and website-oriented rather than headless-first. Twill is an excellent admin package from AREA 17 — but it's a UI layer, not a full CMS. Neither fills the "Laravel-native, database-backed, headless-first, plugin ecosystem, free and open-source" slot. Magna does.
+Statamic is a great Laravel CMS — but it's flat-file by default, its Pro features need a paid licence, and it's website-oriented rather than headless-first. Twill is an excellent admin package from AREA 17 — but it's a UI layer, not a full CMS. Neither fills the "Laravel-native, database-backed, headless-first, plugin ecosystem, free and open-source" slot. Magna does.
 
 | | **Magna** | Statamic | Twill |
 |---|---|---|---|
-| License | **MIT (free)** | Paid (commercial) | MIT |
+| License | **MIT (free)** | Free (Solo) / Paid (Pro) | Apache 2.0 |
 | Content storage | **Real DB tables** | Flat-file (git) | Real DB tables |
 | Headless-first | ✅ | ⚠️ add-on | ⚠️ DIY |
 | Plugin ecosystem | ✅ Composer | ✅ Composer | ❌ admin only |
 | Built-in REST API | ✅ | ✅ | ❌ |
 | Content type builder (visual) | ✅ | ✅ | ⚠️ blueprint |
+
+</details>
 
 ---
 
@@ -617,7 +626,7 @@ Statamic is a great Laravel CMS — but it's flat-file by default, paid for comm
 **Stack:**
 - **PHP 8.3+** — tested on 8.3 and 8.4 in CI
 - **Laravel 13** — routing, Eloquent ORM, queues, events, broadcasting
-- **Filament 5** — admin panel (the most powerful PHP admin framework)
+- **Filament 5** — admin panel
 - **MySQL 8+ / PostgreSQL 14+** — real tables per content type, no EAV
 - **SQLite** — supported for development and testing
 - **Redis** — caching, queues, sessions, surrogate key invalidation
@@ -645,7 +654,7 @@ Statamic is a great Laravel CMS — but it's flat-file by default, paid for comm
 ## ❓ FAQ
 
 **Q: Is Magna production-ready?**  
-A: Magna is in public beta (v1.3.2). The kernel, auth, RBAC, and plugin system are solid. The content engine and delivery API are in active development. We recommend waiting for stable 1.0 for production, or running beta on low-risk projects and contributing feedback.
+A: Magna is in public beta. The kernel, auth, RBAC, and plugin system are solid. The content engine and delivery API are in active development. We recommend waiting for stable 1.0 for production, or running beta on low-risk projects and contributing feedback.
 
 **Q: What database does Magna use?**  
 A: MySQL 8+ and PostgreSQL 14+ are the primary targets. SQLite is fully supported for development and testing. Each content type gets a real table with real columns — no EAV, so your queries stay fast even at scale.
@@ -660,10 +669,10 @@ A: Yes. Magna runs on any PHP 8.3+ host — shared hosting, VPS, Laravel Forge, 
 A: WordPress was designed for rendered pages in 2003. Its REST API is a bolt-on that doesn't cover the full data model without plugins. Magna is API-first from the ground up — the delivery API *is* the product, not an afterthought. And Magna's security defaults, plugin model, and performance contract are fundamentally different.
 
 **Q: How is Magna different from Statamic?**  
-A: Statamic is flat-file by default and paid for commercial use. Magna is database-backed (real tables, real indexes, real queries) and MIT-licensed forever. Magna is also headless-first; Statamic is website-first with headless as an add-on.
+A: Statamic is flat-file by default and its Pro edition is paid. Magna is database-backed (real tables, real indexes, real queries) and MIT-licensed forever. Magna is also headless-first; Statamic is website-first with headless as an add-on.
 
 **Q: Can I build plugins for Magna?**  
-A: Yes. Plugins are Composer packages with a `magna.json` manifest — full guide at [plugin-development-guide.md](docs/plugin-development-guide.md). The plugin API (typed PHP interfaces) is semver-guaranteed from 1.0; we will not break plugin authors inside a major version.
+A: Yes. Plugins are Composer packages with a `magna.json` manifest — start with the [Magna Plugin SDK](https://github.com/Magna-CMS/Magna-Plugin-SDK). The plugin API (typed PHP interfaces) is semver-guaranteed from 1.0; we will not break plugin authors inside a major version.
 
 **Q: Does Magna support multiple languages / localization?**  
 A: Yes. Content localization is a core primitive — not a plugin. Mark any field as localizable in the content type builder and entries will have per-locale versions. The delivery API accepts `?locale=fr` to return the correct version. The Magna Docs plugin also ships with full multi-language support.
@@ -672,7 +681,7 @@ A: Yes. Content localization is a core primitive — not a plugin. Mark any fiel
 A: Yes. The Filament 5 admin panel is fully responsive and works on tablets. Optimized for desktop editing workflows but usable on mobile for review and quick edits.
 
 **Q: What is Magna's business model?**  
-A: The core CMS is MIT-licensed forever. Revenue comes from the official plugin/theme store (Magna Store — planned) and Magna Cloud (managed hosting). Third-party developers can publish paid plugins and themes in the store. See [store-plan.md](docs/store-plan.md).
+A: The core CMS is MIT-licensed forever. Revenue comes from the official plugin/theme store (Magna Store — planned) and Magna Cloud (managed hosting). Third-party developers will be able to publish paid plugins and themes in the store.
 
 ---
 
@@ -686,39 +695,30 @@ A: The core CMS is MIT-licensed forever. Revenue comes from the official plugin/
 | **Phase 4 — Commercial** | Planned | Magna Cloud · store open to third-party publishers |
 | **Phase 5 — Enterprise** | Planned | Multi-tenancy · SSO/SAML · compliance pack |
 
-See the full [build plan](docs/build-plan.md) for current progress stage-by-stage.
 
 ---
 
 ## 📚 Documentation
 
-All specs are written before the code is built. The specs live here:
-
-| Document | What it covers |
+| Resource | What it covers |
 |---|---|
-| [Project overview](docs/Magna-v2.md) | Vision, architecture, market position, roadmap |
-| [Build plan](docs/build-plan.md) | Stage-by-stage plan and current progress |
-| [Plugin development guide](docs/plugin-development-guide.md) | Build a plugin: manifest, contracts, content types, testing |
-| [Theme development guide](docs/theme-development-guide.md) | Build a theme: tokens, block views, pairing |
-| [Default theme spec](docs/default-theme-spec.md) | The reference theme + standard block library |
-| [Performance spec](docs/performance-spec.md) | CI budgets, benchmark harness, caching model |
-| [Security spec](docs/security-spec.md) | OWASP ASVS target, defaults, supply chain, plugin trust |
-| [Plugin isolation](docs/plugin-isolation.md) | Fault-tolerant runtime: circuit breaker, safe mode, remote apps |
-| [Installer](docs/installer.md) | Browser installer: flow, security, roadmap |
-| [Store plan](docs/store-plan.md) | Official plugin/theme store, staged rollout |
+| [Magna Plugin SDK](https://github.com/Magna-CMS/Magna-Plugin-SDK) | Build a plugin: manifest, contracts, content types, testing |
+| [Magna Theme Starter Kit](https://github.com/Magna-CMS/Magna-Theme-Starter-Kit) | Build a theme for Magna Pages |
+| [Releases](https://github.com/Magna-CMS/Magna/releases) | Changelog and installable builds |
+| [Discord](https://discord.gg/Wby3nKb4A) | Questions, feedback and announcements |
 
 ---
 
 ## 🤝 Contributing
 
-The most valuable contribution right now is **review of the specs** — changing a spec today is free; changing shipped behavior is not. Open an issue or discussion on any spec document.
+The most valuable contribution right now is **trying Magna and telling us what breaks** — install it, build something small, and open an issue.
 
-For code contributions: all PRs run the full gate — Pint, PHPStan level 9, Pest, and the performance suite. See `CONTRIBUTING.md` (coming with the first stable alpha).
+For code contributions: all PRs run the full gate — Pint, PHPStan level 9, Pest, Psalm taint analysis and `composer audit`. Run `composer check` locally before opening a PR.
 
 Ways to contribute:
 - ⭐ Star the repo to show support and help others find it
-- 🐛 Open an issue for bugs, spec corrections, or feature requests
-- 📖 Review the specs and challenge the design decisions
+- 🐛 Open an issue for bugs or feature requests
+- 💬 Challenge the design decisions in an issue or on Discord
 - 🔌 Build a plugin and share it
 - 🌍 Help with translations
 
@@ -728,7 +728,7 @@ Ways to contribute:
 
 Magna CMS is open-source software licensed under the [MIT license](LICENSE). The core will always be free and open-source.
 
-The "Magna" name and logo are trademarks. The [store plan](docs/store-plan.md) describes the commercial layer (official store, Magna Cloud) that funds ongoing core development.
+The "Magna" name and logo are trademarks. The commercial layer (official store, Magna Cloud) funds ongoing core development.
 
 ---
 
@@ -740,6 +740,7 @@ The "Magna" name and logo are trademarks. The [store plan](docs/store-plan.md) d
 <p align="center">
   <a href="https://github.com/Magna-CMS/Magna">GitHub</a> •
   <a href="https://github.com/Magna-CMS/Magna-Docs">Magna Docs Plugin</a> •
-  <a href="SECURITY.md">Security</a> •
-  <a href="docs/build-plan.md">Build Plan</a>
+  <a href="https://github.com/Magna-CMS/Magna-Plugin-SDK">Plugin SDK</a> •
+  <a href="https://github.com/Magna-CMS/Magna/releases">Releases</a> •
+  <a href="https://discord.gg/Wby3nKb4A">Discord</a>
 </p>
