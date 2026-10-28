@@ -103,27 +103,7 @@ final class VendorPolicy
      */
     public function foreignRepositories(): array
     {
-        $site = $this->composerJson($this->sitePath);
-        $archive = $this->composerJson($this->archivePath);
-
-        if ($site === null) {
-            return [];
-        }
-
-        $archiveRepositories = array_map(self::repositoryKey(...), is_array($archive['repositories'] ?? null) ? $archive['repositories'] : []);
-        $foreign = [];
-
-        foreach (is_array($site['repositories'] ?? null) ? $site['repositories'] : [] as $repository) {
-            $key = self::repositoryKey($repository);
-
-            if ($key === null || in_array($key, $archiveRepositories, true) || $this->isDeadPathRepository($repository)) {
-                continue;
-            }
-
-            $foreign[] = $key;
-        }
-
-        return $foreign;
+        return array_keys($this->foreignRepositoryEntries());
     }
 
     /**
@@ -143,24 +123,10 @@ final class VendorPolicy
      */
     public function portableForeignRepositories(): array
     {
-        $site = $this->composerJson($this->sitePath);
-        $archive = $this->composerJson($this->archivePath);
-
-        if ($site === null) {
-            return [];
-        }
-
-        $archiveRepositories = array_map(self::repositoryKey(...), is_array($archive['repositories'] ?? null) ? $archive['repositories'] : []);
         $portable = [];
 
-        foreach (is_array($site['repositories'] ?? null) ? $site['repositories'] : [] as $repository) {
-            $key = self::repositoryKey($repository);
-
-            if ($key === null || in_array($key, $archiveRepositories, true) || $this->isDeadPathRepository($repository)) {
-                continue;
-            }
-
-            if (! is_array($repository) || ($repository['type'] ?? null) !== 'path' || ! is_string($repository['url'] ?? null)) {
+        foreach ($this->foreignRepositoryEntries() as $key => $repository) {
+            if (($repository['type'] ?? null) !== 'path' || ! is_string($repository['url'] ?? null)) {
                 continue;
             }
 
@@ -190,6 +156,37 @@ final class VendorPolicy
         }
 
         return $portable;
+    }
+
+    /**
+     * Every live foreign repository, keyed the way foreignRepositories()
+     * names it — the one walk both it and portableForeignRepositories() read.
+     *
+     * @return array<string, array<array-key, mixed>>
+     */
+    private function foreignRepositoryEntries(): array
+    {
+        $site = $this->composerJson($this->sitePath);
+        $archive = $this->composerJson($this->archivePath);
+
+        if ($site === null) {
+            return [];
+        }
+
+        $archiveRepositories = array_map(self::repositoryKey(...), is_array($archive['repositories'] ?? null) ? $archive['repositories'] : []);
+        $foreign = [];
+
+        foreach (is_array($site['repositories'] ?? null) ? $site['repositories'] : [] as $repository) {
+            $key = self::repositoryKey($repository);
+
+            if ($key === null || ! is_array($repository) || in_array($key, $archiveRepositories, true) || $this->isDeadPathRepository($repository)) {
+                continue;
+            }
+
+            $foreign[$key] = $repository;
+        }
+
+        return $foreign;
     }
 
     /**
