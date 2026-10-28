@@ -24,16 +24,17 @@ namespace Magna\Themes;
  * from here would need a contract the plugin implements — worth doing, and its
  * own task rather than a side effect of this one.
  *
- * The second is that applying a kit is not obviously safe. It upserts by
- * deterministic node id, so a kit re-applied over a page an editor has since
- * rewritten would overwrite their work. That decision belongs to the person
- * who knows what the editors have been doing, which is never the updater.
+ * The second is that applying a kit is not obviously safe. A sync upserts by
+ * slug and replaces a page's whole document, so a kit re-applied over a page
+ * an editor has since rewritten would overwrite their work.
  *
- * Since then the contract exists — ThemeContentImporter, implemented by the
- * page builder — and ThemeContent uses it for "install with demo data". It
- * answers the second reason by adding only what a site lacks and never
- * updating an existing entry. Updates still only say so: re-applying a
- * changed kit over edited pages remains a decision for a person.
+ * Both have since been answered. ThemeContentImporter (install with demo
+ * data) adds only what a site lacks. ThemeContentUpdater (an update) compares
+ * three versions of every entry — the outgoing theme's, the site's, the
+ * incoming theme's — and changes only what nobody edited, listing the rest
+ * for an admin to decide. The page builder implements both. This notice is
+ * what an update says on a site WITHOUT the page builder, where nothing can
+ * apply the content.
  */
 final class ThemeSiteKit
 {

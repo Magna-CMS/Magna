@@ -23,8 +23,8 @@ use Throwable;
  * milliseconds. The displaced directory IS the rollback point: undoing is the
  * same two renames backwards. Every step is written to the journal before
  * and after, so whatever process finds a half-done run knows which paths are
- * which. Same shape as Magna\Licensing\LicenseInstaller::swapInPlace, which
- * has done this for plugin updates since an interrupted mirror destroyed one.
+ * which. Same shape as Magna\Support\DirectorySwap, which has done this for
+ * plugin and theme updates since an interrupted mirror destroyed one.
  *
  * Dot-prefixed siblings because glob patterns skip dot entries: Composer's
  * path-repository discovery and Magna's own plugin discovery never see the
