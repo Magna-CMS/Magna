@@ -8,6 +8,7 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Application as LaravelApplication;
 use Illuminate\Support\Facades\Artisan;
 use Magna\Admin\AdminAssetPublisher;
+use Magna\Updater\RuntimeRefresh;
 use Throwable;
 
 /**
@@ -38,6 +39,35 @@ class PluginCacheInvalidator
             $this->app->make(AdminAssetPublisher::class)->requestPublish();
         } catch (Throwable) {
             // Never block the enable that asked for this.
+        }
+    }
+
+    /**
+     * Everything replacing a plugin's FILES makes stale — a zip update, a
+     * licence update. Enabling only changes which plugins answer; a file swap
+     * changes what the already-enabled code IS, so it needs the same runtime
+     * refresh a core update gets: config/route/view/event caches, queue
+     * workers still holding the old classes, opcache, Octane. Assets are also
+     * published inline — the new files are on disk, and the caller (a
+     * synchronous admin request) has every plugin booted; the deferred marker
+     * from requestPublish() stays as the fallback for anything a next-request
+     * boot registers.
+     */
+    public function afterFilesChanged(): void
+    {
+        $this->invalidate();
+
+        try {
+            $this->app->make(RuntimeRefresh::class)->refresh();
+        } catch (Throwable) {
+            // Never block the update that asked for this.
+        }
+
+        try {
+            $this->app->make(AdminAssetPublisher::class)->publish();
+        } catch (Throwable) {
+            // The requestPublish() marker set by refresh() covers this on the
+            // next request.
         }
     }
 

@@ -7,6 +7,7 @@ namespace Magna\Plugins;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 
 /**
  * A plugin's own migrations: running them on enable, and forgetting them on a
@@ -18,19 +19,33 @@ use Illuminate\Support\Facades\Schema;
  */
 class PluginMigrator
 {
-    public function run(string $basePath): void
+    /**
+     * Returns the migrate command's output, or null when the plugin ships no
+     * migrations. A migration that fails by exit code rather than by throwing
+     * must not pass silently — the enable/update that asked for it has to see
+     * the failure to roll anything back.
+     */
+    public function run(string $basePath): ?string
     {
         $migrationsPath = $basePath.'/database/migrations';
 
         if (! is_dir($migrationsPath)) {
-            return;
+            return null;
         }
 
-        Artisan::call('migrate', [
+        $exit = Artisan::call('migrate', [
             '--path' => $migrationsPath,
             '--realpath' => true,
             '--force' => true,
         ]);
+
+        $output = Artisan::output();
+
+        if ($exit !== 0) {
+            throw new RuntimeException("Plugin migrations failed (exit {$exit}):\n{$output}");
+        }
+
+        return $output;
     }
 
     /**

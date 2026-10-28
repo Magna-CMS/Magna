@@ -22,6 +22,7 @@
                     <span wire:loading.remove wire:target="runDiagnostics">diagnostics:run</span>
                     <span wire:loading wire:target="runDiagnostics">running…</span>
                 </button>
+                @can('settings.manage')
                 <button
                     wire:click="clearCache"
                     wire:loading.attr="disabled"
@@ -31,6 +32,44 @@
                     <span wire:loading.remove wire:target="clearCache">cache:clear</span>
                     <span wire:loading wire:target="clearCache">clearing…</span>
                 </button>
+                <button
+                    wire:click="runMigrations"
+                    wire:confirm="Run all pending database migrations (host and every enabled plugin) now?"
+                    wire:loading.attr="disabled"
+                    wire:target="runMigrations"
+                    class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold font-mono text-amber-400 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                    <span wire:loading.remove wire:target="runMigrations">migrate:run</span>
+                    <span wire:loading wire:target="runMigrations">migrating…</span>
+                </button>
+                <button
+                    wire:click="rebuildCaches"
+                    wire:loading.attr="disabled"
+                    wire:target="rebuildCaches"
+                    class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold font-mono text-sky-400 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                    <span wire:loading.remove wire:target="rebuildCaches">caches:rebuild</span>
+                    <span wire:loading wire:target="rebuildCaches">rebuilding…</span>
+                </button>
+                <button
+                    wire:click="publishAssets"
+                    wire:loading.attr="disabled"
+                    wire:target="publishAssets"
+                    class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold font-mono text-teal-400 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                    <span wire:loading.remove wire:target="publishAssets">assets:publish</span>
+                    <span wire:loading wire:target="publishAssets">publishing…</span>
+                </button>
+                <button
+                    wire:click="restartQueue"
+                    wire:loading.attr="disabled"
+                    wire:target="restartQueue"
+                    class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold font-mono text-orange-400 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                    <span wire:loading.remove wire:target="restartQueue">queue:restart</span>
+                    <span wire:loading wire:target="restartQueue">signalling…</span>
+                </button>
+                @endcan
                 <button
                     wire:click="clearTerminal"
                     class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold font-mono text-rose-400 rounded-lg transition-all active:scale-[0.98]"
@@ -45,7 +84,7 @@
             @if(empty($terminalLines))
             <p class="text-slate-500">
                 <span class="text-violet-500">magna-cms$</span>
-                type commands below or click mock triggers to run diagnostic operations…
+                run maintenance commands with the buttons above — output appears here…
             </p>
             @endif
             @foreach($terminalLines as $line)

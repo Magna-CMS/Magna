@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use Laravel\Octane\OctaneServiceProvider;
 use Magna\Admin\Concerns\DrivesCoreUpdate;
 use Magna\Admin\Concerns\ResolvesIncompatiblePlugins;
+use Magna\Admin\Concerns\RunsMaintenanceActions;
 use Magna\MagnaServiceProvider;
 use Magna\Plugins\PluginRecord;
 use Magna\Support\Runtime;
@@ -26,6 +27,7 @@ class SystemInfoPage extends Page
 {
     use DrivesCoreUpdate;
     use ResolvesIncompatiblePlugins;
+    use RunsMaintenanceActions;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-information-circle';
 
@@ -135,8 +137,10 @@ class SystemInfoPage extends Page
     {
         $data = $this->getViewData();
 
-        $this->terminalLines[] = ['type' => 'cmd',     'text' => 'php artisan magna:diagnostics --detailed'];
-        $this->terminalLines[] = ['type' => 'init',    'text' => '[INIT] Starting general diagnostics sequence on '.$data['db_driver'].' storage node...'];
+        // No pretend command line here — this is a read-out of collected
+        // values, not an artisan run, and the console must never claim to have
+        // executed something it did not.
+        $this->terminalLines[] = ['type' => 'cmd',     'text' => '# system overview'];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] PHP engine: '.$data['php_version']];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] Laravel framework: '.$data['laravel_version']];
         $this->terminalLines[] = ['type' => 'info',    'text' => '[INFO] Database: '.$data['db_driver'].' v'.$data['db_version']];

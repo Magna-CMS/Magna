@@ -11,6 +11,7 @@ use Magna\Frontend\RenderedOutputRefresher;
 use Magna\MagnaServiceProvider;
 use Magna\Marketplace\Marketplace;
 use Magna\Plugins\Manifest;
+use Magna\Plugins\PluginCacheInvalidator;
 use Magna\Plugins\PluginDiscovery;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginPackageName;
@@ -56,6 +57,7 @@ class LicenseInstaller
         private readonly Filesystem $files,
         private readonly PluginDiscovery $discovery,
         private readonly ThemeInstaller $themeInstaller,
+        private readonly PluginCacheInvalidator $cacheInvalidator,
         private readonly InstalledVersionRecorder $versions = new InstalledVersionRecorder,
         private readonly RenderedOutputRefresher $rendered = new RenderedOutputRefresher,
     ) {}
@@ -356,6 +358,12 @@ class LicenseInstaller
             // own wallet — the deliberate action a bundled plugin lacks — and the
             // record above already carries enabled for an update.
             $this->plugins->enable($manifest->name);
+
+            // An update replaced the files under an already-running plugin, so
+            // the whole runtime has to notice — not just the enable-time caches.
+            if ($isUpdate) {
+                $this->cacheInvalidator->afterFilesChanged();
+            }
 
             return $isUpdate
                 ? $manifest->name.' updated to '.$manifest->version.'.'
