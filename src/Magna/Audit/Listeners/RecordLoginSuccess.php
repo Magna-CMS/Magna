@@ -40,10 +40,14 @@ class RecordLoginSuccess
             return;
         }
 
+        // 'user' means a Magna user the Audit Logs viewer can resolve by id.
+        // A login on any other session guard (a plugin's portal, say) is a
+        // different population with its own id space — label it by guard so
+        // the entry never reads as a Magna user it is not.
         AuditLog::record(
             action: 'auth.login.success',
             actorId: $normalize($eventUserId),
-            actorType: 'user',
+            actorType: $event->guard === config('auth.defaults.guard') ? 'user' : 'guard:'.$event->guard,
             ip: request()->ip(),
         );
     }

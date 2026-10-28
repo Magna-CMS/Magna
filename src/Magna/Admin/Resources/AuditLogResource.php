@@ -82,7 +82,11 @@ class AuditLogResource extends Resource
 
                 TextColumn::make('actor_name')
                     ->label('User')
-                    ->getStateUsing(fn (AuditLog $record): string => $record->actorUser->name ?? 'System')
+                    // An actor that is not a Magna user (a plugin guard's
+                    // person, actor_type "guard:…") has no User row to name;
+                    // show which guard it was instead of mislabelling it.
+                    ->getStateUsing(fn (AuditLog $record): string => $record->actorUser->name
+                        ?? (str_starts_with((string) $record->actor_type, 'guard:') ? (string) $record->actor_type : 'System'))
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas('actorUser', fn (Builder $q) => $q->where('name', 'like', "%{$search}%"))
                     )
                     ->icon('heroicon-m-user-circle')

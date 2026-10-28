@@ -81,6 +81,31 @@ it('records the audit entry when the Login event matches the real authenticated 
         ->and($log->actor_id)->toBe($user->id); // @phpstan-ignore-line
 });
 
+it('stores an actor id wider than a ULID — a plugin guard\'s UUID user', function (): void {
+    // actor_id was string(26), sized for Magna's ULIDs; a plugin session
+    // guard's UUID (36 chars) overflowed it AFTER the session was written,
+    // so the person saw a server error and was signed in on refresh.
+    $log = AuditLog::record(
+        action: 'auth.login.success',
+        actorId: '01999f30-2e5a-7cc3-9a2f-3b7d6a1c9e42',
+        actorType: 'guard:lekha_portal',
+    );
+
+    expect($log->refresh()->actor_id)->toBe('01999f30-2e5a-7cc3-9a2f-3b7d6a1c9e42');
+});
+
+it('labels a login on a non-default guard by that guard, not as a Magna user', function (): void {
+    config(['auth.guards.portal_test' => ['driver' => 'session', 'provider' => 'users']]);
+    $user = User::factory()->create();
+
+    auth('portal_test')->login($user);
+    event(new Login('portal_test', $user, false));
+
+    $log = AuditLog::query()->where('action', 'auth.login.success')->first();
+    expect($log)->not->toBeNull()
+        ->and($log->actor_type)->toBe('guard:portal_test'); // @phpstan-ignore-line
+});
+
 it('records an audit entry when a role is assigned', function (): void {
     $user = User::factory()->create();
     $role = Role::factory()->withPanelAccess()->create(['handle' => 'editor']);
