@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Magna\Admin\Pages;
 
+use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Magna\Admin\Concerns\ShowsMarketplaceDetails;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseClient;
@@ -17,8 +20,10 @@ use Magna\Marketplace\PluginCatalogView;
 use Magna\Marketplace\PluginListing;
 use Magna\Support\Version;
 use Magna\Themes\ThemeContent;
+use Magna\Themes\ThemeContentUpdates;
 use Magna\Themes\ThemeManager;
 use Magna\Themes\ThemeManifest;
+use Magna\Themes\ThemeZipInstaller;
 use Magna\Updater\UpdateCheck;
 use Magna\Updater\UpdateCheckClient;
 use Throwable;
@@ -130,9 +135,22 @@ class ThemesPage extends Page
         };
 
         $content = $themes->content();
+        $updates = $themes->contentUpdates();
 
         return [
             'demoSupported' => $content->supported(),
+            // What the last update left alone because the site had edited it,
+            // per theme: [key, label] pairs for the Review list on its card.
+            'kept' => array_map(
+                fn (array $keys): array => array_map(
+                    fn (string $key): array => ['key' => $key, 'label' => ThemeContentUpdates::label($key)],
+                    $keys,
+                ),
+                array_filter(array_combine(
+                    array_keys($installed),
+                    array_map(fn (string $name): array => $updates->supported() ? $updates->kept($name) : [], array_keys($installed)),
+                )),
+            ),
             'installed' => array_map(
                 fn (ThemeManifest $t): array => [
                     'name' => $t->name,
@@ -444,11 +462,12 @@ class ThemesPage extends Page
     /**
      * Fetch and apply the newer version the check-in reported.
      *
-     * A theme only ever arrives through a licence grant — bought, trialled,
-     * or claimed for free with getFree() — so unlike PluginsPage::update() there is
-     * no re-enable fallback: the licence is the single route to the bytes,
-     * and LicenseInstaller::update() already does the in-place swap that
-     * keeps the active theme active.
+     * A marketplace theme arrives through a licence grant — bought, trialled,
+     * or claimed for free with getFree() — so unlike PluginsPage::update()
+     * there is no re-enable fallback: the licence is the route to the bytes,
+     * and LicenseInstaller::update() hands them to ThemeInstaller, which
+     * swaps the files in place and carries the theme's content onto the
+     * site. A zip upload takes the same ThemeInstaller route.
      */
     public function update(string $name): void
     {
@@ -465,7 +484,9 @@ class ThemesPage extends Page
             // this is developed on.
             [$title, $body] = array_pad(explode("\n", $message, 2), 2, null);
 
-            Notification::make()->title($title)->body($body)->success()->send();
+            // Persistent: the body now says what happened to the site's pages,
+            // which is worth more than the few seconds a toast stays up.
+            Notification::make()->title($title)->body($body)->success()->persistent()->send();
         } catch (Throwable $e) {
             // Logged as well as shown, for the same reason as the Plugins
             // page: a toast leaves no server-side trace of a refused grant.
@@ -476,6 +497,69 @@ class ThemesPage extends Page
 
             Notification::make()->title('Update failed')->body($e->getMessage())->danger()->send();
         }
+    }
+
+    /**
+     * "Upload theme": install a theme from a zip, or update an installed one
+     * from it — files and content, the same route a marketplace update takes
+     * (ThemeZipInstaller). Gated on plugins.manage, not settings.manage: a
+     * theme's views are code this site will run.
+     */
+    public function uploadThemeAction(): Action
+    {
+        return Action::make('uploadTheme')
+            ->label('Upload theme')
+            ->icon('heroicon-o-arrow-up-tray')
+            ->color('gray')
+            ->authorize(fn (): bool => auth()->user()?->can('plugins.manage') ?? false)
+            ->modalHeading('Upload a theme')
+            ->modalDescription('Installs a new theme, or updates an installed one in place. On an update, pages nobody edited follow the theme; pages your team changed are kept and listed for review.')
+            ->form([
+                FileUpload::make('zip')
+                    ->label('Theme zip')
+                    ->required()
+                    ->storeFiles(false)
+                    ->acceptedFileTypes(['application/zip', 'application/x-zip-compressed'])
+                    ->maxSize(51200)
+                    ->helperText('A theme.json at its root (or inside one wrapping folder). Its code is checked before anything is installed.'),
+            ])
+            ->action(function (array $data, ThemeZipInstaller $installer): void {
+                /** @var TemporaryUploadedFile $file */
+                $file = $data['zip'];
+
+                try {
+                    $message = $installer->install((string) $file->getRealPath(), $this->actorId());
+                } catch (Throwable $e) {
+                    Notification::make()->title('The theme was not installed')->body($e->getMessage())->danger()->send();
+
+                    return;
+                }
+
+                [$title, $body] = array_pad(explode("\n", $message, 2), 2, null);
+                Notification::make()->title($title)->body($body)->success()->persistent()->send();
+            });
+    }
+
+    /**
+     * "Use theme version" for entries the last update kept because the site
+     * had edited them — one entry, or all of a theme's when $key is null.
+     * The replaced version stays in the page's history.
+     */
+    public function useThemeVersion(string $name, ?string $key = null): void
+    {
+        try {
+            $count = $this->themes()->contentUpdates()->useThemeVersion($name, $key === null ? null : [$key], $this->actorId());
+        } catch (Throwable $e) {
+            Notification::make()->title('Nothing was replaced')->body($e->getMessage())->danger()->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title($count === 1 ? 'Replaced with the theme\'s version.' : 'Replaced '.$count.' with the theme\'s versions.')
+            ->body('The previous version is in the page\'s history if you need it back.')
+            ->success()
+            ->send();
     }
 
     public function remove(string $name): void

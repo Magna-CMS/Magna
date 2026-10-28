@@ -18,6 +18,7 @@
         </p>
     </div>
     <div class="flex items-center gap-2 shrink-0">
+        {{ $this->uploadThemeAction }}
         {{-- Re-fetches the hour-cached catalog AND runs an update check-in:
              the "Update now" banner below reads update_checks rows the
              scheduled check-in may not have written yet. --}}
@@ -99,6 +100,8 @@
                             <a href="{{ \Magna\Admin\Pages\AccountCentrePage::getUrl() }}" class="font-semibold underline transition-all hover:no-underline">Renew</a>
                         </div>
                     @endif
+
+                    @include('magna::admin.partials.themes.kept-content', ['theme' => $theme['name'], 'entries' => $kept[$theme['name']] ?? []])
 
                     <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-white/5">
                         <span class="font-mono text-[11px] text-gray-400 dark:text-gray-500">{{ $theme['name'] }}</span>

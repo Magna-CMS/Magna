@@ -15,9 +15,9 @@ use Magna\Plugins\PluginDiscovery;
 use Magna\Plugins\PluginManager;
 use Magna\Plugins\PluginPackageName;
 use Magna\Plugins\PluginRecord;
-use Magna\Themes\ThemeManager;
+use Magna\Support\DirectorySwap;
+use Magna\Themes\ThemeInstaller;
 use Magna\Themes\ThemeManifest;
-use Magna\Themes\ThemeSiteKit;
 use Magna\Updater\InstalledVersionRecorder;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -54,8 +54,8 @@ class LicenseInstaller
         private readonly PluginManager $plugins,
         private readonly PackageExtractor $extractor,
         private readonly Filesystem $files,
-        private readonly ThemeManager $themes,
         private readonly PluginDiscovery $discovery,
+        private readonly ThemeInstaller $themeInstaller,
         private readonly InstalledVersionRecorder $versions = new InstalledVersionRecorder,
         private readonly RenderedOutputRefresher $rendered = new RenderedOutputRefresher,
     ) {}
@@ -295,7 +295,7 @@ class LicenseInstaller
             $isUpdate = is_dir($targetDir);
 
             if ($isUpdate) {
-                $this->swapInPlace($contentRoot, $targetDir);
+                (new DirectorySwap($this->files))->swap($contentRoot, $targetDir);
             } else {
                 $this->files->mkdir(dirname($targetDir), 0755);
                 $this->files->rename($contentRoot, $targetDir);
@@ -393,95 +393,10 @@ class LicenseInstaller
      */
     private function placeTheme(string $productSlug, string $contentRoot): string
     {
-        $manifest = ThemeManifest::loadFromFile($contentRoot.'/'.ThemeManifest::FILENAME);
+        // Same rule as plugins: a licence for A must never install B — the
+        // expected name is what ThemeInstaller holds the manifest to.
+        $actor = auth()->id();
 
-        // Same rule as plugins: a licence for A must never install B.
-        if ($manifest->name !== $productSlug) {
-            throw new RuntimeException("The downloaded theme is \"{$manifest->name}\", not \"{$productSlug}\" — installation was aborted.");
-        }
-
-        if (! $manifest->isCompatibleWith(MagnaServiceProvider::VERSION)) {
-            throw new RuntimeException("\"{$manifest->displayName}\" is not compatible with this version of Magna.");
-        }
-
-        // pathFor() asserts the theme-name shape itself before joining it
-        // onto the themes root (ThemeManifest::isValidName — the same rule
-        // fromArray enforced when this manifest was parsed).
-        $targetDir = $this->themes->pathFor($manifest->name);
-        $isUpdate = is_dir($targetDir);
-
-        if ($isUpdate) {
-            $this->swapInPlace($contentRoot, $targetDir);
-        } else {
-            $this->files->mkdir(dirname($targetDir), 0755);
-            $this->files->rename($contentRoot, $targetDir);
-        }
-
-        // An updated layout older than its compiled view, and every cached
-        // page drawn by the old one, went on serving the old theme — the
-        // lekha/billing update on core 1.6.2. See RenderedOutputRefresher.
-        $this->rendered->filesReplaced($targetDir, $manifest->name);
-
-        // Same reasoning as the plugin branch: the Themes page reads the
-        // check-in row, which this install never touched, so without this the
-        // page kept offering the version just installed.
-        $this->versions->record($manifest->name, $manifest->version, 'theme');
-
-        if (! $isUpdate) {
-            return $manifest->displayName.' installed. Activate it from Themes.';
-        }
-
-        // An update swaps files and nothing else, which is silently inert for a
-        // theme whose release is a menu or a page rather than CSS. Said out
-        // loud here because every other signal says success: new files, new
-        // version, a site reporting itself up to date, and a page that looks
-        // exactly as before. The second line becomes the notification's body.
-        $notice = ThemeSiteKit::updateNotice($targetDir, $manifest->name);
-
-        return $manifest->displayName.' updated to '.$manifest->version.'.'
-            .($notice === '' ? '' : "\n".$notice);
-    }
-
-    /**
-     * Replace $targetDir with $contentRoot without ever leaving the install
-     * in a state an interrupted process can break.
-     *
-     * The previous shape renamed the live directory to a VISIBLE sibling
-     * ({name}.replacing-{rand}) before moving the new content in. Two ways
-     * that failed in practice: a process killed between the two renames left
-     * the plugin gone entirely, and the stray sibling sat exactly where the
-     * Composer path-repository glob (plugins-dev, any vendor, any package)
-     * matches — a duplicate package definition that broke every composer
-     * command until someone moved the directory out by hand. One interrupted
-     * update destroyed a working roya/erp install this way.
-     *
-     * The new content is now staged INTO the parent first, dot-prefixed:
-     * glob patterns skip dot entries, so debris from an interrupted run is
-     * invisible to Composer and discovery, and the live directory changes
-     * hands in two same-directory renames with nothing slow between them.
-     * The cross-filesystem move (storage tmp into the install root) happens
-     * while the live directory is still untouched — a failure there changes
-     * nothing.
-     */
-    private function swapInPlace(string $contentRoot, string $targetDir): void
-    {
-        $parent = dirname($targetDir);
-        $staging = $parent.'/.incoming-'.Str::random(8);
-        $displaced = $parent.'/.replaced-'.Str::random(8);
-
-        $this->files->rename($contentRoot, $staging);
-
-        $this->files->rename($targetDir, $displaced);
-
-        try {
-            $this->files->rename($staging, $targetDir);
-        } catch (Throwable $e) {
-            $this->files->rename($displaced, $targetDir);
-            $this->files->remove($staging);
-
-            throw new RuntimeException('The update could not be written to disk; the previous version was restored.', 0, $e);
-        }
-
-        $this->files->remove($displaced);
+        return $this->themeInstaller->place($contentRoot, $productSlug, $actor === null ? null : (string) $actor);
     }
 }

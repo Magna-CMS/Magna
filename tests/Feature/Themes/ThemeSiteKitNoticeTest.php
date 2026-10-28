@@ -84,10 +84,12 @@ it('ignores a starter directory holding nothing it can apply', function (): void
 });
 
 it('is returned by a theme update, as a second line the panel shows as the body', function (): void {
-    // The seam the panel depends on: LicenseInstaller appends the notice after
-    // a newline, and ThemesPage splits title from body on it. Asserted on the
-    // shape rather than through a licence grant, which needs a live hub.
-    $installer = (string) file_get_contents(base_path('src/Magna/Licensing/LicenseInstaller.php'));
+    // The seam the panel depends on: ThemeInstaller (which LicenseInstaller
+    // and a zip upload both hand themes to) appends the notice after a
+    // newline on a site with no page builder, and ThemesPage splits title
+    // from body on it. Asserted on the shape rather than through a licence
+    // grant, which needs a live hub.
+    $installer = (string) file_get_contents(base_path('src/Magna/Themes/ThemeInstaller.php'));
     $page = (string) file_get_contents(base_path('src/Magna/Admin/Pages/ThemesPage.php'));
 
     expect($installer)->toContain('ThemeSiteKit::updateNotice($targetDir, $manifest->name)')

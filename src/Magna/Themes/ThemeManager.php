@@ -47,6 +47,19 @@ class ThemeManager
         return new ThemeContent($this, $importer instanceof ThemeContentImporter ? $importer : null);
     }
 
+    /**
+     * A theme update's content — what lands on the site's pages when a theme
+     * is updated (see ThemeContentUpdater).
+     */
+    public function contentUpdates(): ThemeContentUpdates
+    {
+        $updater = $this->container !== null && $this->container->bound(ThemeContentUpdater::class)
+            ? $this->container->make(ThemeContentUpdater::class)
+            : null;
+
+        return new ThemeContentUpdates($this, $updater instanceof ThemeContentUpdater ? $updater : null);
+    }
+
     /** Absolute path of the themes directory. */
     public function directory(): string
     {

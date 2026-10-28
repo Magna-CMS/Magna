@@ -103,17 +103,8 @@ final class ThemeContent
         $totals = [];
 
         foreach ($bundles as $path) {
-            $size = filesize($path);
-            if ($size === false || $size > self::MAX_BUNDLE_BYTES) {
-                throw new RuntimeException(basename($path).' is too large to import.');
-            }
+            $kit = self::read($path);
 
-            $kit = json_decode((string) file_get_contents($path), true);
-            if (! is_array($kit)) {
-                throw new RuntimeException(basename($path).' is not valid JSON.');
-            }
-
-            /** @var array<string, mixed> $kit */
             try {
                 $counts = $this->importer->importMissing($kit, $actorId);
             } catch (\InvalidArgumentException $e) {
@@ -126,6 +117,29 @@ final class ThemeContent
         }
 
         return $totals;
+    }
+
+    /**
+     * One bundle, decoded, held to the size cap.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException with a message fit to show an admin
+     */
+    public static function read(string $path): array
+    {
+        $size = filesize($path);
+        if ($size === false || $size > self::MAX_BUNDLE_BYTES) {
+            throw new RuntimeException(basename($path).' is too large to import.');
+        }
+
+        $kit = json_decode((string) file_get_contents($path), true);
+        if (! is_array($kit)) {
+            throw new RuntimeException(basename($path).' is not valid JSON.');
+        }
+
+        /** @var array<string, mixed> $kit */
+        return $kit;
     }
 
     /**
