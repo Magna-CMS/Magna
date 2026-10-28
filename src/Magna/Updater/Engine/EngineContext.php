@@ -238,15 +238,108 @@ final class EngineContext
 
     /**
      * Repositories the site's composer.json names that the release's does
-     * not, and that could still serve something. Nothing here knows how to
-     * carry one across, so one that a foreign package may need means refusal;
-     * one that serves nothing leaves with the site's composer.json.
+     * not, and that could still serve something. One that a foreign package
+     * may need means refusal — unless every one of them is portable
+     * (carryableRepositories()), which the engine decides; one that serves
+     * nothing leaves with the site's composer.json.
      *
      * @return list<string>
      */
     public function foreignRepositories(): array
     {
         return $this->vendorPolicy()->foreignRepositories();
+    }
+
+    /**
+     * The foreign repositories carryRepositories() knows how to carry: `path`
+     * repositories on the site's own tree (the Core Plugin Manager's wiring
+     * for a proprietary plugin). Keyed by the same `type:url` key
+     * foreignRepositories() answers with. Engine API 1, added in 1.7.1 — an
+     * engine feature-detects this with method_exists() and falls back to
+     * refusal on an older context.
+     *
+     * @return array<string, array{type: string, url: string}>
+     */
+    public function carryableRepositories(): array
+    {
+        return $this->vendorPolicy()->portableForeignRepositories();
+    }
+
+    /**
+     * The constraint the site's composer.json stated for each foreign package
+     * — what composerRequire() should pin to when the repositories serving
+     * them are carried across, instead of installed.json's recorded version
+     * (a path-repository package records a branch alias, not a constraint
+     * Composer could resolve again).
+     *
+     * @return array<string, string> name => constraint
+     */
+    public function foreignRequireConstraints(): array
+    {
+        return $this->vendorPolicy()->foreignRequireConstraints();
+    }
+
+    /**
+     * Re-name the given repositories in the composer.json that is now live —
+     * called between swapVendor() and composerRequire(), so Composer can
+     * resolve the site's own packages from the trees they already live in.
+     * Only the shape carryableRepositories() vouched for is accepted: a
+     * relative `path` url, no parent escape, resolving inside the site. The
+     * entries arrive from the release's engine closure, so they are checked
+     * here rather than trusted.
+     *
+     * @param  array<array-key, mixed>  $entries
+     */
+    public function carryRepositories(array $entries): void
+    {
+        if ($entries === []) {
+            return;
+        }
+
+        $file = $this->paths->base('composer.json');
+        $decoded = json_decode((string) file_get_contents($file), true);
+
+        if (! is_array($decoded)) {
+            throw new RuntimeException('The release\'s composer.json could not be read to carry the site\'s repositories across.');
+        }
+
+        $repositories = is_array($decoded['repositories'] ?? null) ? $decoded['repositories'] : [];
+        $present = array_map(
+            static fn (mixed $entry): ?string => is_array($entry) && is_string($entry['url'] ?? null) ? str_replace('\\', '/', $entry['url']) : null,
+            $repositories,
+        );
+        $carried = [];
+
+        foreach ($entries as $entry) {
+            $url = is_array($entry) && is_string($entry['url'] ?? null) ? str_replace('\\', '/', $entry['url']) : null;
+
+            if ($url === null || ($entry['type'] ?? null) !== 'path'
+                || preg_match('#^(/|[A-Za-z]:/)#', $url) === 1 || str_contains($url, '..')
+                || ! is_dir($this->paths->base($url))) {
+                throw new RuntimeException('Only a path repository on the site\'s own tree can be carried across an update.');
+            }
+
+            if (in_array($url, $present, true)) {
+                continue;
+            }
+
+            $repositories[] = ['type' => 'path', 'url' => $url];
+            $present[] = $url;
+            $carried[] = $url;
+        }
+
+        if ($carried === []) {
+            return;
+        }
+
+        $decoded['repositories'] = array_values($repositories);
+
+        if (file_put_contents($file, json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL) === false) {
+            throw new RuntimeException('The release\'s composer.json could not be written to carry the site\'s repositories across.');
+        }
+
+        $this->journal->set(['carried_repositories' => $carried]);
+        $this->log('Carried the site\'s own path repositories into the release\'s composer.json: '.implode(', ', $carried).'.');
     }
 
     public function composerAvailable(): bool

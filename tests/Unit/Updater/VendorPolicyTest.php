@@ -113,6 +113,67 @@ it('ignores a path repository whose directory is not on the site', function (): 
     }
 });
 
+it('vouches only for relative path repositories on the site\'s own tree as portable', function (): void {
+    $archive = vendorFixture(['require' => [], 'repositories' => [['type' => 'composer', 'url' => 'https://repo.example.test']]], []);
+    $site = vendorFixture([
+        'require' => [],
+        'repositories' => [
+            ['type' => 'composer', 'url' => 'https://repo.example.test'],
+            ['type' => 'path', 'url' => 'plugins-dev\\acme\\forum'],
+            ['type' => 'vcs', 'url' => 'https://git.example.test/acme/forum'],
+            ['type' => 'path', 'url' => 'plugins-dev/../../outside'],
+        ],
+    ], []);
+    mkdir($site.'/plugins-dev/acme/forum', 0777, true);
+    @mkdir(dirname($site).'/outside', 0777, true);
+
+    try {
+        $policy = new VendorPolicy($site, $archive);
+
+        // The vcs repository and the parent escape stay foreign; only the
+        // plugin-manager shape is vouched for, url normalised to forward
+        // slashes and keyed the way foreignRepositories() names it.
+        expect($policy->portableForeignRepositories())->toBe([
+            'path:plugins-dev/acme/forum' => ['type' => 'path', 'url' => 'plugins-dev/acme/forum'],
+        ]);
+    } finally {
+        (new Filesystem)->remove([$archive, $site, dirname($site).'/outside']);
+    }
+});
+
+it('does not vouch for an absolute path repository even when its directory exists', function (): void {
+    $archive = vendorFixture(['require' => []], []);
+    $site = vendorFixture(['require' => []], []);
+    // Point the absolute repo at the site itself so the directory exists.
+    file_put_contents($site.'/composer.json', (string) json_encode([
+        'require' => [],
+        'repositories' => [['type' => 'path', 'url' => str_replace('\\', '/', $site)]],
+    ]));
+
+    try {
+        expect((new VendorPolicy($site, $archive))->portableForeignRepositories())->toBe([]);
+    } finally {
+        (new Filesystem)->remove([$archive, $site]);
+    }
+});
+
+it('answers the constraint the site stated for each foreign package', function (): void {
+    $archive = vendorFixture(['require' => ['laravel/framework' => '^13']], [packageRecord('laravel/framework', 'v13.30.0')]);
+    $site = vendorFixture(
+        ['require' => ['laravel/framework' => '^13', 'acme/forum' => '@dev', 'acme/unrecorded' => '^2.1']],
+        [packageRecord('laravel/framework', 'v13.23.0'), packageRecord('acme/forum', 'dev-main')],
+    );
+
+    try {
+        expect((new VendorPolicy($site, $archive))->foreignRequireConstraints())->toBe([
+            'acme/forum' => '@dev',
+            'acme/unrecorded' => '^2.1',
+        ]);
+    } finally {
+        (new Filesystem)->remove([$archive, $site]);
+    }
+});
+
 it('treats an archive without vendor as nothing to replace', function (): void {
     $archive = sys_get_temp_dir().'/magna-vendor-bare-'.bin2hex(random_bytes(4));
     mkdir($archive, 0777, true);

@@ -24,7 +24,10 @@ declare(strict_types=1);
 | vendorMatches(), foreignPackages(), foreignRepositories(),
 | composerAvailable(), recordVendorDecision(), stageVendor(), swapVendor(),
 | composerRequire(), writeFootprintDraft(), markFinalizePending(),
-| progress(), log().
+| progress(), log(). From 1.7.1 the context also offers
+| carryableRepositories(), foreignRequireConstraints() and
+| carryRepositories(); this engine feature-detects them with method_exists()
+| and refuses as before on an older context.
 */
 
 return static function (object $ctx): void {
@@ -38,6 +41,7 @@ return static function (object $ctx): void {
     //    nothing — the site keeps its release and the admin reads why.
     $replaceVendor = false;
     $putBack = [];
+    $carryRepositories = [];
 
     if ($ctx->vendorStrategy() !== 'replace') {
         $ctx->recordVendorDecision('keep', 'the release leaves vendor/ to the site');
@@ -48,11 +52,29 @@ return static function (object $ctx): void {
         $repositories = $ctx->foreignRepositories();
         $replaceVendor = true;
 
+        // A context from 1.7.1 on can carry the site's own `path`
+        // repositories (the Core Plugin Manager's plugins-dev/ wiring) into
+        // the release's composer.json; an older one cannot, and refuses as it
+        // always has. Feature-detected, because this engine travels inside
+        // the archive and runs against whatever context the SITE already has.
+        $portable = method_exists($ctx, 'carryableRepositories') ? $ctx->carryableRepositories() : [];
+
         if ($putBack === []) {
             // The site's composer.json goes with its vendor/. A repository it
             // named that served nothing the release lacks goes with it.
             $ctx->recordVendorDecision('replace', 'nothing in vendor/ is the site\'s own, so the release\'s vendor/ replaces it whole'
                 .($repositories !== [] ? '; the site\'s composer.json also named '.implode(', ', $repositories).', which served nothing of its own' : ''));
+        } elseif ($repositories !== [] && count($portable) === count($repositories) && $ctx->composerAvailable()) {
+            $carryRepositories = $portable;
+            $putBack = $ctx->foreignRequireConstraints();
+            $ctx->recordVendorDecision('composer', 'the release\'s vendor/ replaces the site\'s, carrying the site\'s own path repositories across ('
+                .implode(', ', array_keys($portable)).'), then Composer puts back the site\'s own packages: '.implode(', ', array_keys($putBack)));
+        } elseif ($repositories !== [] && count($portable) === count($repositories)) {
+            $ctx->refuse(
+                'This release replaces core dependencies, and this site asks Composer for packages of its own ('
+                .implode(', ', array_keys($putBack)).') that replacing vendor/ would drop. Composer is not available here to put them back. '
+                .'Install Composer on the server, then update again.'
+            );
         } elseif ($repositories !== []) {
             $ctx->refuse(
                 'This release replaces core dependencies, and this site asks Composer for packages of its own ('
@@ -105,6 +127,10 @@ return static function (object $ctx): void {
 
     if ($replaceVendor) {
         $ctx->swapVendor();
+    }
+
+    if ($carryRepositories !== []) {
+        $ctx->carryRepositories($carryRepositories);
     }
 
     if ($putBack !== []) {

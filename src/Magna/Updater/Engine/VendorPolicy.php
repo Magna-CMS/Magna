@@ -126,6 +126,97 @@ final class VendorPolicy
         return $foreign;
     }
 
+    /**
+     * The foreign repositories an update CAN carry across: `path` repositories
+     * whose url is relative and resolves to a directory inside the site — the
+     * exact shape the Core Plugin Manager writes for a proprietary plugin
+     * (`plugins-dev/<vendor>/<package>`). The directory travels with the site,
+     * not with vendor/, so re-naming it in the release's composer.json after
+     * the swap reproduces the site's wiring faithfully. Anything else — vcs,
+     * composer, an absolute path onto some other machine's disk — stays
+     * foreign and keeps meaning refusal.
+     *
+     * Keyed by the same `type:url` key foreignRepositories() answers with, so
+     * the engine can tell whether EVERY foreign repository is portable.
+     *
+     * @return array<string, array{type: string, url: string}>
+     */
+    public function portableForeignRepositories(): array
+    {
+        $site = $this->composerJson($this->sitePath);
+        $archive = $this->composerJson($this->archivePath);
+
+        if ($site === null) {
+            return [];
+        }
+
+        $archiveRepositories = array_map(self::repositoryKey(...), is_array($archive['repositories'] ?? null) ? $archive['repositories'] : []);
+        $portable = [];
+
+        foreach (is_array($site['repositories'] ?? null) ? $site['repositories'] : [] as $repository) {
+            $key = self::repositoryKey($repository);
+
+            if ($key === null || in_array($key, $archiveRepositories, true) || $this->isDeadPathRepository($repository)) {
+                continue;
+            }
+
+            if (! is_array($repository) || ($repository['type'] ?? null) !== 'path' || ! is_string($repository['url'] ?? null)) {
+                continue;
+            }
+
+            $url = str_replace('\\', '/', $repository['url']);
+
+            // Absolute paths and parent-escapes are someone else's disk, not
+            // the site's own tree; they are not portable.
+            if (preg_match('#^(/|[A-Za-z]:/)#', $url) === 1 || str_contains($url, '..')) {
+                continue;
+            }
+
+            $real = realpath(rtrim($this->sitePath, '/\\').'/'.$url);
+            $root = realpath($this->sitePath);
+
+            if ($real === false || $root === false) {
+                continue;
+            }
+
+            $real = str_replace('\\', '/', $real);
+            $root = str_replace('\\', '/', $root);
+
+            if ($real !== $root && ! str_starts_with($real, $root.'/')) {
+                continue;
+            }
+
+            $portable[$key] = ['type' => 'path', 'url' => $url];
+        }
+
+        return $portable;
+    }
+
+    /**
+     * The constraint the site's composer.json states for each foreign package
+     * — what `composer require` should ask for once the repositories that
+     * serve them are carried across. installed.json's version is the wrong
+     * thing to pin a path-repository package to (Composer records a branch
+     * alias or whatever the directory claimed), while the stated constraint
+     * (`@dev`, the Core Plugin Manager's own wiring) reproduces the site's
+     * composer.json as it was.
+     *
+     * @return array<string, string> name => constraint, '*' when the site states none readable
+     */
+    public function foreignRequireConstraints(): array
+    {
+        $site = $this->composerJson($this->sitePath);
+        $require = is_array($site['require'] ?? null) ? $site['require'] : [];
+        $constraints = [];
+
+        foreach (array_keys($this->foreignPackages()) as $package) {
+            $stated = $require[$package] ?? null;
+            $constraints[$package] = is_string($stated) && $stated !== '' ? $stated : '*';
+        }
+
+        return $constraints;
+    }
+
     private function isDeadPathRepository(mixed $repository): bool
     {
         if (! is_array($repository) || ($repository['type'] ?? null) !== 'path' || ! is_string($repository['url'] ?? null)) {

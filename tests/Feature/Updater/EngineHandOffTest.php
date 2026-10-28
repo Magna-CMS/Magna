@@ -376,8 +376,7 @@ it('replaces vendor whole when the only repository the site names served nothing
 
 it('refuses before staging when the site\'s own packages come through a repository the release cannot carry', function (): void {
     $paths = handOffInstall();
-    installSiteVendor($paths, ['laravel/framework' => 'v13.23.0', 'acme/forum' => 'v2.1.4'], ['laravel/framework' => '^13', 'acme/forum' => '^2.1'], [['type' => 'path', 'url' => 'plugins-dev/acme/forum']]);
-    mkdir($paths->base('plugins-dev/acme/forum'), 0777, true);
+    installSiteVendor($paths, ['laravel/framework' => 'v13.23.0', 'acme/forum' => 'v2.1.4'], ['laravel/framework' => '^13', 'acme/forum' => '^2.1'], [['type' => 'vcs', 'url' => 'https://git.example.test/acme/forum']]);
     $archive = handOffArchive('99.0.0', null, ['vendor' => ['strategy' => 'replace']], engineVendorEntries(['laravel/framework' => 'v13.30.0'], ['laravel/framework' => '^13']));
     Http::fake(['github.com/*' => Http::response($archive['bytes'])]);
 
@@ -387,9 +386,74 @@ it('refuses before staging when the site\'s own packages come through a reposito
         expect($state)->toBe(CoreUpdateState::Failed)
             ->and(CoreUpdater::progress()['message'])->toContain('before any files were changed')
             ->and(CoreUpdater::progress()['message'])->toContain('acme/forum')
-            ->and(CoreUpdater::progress()['message'])->toContain('path:plugins-dev/acme/forum')
+            ->and(CoreUpdater::progress()['message'])->toContain('vcs:https://git.example.test/acme/forum')
             ->and(is_file($paths->base('src/Magna/Installed.php')))->toBeTrue()
             ->and(glob($paths->base('src/.Magna.incoming-*')) ?: [])->toBe([])
+            ->and(app()->maintenanceMode()->active())->toBeFalse();
+    } finally {
+        removeHandOffInstall($paths);
+    }
+});
+
+/*
+ * The Core Plugin Manager wires a proprietary plugin as a `path` repository
+ * on plugins-dev/ plus a `require`. That tree travels with the site, not
+ * with vendor/, so the update carries the repository into the release's
+ * composer.json and asks Composer to put the plugin back at the constraint
+ * the site stated — the exact wiring both production sites run.
+ */
+it('carries the site\'s own path repositories across a vendor replace and requires at the stated constraint', function (): void {
+    $paths = handOffInstall();
+    installSiteVendor($paths, ['laravel/framework' => 'v13.23.0', 'acme/forum' => 'dev-main'], ['laravel/framework' => '^13', 'acme/forum' => '@dev'], [['type' => 'path', 'url' => 'plugins-dev/acme/forum']]);
+    mkdir($paths->base('plugins-dev/acme/forum'), 0777, true);
+    $archive = handOffArchive('99.0.0', null, ['vendor' => ['strategy' => 'replace']], engineVendorEntries(['laravel/framework' => 'v13.30.0'], ['laravel/framework' => '^13']));
+    Http::fake(['github.com/*' => Http::response($archive['bytes'])]);
+
+    $composer = fakeComposer(available: true);
+    app()->instance(ComposerRunner::class, $composer);
+
+    try {
+        $state = app(CoreUpdater::class)->apply('99.0.0', 'https://github.com/magna-cms/magna/archive/v99.0.0.zip', $archive['sha256']);
+
+        expect($state)->toBe(CoreUpdateState::Switched)
+            ->and((string) file_get_contents($paths->base('vendor/autoload.php')))->toContain('release autoloader')
+            ->and($composer->runs)->toHaveCount(1)
+            ->and($composer->runs[0][0])->toBe('require')
+            ->and($composer->runs[0])->toContain('acme/forum:@dev');
+
+        // The repository is in the composer.json that is now live.
+        $live = json_decode((string) file_get_contents($paths->base('composer.json')), true);
+        expect($live['repositories'] ?? [])->toContain(['type' => 'path', 'url' => 'plugins-dev/acme/forum']);
+
+        $journal = UpdateJournal::latestPending($paths);
+        expect($journal?->get('vendor')['decision'] ?? null)->toBe('composer')
+            ->and($journal?->get('carried_repositories'))->toBe(['plugins-dev/acme/forum']);
+
+        // Rolling back restores the site's composer.json untouched.
+        app(UpdateResumer::class)->rollback();
+        $restored = json_decode((string) file_get_contents($paths->base('composer.json')), true);
+        expect($restored['repositories'] ?? [])->toBe([['type' => 'path', 'url' => 'plugins-dev/acme/forum']]);
+    } finally {
+        removeHandOffInstall($paths);
+    }
+});
+
+it('refuses a portable repository carry when Composer is not available to put the packages back', function (): void {
+    $paths = handOffInstall();
+    installSiteVendor($paths, ['laravel/framework' => 'v13.23.0', 'acme/forum' => 'dev-main'], ['laravel/framework' => '^13', 'acme/forum' => '@dev'], [['type' => 'path', 'url' => 'plugins-dev/acme/forum']]);
+    mkdir($paths->base('plugins-dev/acme/forum'), 0777, true);
+    $archive = handOffArchive('99.0.0', null, ['vendor' => ['strategy' => 'replace']], engineVendorEntries(['laravel/framework' => 'v13.30.0'], ['laravel/framework' => '^13']));
+    Http::fake(['github.com/*' => Http::response($archive['bytes'])]);
+
+    app()->instance(ComposerRunner::class, fakeComposer(available: false));
+
+    try {
+        $state = app(CoreUpdater::class)->apply('99.0.0', 'https://github.com/magna-cms/magna/archive/v99.0.0.zip', $archive['sha256']);
+
+        expect($state)->toBe(CoreUpdateState::Failed)
+            ->and(CoreUpdater::progress()['message'])->toContain('acme/forum')
+            ->and(CoreUpdater::progress()['message'])->toContain('Install Composer on the server')
+            ->and(is_file($paths->base('src/Magna/Installed.php')))->toBeTrue()
             ->and(app()->maintenanceMode()->active())->toBeFalse();
     } finally {
         removeHandOffInstall($paths);
