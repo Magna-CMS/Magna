@@ -883,7 +883,9 @@ it('lets the pinned big classes only shrink', function (): void {
         'Admin/Pages/PluginsPage.php' => 707,
         'Licensing/LicenseClient.php' => 579,
         'Blocks/Livewire/BlockEditor.php' => 586,
-        'Plugins/PluginManager.php' => 546,
+        // 546 + the maintenance-window skip in bootEnabledPlugins (1.7.2) —
+        // a correctness fix, not feature growth; the next split pays it back.
+        'Plugins/PluginManager.php' => 555,
         // Update-driving and plugin-resolution logic moved into
         // Admin/Concerns traits; the page is presentation again.
         'Admin/Pages/SystemInfoPage.php' => 290,

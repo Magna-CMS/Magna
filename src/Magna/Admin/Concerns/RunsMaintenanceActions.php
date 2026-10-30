@@ -28,7 +28,7 @@ use Throwable;
  * button rendered — and prints what actually ran, line by line, exit code
  * included, into the page's terminal panel. Dependencies arrive as action
  * parameters, which Livewire resolves from the container (the seam the
- * app()-call-site rule points to).
+ * service-location ratchet points to).
  */
 trait RunsMaintenanceActions
 {

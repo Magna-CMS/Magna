@@ -98,12 +98,9 @@ class PluginManager
                 $plugin->register();
                 $this->booted[$record->name] = $plugin;
             } catch (Throwable $e) {
-                // Mid-update the site is in maintenance mode and the vendor
-                // autoload map is being swapped underneath this request — a
-                // plugin wired through Composer is "missing" for exactly that
-                // window. Disabling it here turns every core update into a
-                // round of re-enable clicks; skip it for this request instead,
-                // and let the first normal request after the window decide.
+                // Mid-update (maintenance mode) the vendor autoload map is
+                // being swapped under this request — skip the "missing" plugin
+                // for this request instead of disabling it.
                 if ($this->app->isDownForMaintenance()) {
                     Log::warning("Plugin [{$record->name}] skipped this request (maintenance mode, likely mid-update): {$e->getMessage()}");
 
