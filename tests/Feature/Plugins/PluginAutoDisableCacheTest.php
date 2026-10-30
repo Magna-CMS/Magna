@@ -14,6 +14,7 @@ declare(strict_types=1);
  */
 
 use Filament\Facades\Filament;
+use Illuminate\Contracts\Foundation\MaintenanceMode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Magna\Plugins\PluginManager;
@@ -76,6 +77,38 @@ it('clears the cached panel components when a plugin is auto-disabled at registe
     foreach ($planted as $path) {
         expect(is_file($path))->toBeFalse();
     }
+});
+
+it('does not auto-disable a failing plugin while the site is in maintenance mode', function (): void {
+    $record = brokenPluginRecord();
+
+    // Mid-update the vendor autoload map is being swapped underneath this
+    // request, so a Composer-wired plugin is "missing" only for that window.
+    $this->app->instance(
+        MaintenanceMode::class,
+        new class implements MaintenanceMode
+        {
+            public function activate(array $payload): void {}
+
+            public function deactivate(): void {}
+
+            public function active(): bool
+            {
+                return true;
+            }
+
+            public function data(): array
+            {
+                return [];
+            }
+        }
+    );
+
+    $this->app->make(PluginManager::class)->bootEnabledPlugins();
+
+    // Skipped for this request only; the record is untouched, so the first
+    // request after the maintenance window decides whether it is really gone.
+    expect($record->fresh()->enabled)->toBeTrue();
 });
 
 it('leaves the cached panel components alone when every plugin boots cleanly', function (): void {
