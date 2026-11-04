@@ -13,8 +13,10 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 use Magna\Admin\Console\NotificationsPruneCommand;
 use Magna\Admin\Console\PanelPathCommand;
+use Magna\Admin\Support\EntrySynth;
 use Magna\Contracts\RegistersAdminNavigation;
 use Magna\Contracts\RegistersDashboardWidgets;
 use Magna\Contracts\RegistersSettingsPages;
@@ -46,6 +48,8 @@ class AdminServiceProvider extends ServiceProvider
         // case-insensitive Windows/macOS.
         $this->loadViewsFrom(__DIR__.'/Resources/views', 'magna');
         $this->loadRoutesFrom(__DIR__.'/routes/web.php');
+
+        Livewire::propertySynthesizer(EntrySynth::class);
 
         // A core update or a plugin enable asks for admin assets to be
         // republished; honour it once the request is over, when every enabled

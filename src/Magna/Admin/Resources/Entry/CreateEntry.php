@@ -7,6 +7,7 @@ namespace Magna\Admin\Resources\Entry;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Magna\Admin\Resources\EntryResource;
 use Magna\Content\EntryManager;
@@ -16,6 +17,7 @@ class CreateEntry extends CreateRecord
 {
     protected static string $resource = EntryResource::class;
 
+    #[Locked]
     #[Url(as: 'type')]
     public string $type = '';
 

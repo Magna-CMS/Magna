@@ -8,6 +8,7 @@ use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Magna\Admin\Resources\EntryResource;
 use Magna\Content\Entry;
@@ -17,6 +18,7 @@ class ListEntries extends ListRecords
 {
     protected static string $resource = EntryResource::class;
 
+    #[Locked]
     #[Url(as: 'type')]
     public string $type = '';
 
