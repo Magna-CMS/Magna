@@ -21,6 +21,7 @@ use Magna\Updater\Footprint\InstalledFootprint;
 use Magna\Updater\IncompatiblePlugin;
 use Magna\Updater\MaintenanceWindow;
 use Magna\Updater\PluginDisableResult;
+use Magna\Updater\RootForwarderRepair;
 use Magna\Updater\RuntimeRefresh;
 use Magna\Updater\UpdateHousekeeping;
 use Magna\Updater\UpdatePaths;
@@ -58,6 +59,7 @@ final class UpdateFinalizer
         private readonly UpdateHousekeeping $housekeeping,
         private readonly PluginCompatibilityCheck $compatibility,
         private readonly PluginUpgradeHooks $pluginHooks,
+        private readonly RootForwarderRepair $forwarder,
         private readonly Dispatcher $events,
         private readonly UpdateRunLog $log,
     ) {}
@@ -158,6 +160,10 @@ final class UpdateFinalizer
 
             $this->rollback->disarmBootGuard();
             $journal->transition(RunState::Committed);
+
+            // After the transition, because rewriting web.config can make IIS
+            // recycle this very process; whoever resumes finds the commit done.
+            $this->repairRootForwarder();
         }
 
         $this->maintenance->leave();
@@ -258,6 +264,35 @@ final class UpdateFinalizer
             null,
             $delivered,
         );
+    }
+
+    /**
+     * Never fails the update: the release is committed, and a forwarder that
+     * could not be corrected costs the site its media URLs, which it had
+     * already lost. The operator is told what to change by hand instead.
+     */
+    private function repairRootForwarder(): void
+    {
+        $report = $this->forwarder->repair();
+
+        foreach ($report['repaired'] as $file) {
+            $this->log->line("Root forwarder {$file} corrected: public media now reaches public/storage.");
+        }
+
+        if ($report['failed'] === []) {
+            return;
+        }
+
+        $body = 'PHP could not correct '.implode(' and ', $report['failed']).' at the site root, so public media keeps answering 403. Delete "storage|" from the deny list in that file by hand.';
+
+        Log::warning('[magna.updater] '.$body);
+        $this->log->line($body);
+
+        try {
+            NotificationRecipients::notifyDashboard('Root forwarder needs a hand edit', $body, 'warning');
+        } catch (Throwable) {
+            // The bell is best-effort; the log line above is the record.
+        }
     }
 
     /**
