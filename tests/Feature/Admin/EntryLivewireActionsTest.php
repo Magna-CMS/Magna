@@ -36,7 +36,7 @@ uses(TestCase::class, RefreshDatabase::class);
 //
 // Livewire::test() behaves the same way, and that is the point of it here:
 // the query parameter goes to the mounting GET and is gone from each update.
-// Do not "help" these tests with request()->query->set('type', ...) â€” that is
+// Do not "help" these tests with request()->query->set('type', ...) — that is
 // how the screens stayed broken behind green tests.
 
 beforeEach(function (): void {
@@ -109,7 +109,7 @@ function entryActionsExpectNoTypeOnRequest(): void
         ->and(request()->query('type'))->toBeNull();
 }
 
-// â”€â”€ List screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── List screen ──────────────────────────────────────────────────────────────
 
 it('unpublishes a row from the list on an update with no type in the URL', function (): void {
     entryActionsRegisterType('wire_list_unpublish');
@@ -221,7 +221,7 @@ it('will not let the browser swap the list onto a type it was never authorised f
     entryActionsList('wire_swap_mine')->set('type', 'wire_swap_theirs');
 })->throws(CannotUpdateLockedPropertyException::class);
 
-// â”€â”€ Edit screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Edit screen ──────────────────────────────────────────────────────────────
 
 it('unpublishes from the edit screen on an update with no type in the URL', function (): void {
     entryActionsRegisterType('wire_edit_unpublish');
@@ -374,7 +374,7 @@ it('will not let the browser swap the edit screen onto another type', function (
     entryActionsEdit('wire_edit_swap', $entry)->set('type', 'wire_edit_swap_other');
 })->throws(CannotUpdateLockedPropertyException::class);
 
-// â”€â”€ Create screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Create screen ────────────────────────────────────────────────────────────
 
 it('creates an entry on an update with no type in the URL', function (): void {
     entryActionsRegisterType('wire_create');
