@@ -22,6 +22,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Livewire;
 use Magna\Admin\Resources\Entry\CreateEntry;
 use Magna\Admin\Resources\Entry\EditEntry;
 use Magna\Admin\Resources\Entry\ListEntries;
@@ -74,6 +75,12 @@ class EntryResource extends Resource
     public static function canDeleteAny(): bool
     {
         return self::hasContentPermission('delete');
+    }
+
+    public static function canPublish(Model $record): bool
+    {
+        /** @var Entry $record */
+        return self::hasContentPermission('publish', $record->getHandle());
     }
 
     private static function hasContentPermission(string $action, ?string $handle = null): bool
@@ -189,7 +196,7 @@ class EntryResource extends Resource
                 TextColumn::make('published_at')
                     ->label('Published')
                     ->dateTime('d M Y H:i')
-                    ->default('—')
+                    ->placeholder('—')
                     ->sortable(),
 
                 TextColumn::make('updated_at')
@@ -231,7 +238,7 @@ class EntryResource extends Resource
                         }
                     })
                     ->visible(fn (Entry $record): bool => $record->status !== EntryStatus::Published
-                        && self::hasContentPermission('publish', $record->getHandle())),
+                        && self::canPublish($record)),
 
                 // Unpublish action
                 Action::make('unpublish')
@@ -243,7 +250,7 @@ class EntryResource extends Resource
                         app(EntryManager::class)->unpublish($record);
                     })
                     ->visible(fn (Entry $record): bool => $record->status === EntryStatus::Published
-                        && self::hasContentPermission('publish', $record->getHandle())),
+                        && self::canPublish($record)),
 
                 // Create translation action (localizable types only)
                 Action::make('create_translation')
@@ -297,11 +304,24 @@ class EntryResource extends Resource
                     ->modalCancelActionLabel('Close')
                     ->visible(fn (Entry $record): bool => self::hasContentPermission('view', $record->getHandle())),
 
-                EditAction::make(),
+                EditAction::make()
+                    ->url(fn (Entry $record): string => static::getUrl('edit', [
+                        'record' => $record,
+                        'type' => $record->getHandle(),
+                    ])),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    // Through the manager, as the edit screen's delete is: a
+                    // bare model delete would strand children and relations.
+                    DeleteBulkAction::make()
+                        ->using(function (iterable $records, EntryManager $manager): void {
+                            $actorId = auth()->id();
+                            /** @var iterable<Entry> $records */
+                            foreach ($records as $record) {
+                                $manager->delete($record, $actorId !== null ? (string) $actorId : null);
+                            }
+                        }),
                 ]),
             ])
             ->defaultSort('updated_at', 'desc');
@@ -352,8 +372,19 @@ class EntryResource extends Resource
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    /**
+     * The content type this screen is on. ?type= exists only on the page URL:
+     * Livewire's update requests carry a snapshot and no query string, so once
+     * a page is running, the type it mounted with is the one that counts. The
+     * pages lock that property, so the browser cannot change it after mount.
+     */
     public static function getTypeHandleFromRequest(): string
     {
+        $page = Livewire::current();
+        if (($page instanceof ListEntries || $page instanceof CreateEntry || $page instanceof EditEntry) && $page->type !== '') {
+            return $page->type;
+        }
+
         $type = request()->query('type', '');
 
         return is_string($type) ? $type : '';

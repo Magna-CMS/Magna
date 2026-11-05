@@ -12,6 +12,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Magna\Admin\Resources\EntryResource;
 use Magna\Content\Entry;
@@ -23,6 +24,7 @@ class EditEntry extends EditRecord
 {
     protected static string $resource = EntryResource::class;
 
+    #[Locked]
     #[Url(as: 'type')]
     public string $type = '';
 
@@ -93,7 +95,8 @@ class EditEntry extends EditRecord
                     app(EntryManager::class)->publish($this->entry());
                     $this->fillForm();
                 })
-                ->visible(fn (): bool => $record->status !== EntryStatus::Published),
+                ->visible(fn (): bool => $record->status !== EntryStatus::Published
+                    && EntryResource::canPublish($record)),
 
             // Schedule publishing
             Action::make('schedule')
@@ -112,7 +115,8 @@ class EditEntry extends EditRecord
                     $publishAt = Carbon::parse($data['publish_at']);
                     app(EntryManager::class)->publish($this->entry(), $publishAt);
                     $this->fillForm();
-                }),
+                })
+                ->visible(fn (): bool => EntryResource::canPublish($record)),
 
             // Unpublish
             Action::make('unpublish')
@@ -124,7 +128,8 @@ class EditEntry extends EditRecord
                     app(EntryManager::class)->unpublish($this->entry());
                     $this->fillForm();
                 })
-                ->visible(fn (): bool => $record->status === EntryStatus::Published),
+                ->visible(fn (): bool => $record->status === EntryStatus::Published
+                    && EntryResource::canPublish($record)),
 
             // View revisions
             Action::make('revisions')
@@ -142,7 +147,8 @@ class EditEntry extends EditRecord
                 ->action(function (): void {
                     $actorId = auth()->id();
                     app(EntryManager::class)->delete($this->entry(), $actorId !== null ? (string) $actorId : null);
-                }),
+                })
+                ->successRedirectUrl(fn (): string => $this->getRedirectUrl()),
         ];
     }
 
