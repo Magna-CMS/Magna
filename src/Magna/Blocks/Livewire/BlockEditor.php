@@ -19,13 +19,9 @@ use RuntimeException;
 /**
  * Livewire block editor component for the Section → Column → Block page tree.
  *
- * Embedded in the Filament entry form as a custom field.  The host form passes
- * the current blocks_data JSON string via the @modelable wire:model binding.
- *
- * Usage in Filament form schema:
- *
- *   \Filament\Forms\Components\Livewire::make(BlockEditor::class)
- *       ->key('block-editor')
+ * Not on the entry form: BlocksField puts a notice there, and that form must
+ * never bind this to wire:model, or every Save rewrites the document. A host
+ * passes the blocks_data JSON string through the @modelable binding or mount().
  *
  * The component fires 'blockEditorUpdated' (dispatch to parent) with the
  * serialised blocks_data whenever a save is triggered.

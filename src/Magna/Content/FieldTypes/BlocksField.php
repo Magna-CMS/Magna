@@ -4,17 +4,26 @@ declare(strict_types=1);
 
 namespace Magna\Content\FieldTypes;
 
+use Filament\Actions\Action;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Component;
-use Filament\Schemas\Components\Livewire;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
-use Magna\Blocks\Livewire\BlockEditor;
+use Illuminate\Support\Facades\Route;
 use Magna\Blocks\Rules\ValidBlockDocument;
 use Magna\Blocks\Sanitization\RichTextSanitizer;
+use Magna\Content\Entry;
 use Magna\Content\Field;
 
 class BlocksField extends FieldType
 {
+    /** Registered by magna-cms/pages, so it exists only while that plugin does. */
+    private const BUILDER_ROUTE = 'pages.builder.edit';
+
+    /** What that builder opens; any other type would 404 there. */
+    private const BUILDER_TYPES = ['page', 'pages_template'];
+
     public function typeName(): string
     {
         return 'blocks';
@@ -123,10 +132,38 @@ class BlocksField extends FieldType
         return $blocks;
     }
 
+    /**
+     * A pointer, not an editor, and it must stay one. An unbound editor opened
+     * empty on pages that had sections and said "Saved" while storing nothing;
+     * a bound one would send the whole document back through every Save. With
+     * no state path here, Save cannot touch the column at all.
+     */
     public function toFilamentComponent(Field $field): Component
     {
-        return Livewire::make(BlockEditor::class)
-            ->key('block-editor-'.$field->handle)
+        return Callout::make('Sections are not edited on this screen')
+            ->key('blocks-notice-'.$field->handle)
+            ->info()
+            ->description(fn (?Model $record): string => $this->builderUrl($record) !== null
+                ? 'Open the page builder to change them. Saving here leaves them exactly as they are.'
+                : 'The page builder in Magna Pages edits them. Saving here leaves them exactly as they are.')
+            ->actions([
+                Action::make('openBuilder_'.$field->handle)
+                    ->label('Open page builder')
+                    ->url(fn (?Model $record): ?string => $this->builderUrl($record))
+                    ->visible(fn (?Model $record): bool => $this->builderUrl($record) !== null),
+            ])
             ->columnSpanFull();
+    }
+
+    private function builderUrl(?Model $record): ?string
+    {
+        if (! $record instanceof Entry
+            || ! in_array($record->getHandle(), self::BUILDER_TYPES, true)
+            || ! Route::has(self::BUILDER_ROUTE)
+        ) {
+            return null;
+        }
+
+        return route(self::BUILDER_ROUTE, ['id' => $record->getKey()]);
     }
 }
