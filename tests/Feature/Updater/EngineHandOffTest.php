@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Magna\MagnaServiceProvider;
 use Magna\Marketplace\ComposerResult;
 use Magna\Marketplace\ComposerRunner;
@@ -15,12 +16,14 @@ use Magna\Updater\CoreUpdater;
 use Magna\Updater\CoreUpdateState;
 use Magna\Updater\Footprint\InstalledFootprint;
 use Magna\Updater\Manifest\ReleaseManifest;
+use Magna\Updater\RootForwarderRepair;
 use Magna\Updater\Run\RunOutcome;
 use Magna\Updater\Run\RunRollback;
 use Magna\Updater\Run\RunState;
 use Magna\Updater\Run\UpdateJournal;
 use Magna\Updater\Run\UpdateResumer;
 use Magna\Updater\UpdatePaths;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Tests\TestCase;
 
@@ -186,6 +189,54 @@ it('finishes a repair under the same code and records the delivery', function ()
         // The finalizer told the next boot which classmap entries the release retired.
         $cache = json_decode((string) file_get_contents($paths->storage('framework/cache/magna-stale-classmap.json')), true);
         expect($cache['stale'] ?? null)->toBe(['Magna\\Admin\\Pages\\GeneralSettingsPage']);
+    } finally {
+        removeHandOffInstall($paths);
+    }
+});
+
+it('corrects the site\'s root forwarder when it finishes, though no release swaps that file', function (): void {
+    $paths = handOffInstall();
+    $archive = handOffArchive(MagnaServiceProvider::VERSION);
+    $zipPath = $paths->storage('app/repair.zip');
+    file_put_contents($zipPath, $archive['bytes']);
+    file_put_contents($paths->base('.htaccess'), "# host rule\nRewriteRule ^(app|bootstrap|config|database|lang|resources|routes|schemas|src|storage|tests|vendor)(/|$) - [F,L]\n");
+
+    try {
+        app(CoreUpdater::class)->repair($zipPath, $archive['sha256']);
+
+        expect((string) file_get_contents($paths->base('.htaccess')))->toContain('|src|storage|tests|');
+
+        expect(app(UpdateResumer::class)->resume()->kind)->toBe(RunOutcome::COMPLETED);
+
+        expect((string) file_get_contents($paths->base('.htaccess')))
+            ->toBe("# host rule\nRewriteRule ^(app|bootstrap|config|database|lang|resources|routes|schemas|src|tests|vendor)(/|$) - [F,L]\n");
+    } finally {
+        removeHandOffInstall($paths);
+    }
+});
+
+it('completes the update and says so when the root forwarder cannot be written', function (): void {
+    $paths = handOffInstall();
+    $archive = handOffArchive(MagnaServiceProvider::VERSION);
+    $zipPath = $paths->storage('app/repair.zip');
+    file_put_contents($zipPath, $archive['bytes']);
+    file_put_contents($paths->base('.htaccess'), 'RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|schemas|src|storage|tests|vendor)(/|$) - [F,L]');
+
+    app()->instance(RootForwarderRepair::class, new RootForwarderRepair(new class extends Filesystem
+    {
+        public function dumpFile(string $filename, $content): void
+        {
+            throw new IOException('Permission denied');
+        }
+    }, $paths));
+    Log::spy();
+
+    try {
+        app(CoreUpdater::class)->repair($zipPath, $archive['sha256']);
+
+        expect(app(UpdateResumer::class)->resume()->kind)->toBe(RunOutcome::COMPLETED);
+
+        Log::shouldHaveReceived('warning')->withArgs(fn (string $message): bool => str_contains($message, '.htaccess') && str_contains($message, 'storage|'));
     } finally {
         removeHandOffInstall($paths);
     }

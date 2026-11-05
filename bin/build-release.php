@@ -885,7 +885,15 @@ function root_htaccess(): string
 #
 # Serves the whole application from public/ while keeping the archive extracted
 # at the domain root. Requests for application internals (.env, source, vendor,
-# storage, …) never resolve to a real file and are denied outright.
+# …) never resolve to a real file and are denied outright.
+#
+# storage is deliberately absent from that denial. Media URLs are
+# /storage/media/…, and they have to reach public/storage, the link to
+# storage/app/public, or every upload answers 403. The forward at the bottom is
+# what keeps the rest of storage/ private: it only ever rewrites to public/$1,
+# so /storage/logs/laravel.log looks for storage/app/public/logs/laravel.log,
+# finds nothing, and Laravel answers 404. The real storage/ folder is never
+# reached by any URL.
 
 Options -Indexes
 
@@ -914,7 +922,7 @@ Options -Indexes
 
     # Block direct access to sensitive top-level paths.
     RewriteRule ^(\.env|\.git|composer\.(json|lock)|artisan) - [F,L]
-    RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|schemas|src|storage|tests|vendor)(/|$) - [F,L]
+    RewriteRule ^(app|bootstrap|config|database|lang|resources|routes|schemas|src|tests|vendor)(/|$) - [F,L]
 
     # Strip trailing slashes here, while REQUEST_URI is still the client's.
     # Laravel's own trailing-slash redirect in public/.htaccess captures
@@ -942,13 +950,20 @@ function root_web_config(): string
 {
     return <<<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Magna root forwarder for IIS. Requires the URL Rewrite module. -->
+<!--
+    Magna root forwarder for IIS. Requires the URL Rewrite module.
+
+    storage is deliberately absent from the deny list: media URLs are
+    /storage/media/... and have to reach public/storage, the link to
+    storage/app/public. "Forward to public" keeps the rest of storage/ private,
+    because it only ever rewrites into public/.
+-->
 <configuration>
     <system.webServer>
         <rewrite>
             <rules>
                 <rule name="Deny app internals" stopProcessing="true">
-                    <match url="^(app|bootstrap|config|database|lang|resources|routes|schemas|src|storage|tests|vendor|\.env|\.git)(/|$)" />
+                    <match url="^(app|bootstrap|config|database|lang|resources|routes|schemas|src|tests|vendor|\.env|\.git)(/|$)" />
                     <action type="CustomResponse" statusCode="403" statusReason="Forbidden" statusDescription="Forbidden" />
                 </rule>
                 <rule name="Forward to public" stopProcessing="true">
