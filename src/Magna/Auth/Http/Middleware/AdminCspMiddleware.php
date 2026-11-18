@@ -7,6 +7,7 @@ namespace Magna\Auth\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Magna\Contracts\CaptchaProvider;
+use Magna\Marketplace\Marketplace;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -54,7 +55,10 @@ class AdminCspMiddleware
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'".$captchaHost, // Livewire inline + Alpine eval; nonce step staged (§C5)
             "style-src 'self' 'unsafe-inline'",                // Filament inline styles
-            "img-src 'self' data: blob:",
+            // The marketplace's icons, covers and screenshots are served by the
+            // hub, so the Themes and Plugins pages showed them broken. Images
+            // only: the hub gets no script, frame or connect permission here.
+            "img-src 'self' data: blob: ".self::hubOrigin(),
             "font-src 'self' data:",
             // 'self' alone does NOT cover blob: — and the file uploader (FilePond)
             // fetches its own object URLs to build previews and to hand the file
@@ -75,6 +79,12 @@ class AdminCspMiddleware
         $response->headers->set('Content-Security-Policy', $csp);
 
         return $response;
+    }
+
+    /** scheme://host of the marketplace hub, from the constant core ships with. */
+    private static function hubOrigin(): string
+    {
+        return parse_url(Marketplace::WEB_BASE, PHP_URL_SCHEME).'://'.parse_url(Marketplace::WEB_BASE, PHP_URL_HOST);
     }
 
     /**

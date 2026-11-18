@@ -58,6 +58,17 @@ it('returns only compatible, well-formed listings', function (): void {
         ->and($plugins[0]->categories)->toBe(['community']);
 });
 
+it('keeps a listing icon only when it is an http(s) URL, as the cover already was', function (): void {
+    $listing = static fn (mixed $icon): ?PluginListing => PluginListing::fromArray([
+        'package' => 'acme/forum', 'name' => 'Acme Forum', 'version' => '1.0.0', 'compat' => '^1.0', 'icon' => $icon,
+    ]);
+
+    expect($listing('https://hub.test/storage/i.png')?->icon)->toBe('https://hub.test/storage/i.png')
+        ->and($listing('javascript:alert(1)')?->icon)->toBeNull()
+        ->and($listing('/relative/i.png')?->icon)->toBeNull()
+        ->and($listing(null)?->icon)->toBeNull();
+});
+
 it('caches the catalog and does not refetch within the TTL', function (): void {
     Http::fake([Marketplace::API_BASE.'/plugins*' => Http::response(fakeCatalog())]);
 

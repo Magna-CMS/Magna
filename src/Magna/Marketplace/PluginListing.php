@@ -125,7 +125,7 @@ final class PluginListing
             shortDescription: is_string($data['shortDescription'] ?? null) ? $data['shortDescription'] : '',
             version: $version,
             compat: $compat,
-            icon: is_string($data['icon'] ?? null) ? $data['icon'] : null,
+            icon: is_string($data['icon'] ?? null) && preg_match('#^https?://#i', $data['icon']) === 1 ? $data['icon'] : null,
             categories: $categories,
             author: is_string($data['author'] ?? null) ? $data['author'] : null,
             installs: is_int($data['installs'] ?? null) ? $data['installs'] : null,

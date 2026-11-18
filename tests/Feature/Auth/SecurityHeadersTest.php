@@ -3,6 +3,7 @@
 declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Magna\Auth\Http\Middleware\AdminCspMiddleware;
+use Magna\Marketplace\Marketplace;
 
 it('attaches security headers to web responses', function (): void {
     // "/" redirects guests to the panel login; assert on the 200 login page.
@@ -62,6 +63,25 @@ it('allows blob: object URLs the file uploader depends on', function (): void {
     expect($csp)->toContain('connect-src \'self\' blob:')
         ->and($csp)->toContain('worker-src \'self\' blob:')
         ->and($csp)->toContain('img-src \'self\' data: blob:');
+});
+
+// Every marketplace icon, cover and screenshot is an absolute URL on the hub.
+// With img-src 'self' alone the Themes and Plugins pages showed them broken.
+it('lets the admin show marketplace images from the hub, and only images', function (): void {
+    $csp = $this->get('/login')->headers->get('Content-Security-Policy', '');
+    $hub = 'https://'.parse_url(Marketplace::WEB_BASE, PHP_URL_HOST);
+
+    $directives = [];
+    foreach (explode(';', $csp) as $directive) {
+        $parts = preg_split('/\s+/', trim($directive)) ?: [];
+        $directives[(string) array_shift($parts)] = $parts;
+    }
+
+    expect($directives['img-src'])->toBe(["'self'", 'data:', 'blob:', $hub]);
+
+    foreach (['default-src', 'script-src', 'style-src', 'connect-src', 'frame-src', 'font-src'] as $name) {
+        expect($directives[$name])->not->toContain($hub);
+    }
 });
 
 it('lets a response with its own policy keep it', function (): void {
