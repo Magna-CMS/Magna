@@ -311,6 +311,75 @@ it('leaves a NULL column NULL when the empty box is saved', function (): void {
     expect(entryFieldsRaw($entry)['page_settings'])->toBeNull();
 });
 
+// ── A tab left open while the builder changes the value ─────────────────────
+
+/** What the builder does in another tab: writes the column directly. */
+function entryFieldsBuilderWrites(Entry $entry, string $settings): void
+{
+    DB::table($entry->getTable())->where('id', $entry->id)->update(['page_settings' => $settings]);
+}
+
+it('keeps what the builder wrote when a stale tab saves with the box untouched', function (): void {
+    entryFieldsRegisterType();
+    $entry = entryFieldsSeed('[]', '{"style":{"background":"#fff"}}');
+    $tab = entryFieldsEdit($entry);
+
+    entryFieldsBuilderWrites($entry, '{"style":{"background":"#000"}}');
+    $before = entryFieldsRaw($entry);
+
+    $tab->fillForm(['title' => 'Renamed'])->call('save')->assertHasNoFormErrors();
+
+    $after = entryFieldsRaw($entry);
+
+    expect($after['title'])->toBe('Renamed')
+        ->and($after['page_settings'])->toBe($before['page_settings']);
+});
+
+it('refuses an edit made on top of a value the builder has since changed', function (): void {
+    entryFieldsRegisterType();
+    $entry = entryFieldsSeed('[]', '{"style":{"background":"#fff"}}');
+    $tab = entryFieldsEdit($entry);
+
+    entryFieldsBuilderWrites($entry, '{"style":{"background":"#000"}}');
+    $before = entryFieldsRaw($entry);
+
+    $tab->fillForm(['page_settings' => '{"style":{"background":"#f00"}}'])
+        ->call('save')
+        ->assertHasFormErrors(['page_settings'])
+        ->assertSee('changed somewhere else after this screen was opened');
+
+    expect(entryFieldsRaw($entry)['page_settings'])->toBe($before['page_settings']);
+});
+
+it('accepts a stale edit that matches what is already stored', function (): void {
+    entryFieldsRegisterType();
+    $entry = entryFieldsSeed('[]', '{"a":1}');
+    $tab = entryFieldsEdit($entry);
+
+    entryFieldsBuilderWrites($entry, '{"a":2}');
+
+    $tab->fillForm(['page_settings' => '{"a": 2}'])->call('save')->assertHasNoFormErrors();
+
+    expect(json_decode((string) entryFieldsRaw($entry)['page_settings'], true))->toBe(['a' => 2]);
+});
+
+it('does not read a second Save in the same tab as a clash with the first', function (): void {
+    entryFieldsRegisterType();
+    $entry = entryFieldsSeed('[]', '{"a":1}');
+    $tab = entryFieldsEdit($entry);
+
+    $tab->fillForm(['page_settings' => '{"a":2}'])->call('save', false)->assertHasNoFormErrors();
+    $tab->fillForm(['page_settings' => '{"a":3}'])->call('save', false)->assertHasNoFormErrors();
+
+    expect(json_decode((string) entryFieldsRaw($entry)['page_settings'], true))->toBe(['a' => 3]);
+
+    // And the box, now matching what this tab wrote, is untouched again.
+    entryFieldsBuilderWrites($entry, '{"a":4}');
+    $tab->fillForm(['title' => 'Renamed'])->call('save', false)->assertHasNoFormErrors();
+
+    expect(json_decode((string) entryFieldsRaw($entry)['page_settings'], true))->toBe(['a' => 4]);
+});
+
 it('refuses text that is not a JSON object or list', function (string $typed): void {
     entryFieldsRegisterType();
     $entry = entryFieldsSeed('[]', '{"a":1}');

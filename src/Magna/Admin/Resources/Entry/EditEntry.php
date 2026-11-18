@@ -7,6 +7,7 @@ namespace Magna\Admin\Resources\Entry;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
@@ -18,6 +19,7 @@ use Magna\Admin\Resources\EntryResource;
 use Magna\Content\Entry;
 use Magna\Content\EntryManager;
 use Magna\Content\EntryStatus;
+use Magna\Content\FieldTypes\JsonField;
 use Magna\Content\Models\Revision;
 
 class EditEntry extends EditRecord
@@ -53,6 +55,20 @@ class EditEntry extends EditRecord
             $data,
             $actorId !== null ? (string) $actorId : null,
         );
+    }
+
+    /**
+     * A JSON box judges "untouched" against what it was loaded with. After a
+     * Save that leaves this form open, that is what was just written, or the
+     * next edit here would read as a clash with this tab's own Save.
+     */
+    protected function afterSave(): void
+    {
+        foreach ($this->form->getFlatFields(withHidden: true) as $field) {
+            if ($field instanceof Hidden && str_starts_with($field->getName(), JsonField::BASELINE_PREFIX)) {
+                $field->callAfterStateHydrated();
+            }
+        }
     }
 
     /**
