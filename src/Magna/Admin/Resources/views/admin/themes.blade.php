@@ -114,11 +114,24 @@
                                     class="text-xs font-semibold text-primary-600 hover:underline dark:text-primary-400"
                                 >Import demo content</button>
                             @endif
-                            <button
-                                wire:click="remove('{{ $theme['name'] }}')"
-                                wire:confirm="Delete this theme's files from the site?"
-                                class="text-xs font-semibold text-gray-500 hover:text-danger-600 dark:text-gray-400 dark:hover:text-danger-400 transition-colors"
-                            >Remove</button>
+                            @if ($theme['demo_on_site'] ?? false)
+                                <button
+                                    wire:click="askRemoveDemo('{{ $theme['name'] }}')"
+                                    wire:loading.attr="disabled"
+                                    class="text-xs font-semibold text-gray-500 hover:text-danger-600 dark:text-gray-400 dark:hover:text-danger-400 transition-colors"
+                                >Remove demo content</button>
+                                {{-- Its own dialog: removing the theme can take the demo with it. --}}
+                                <button
+                                    wire:click="askRemoveTheme('{{ $theme['name'] }}')"
+                                    class="text-xs font-semibold text-gray-500 hover:text-danger-600 dark:text-gray-400 dark:hover:text-danger-400 transition-colors"
+                                >Remove</button>
+                            @else
+                                <button
+                                    wire:click="remove('{{ $theme['name'] }}')"
+                                    wire:confirm="Delete this theme's files from the site?"
+                                    class="text-xs font-semibold text-gray-500 hover:text-danger-600 dark:text-gray-400 dark:hover:text-danger-400 transition-colors"
+                                >Remove</button>
+                            @endif
                             @if ($theme['active'])
                                 <button
                                     wire:click="deactivate"
@@ -126,7 +139,7 @@
                                 >Deactivate</button>
                             @else
                                 <button
-                                    wire:click="activate('{{ $theme['name'] }}')"
+                                    wire:click="askActivate('{{ $theme['name'] }}')"
                                     class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
                                 >Activate</button>
                             @endif
@@ -272,6 +285,8 @@
 ])
 
 @include('magna::admin.partials.checkout')
+
+@include('magna::admin.partials.themes.demo-dialog', ['installed' => $installed])
 
 <x-filament-actions::modals />
 

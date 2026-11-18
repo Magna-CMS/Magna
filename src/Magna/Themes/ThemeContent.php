@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Magna\Themes;
 
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 /**
@@ -28,15 +29,169 @@ final class ThemeContent
     /** A demo bundle with images inlined runs to a few MB; nothing honest needs 25. */
     private const MAX_BUNDLE_BYTES = 25 * 1024 * 1024;
 
+    /** How long the Themes page trusts "this theme's demo is on the site" before asking again. */
+    private const ON_SITE_TTL_SECONDS = 300;
+
     public function __construct(
         private readonly ThemeManager $themes,
         private readonly ?ThemeContentImporter $importer,
+        private readonly ?ThemeContentRemover $remover = null,
     ) {}
 
     /** Whether this site can import demo content at all (the page builder is installed). */
     public function supported(): bool
     {
         return $this->importer !== null;
+    }
+
+    /** Whether this site can take demo content back out (the page builder is new enough). */
+    public function removable(): bool
+    {
+        return $this->remover !== null;
+    }
+
+    /**
+     * Whether any of this theme's demo content is on the site, untouched and
+     * removable — what decides if the Themes page offers to remove it.
+     *
+     * Asking means reading every bundle (a few MB each with inlined images)
+     * and comparing each row with the site, on every render of a page that
+     * re-renders on each click. So the answer is cached briefly, keyed on the
+     * bundles themselves, and forgotten whenever this class imports or
+     * removes. A stale "yes" costs nothing: the removal re-checks every row.
+     */
+    public function onSite(string $themeName): bool
+    {
+        if (! $this->removable()) {
+            return false;
+        }
+
+        $bundles = $this->bundles($themeName);
+        if ($bundles === []) {
+            return false;
+        }
+
+        return (bool) Cache::remember(
+            self::onSiteKey($themeName, $bundles),
+            self::ON_SITE_TTL_SECONDS,
+            fn (): bool => $this->removalPreview($themeName)['remove'] !== [],
+        );
+    }
+
+    /**
+     * What removing this theme's demo content would take out, and what it
+     * would leave and why, across every bundle.
+     *
+     * @return array{remove: list<array{key: string, label: string}>, keep: list<array{key: string, label: string, reason: string}>}
+     *
+     * @throws RuntimeException with a message fit to show an admin
+     */
+    public function removalPreview(string $themeName): array
+    {
+        $remove = [];
+        $keep = [];
+
+        foreach ($this->removableBundles($themeName) as $path) {
+            try {
+                $part = $this->remover()->preview(self::read($path));
+            } catch (\InvalidArgumentException $e) {
+                throw new RuntimeException(basename($path).': '.$e->getMessage(), 0, $e);
+            }
+
+            // Two bundles can ship the same row; it is one row on the site.
+            foreach ($part['remove'] as $row) {
+                $remove[$row['key']] = $row;
+            }
+            foreach ($part['keep'] as $row) {
+                $keep[$row['key']] = $row;
+            }
+        }
+
+        return ['remove' => array_values($remove), 'keep' => array_values($keep)];
+    }
+
+    /**
+     * Remove this theme's untouched demo content from the site.
+     *
+     * @return array<string, int> removed per kind, plus "kept"
+     *
+     * @throws RuntimeException with a message fit to show an admin
+     */
+    public function removeDemo(string $themeName, ?string $actorId = null): array
+    {
+        $bundles = $this->removableBundles($themeName);
+        $totals = [];
+
+        try {
+            foreach ($bundles as $path) {
+                try {
+                    $counts = $this->remover()->removeUntouched(self::read($path), $actorId);
+                } catch (\InvalidArgumentException $e) {
+                    throw new RuntimeException(basename($path).': '.$e->getMessage(), 0, $e);
+                }
+
+                foreach ($counts as $kind => $count) {
+                    $totals[$kind] = ($totals[$kind] ?? 0) + (int) $count;
+                }
+            }
+        } finally {
+            Cache::forget(self::onSiteKey($themeName, $bundles));
+        }
+
+        return $totals;
+    }
+
+    /**
+     * One line for an admin: what a removal took out.
+     *
+     * @param  array<string, int>  $totals
+     */
+    public static function removalSummary(array $totals): string
+    {
+        $labels = ['pages' => 'page', 'templates' => 'header/footer part', 'menus' => 'menu', 'patterns' => 'pattern', 'blog:posts' => 'post', 'forms:forms' => 'form'];
+        $parts = [];
+
+        foreach ($labels as $key => $noun) {
+            $n = (int) ($totals[$key] ?? 0);
+            if ($n > 0) {
+                $parts[] = $n.' '.$noun.($n === 1 ? '' : 's');
+            }
+        }
+
+        $kept = (int) ($totals['kept'] ?? 0);
+        $removed = $parts === [] ? 'Nothing was removed' : 'Removed '.implode(', ', $parts);
+
+        return $removed.($kept > 0 ? " — {$kept} kept because you changed them or they are still in use." : '.');
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws RuntimeException with a message fit to show an admin
+     */
+    private function removableBundles(string $themeName): array
+    {
+        $this->remover();
+
+        $bundles = $this->bundles($themeName);
+        if ($bundles === []) {
+            throw new RuntimeException('This theme does not ship demo content.');
+        }
+
+        return $bundles;
+    }
+
+    private function remover(): ThemeContentRemover
+    {
+        return $this->remover ?? throw new RuntimeException('Removing demo content needs a newer Magna Pages plugin.');
+    }
+
+    /** @param  list<string>  $bundles */
+    private static function onSiteKey(string $themeName, array $bundles): string
+    {
+        $stamp = array_map(static fn (string $path): string => $path.'|'.(int) @filemtime($path).'|'.(int) @filesize($path), $bundles);
+
+        return 'magna.themes.demo-on-site.'.sha1($themeName.'|'.implode(';', $stamp));
     }
 
     /** Whether this installed theme ships demo content this site can import. */
@@ -115,6 +270,8 @@ final class ThemeContent
                 $totals[$kind] = ($totals[$kind] ?? 0) + (int) $count;
             }
         }
+
+        Cache::forget(self::onSiteKey($themeName, $bundles));
 
         return $totals;
     }

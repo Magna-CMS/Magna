@@ -43,8 +43,15 @@ class ThemeManager
         $importer = $this->container !== null && $this->container->bound(ThemeContentImporter::class)
             ? $this->container->make(ThemeContentImporter::class)
             : null;
+        $remover = $this->container !== null && $this->container->bound(ThemeContentRemover::class)
+            ? $this->container->make(ThemeContentRemover::class)
+            : null;
 
-        return new ThemeContent($this, $importer instanceof ThemeContentImporter ? $importer : null);
+        return new ThemeContent(
+            $this,
+            $importer instanceof ThemeContentImporter ? $importer : null,
+            $remover instanceof ThemeContentRemover ? $remover : null,
+        );
     }
 
     /**
@@ -288,9 +295,17 @@ class ThemeManager
      * Removing the active theme deactivates it first, so the site is never
      * left pointing at a directory that no longer exists.
      *
+     * With $removeDemo, the theme's untouched demo content goes first: the
+     * bundles are the only record of what it imported, and they are about to
+     * be deleted with everything else. A failed removal stops here, leaving
+     * the theme installed so it can be tried again.
+     *
+     * @return array<string, int> what the demo removal took out (empty without $removeDemo)
+     *
      * @throws InvalidThemeException
+     * @throws \RuntimeException when the demo content could not be removed
      */
-    public function remove(string $name): void
+    public function remove(string $name, bool $removeDemo = false, ?string $actorId = null): array
     {
         $theme = $this->find($name);
 
@@ -298,10 +313,14 @@ class ThemeManager
             throw new InvalidThemeException('That theme is not installed.');
         }
 
+        $removed = $removeDemo ? $this->content()->removeDemo($theme->name, $actorId) : [];
+
         if (ThemeSettings::get()->active === $theme->name) {
             $this->deactivate();
         }
 
         $this->files->remove($this->pathFor($theme->name));
+
+        return $removed;
     }
 }

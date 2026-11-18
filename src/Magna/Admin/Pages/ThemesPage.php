@@ -11,6 +11,7 @@ use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Log;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Magna\Admin\Concerns\ManagesThemeDemoContent;
 use Magna\Admin\Concerns\ShowsMarketplaceDetails;
 use Magna\Licensing\Concerns\ChecksOutWithRazorpay;
 use Magna\Licensing\LicenseClient;
@@ -46,6 +47,9 @@ class ThemesPage extends Page
         // imports demo content if "Include demo content" was ticked.
         onOrderSettled as installSettledOrder;
     }
+
+    // Remove and switch, with the option to take a theme's demo content out.
+    use ManagesThemeDemoContent;
 
     // "See more" on a Browse card: the full store listing in a modal.
     use ShowsMarketplaceDetails;
@@ -163,6 +167,7 @@ class ThemesPage extends Page
                     'homepage' => $t->homepage,
                     'active' => $t->name === $activeName,
                     'has_demo' => $content->available($t->name),
+                    'demo_on_site' => $content->onSite($t->name),
                 ] + $updateFields($t),
                 array_values(array_filter($installed, fn (ThemeManifest $t): bool => ! $t->isAddon())),
             ),
@@ -560,19 +565,6 @@ class ThemesPage extends Page
             ->body('The previous version is in the page\'s history if you need it back.')
             ->success()
             ->send();
-    }
-
-    public function remove(string $name): void
-    {
-        try {
-            $this->themes()->remove($name);
-        } catch (Throwable $e) {
-            Notification::make()->title('Could not remove that theme')->body($e->getMessage())->danger()->send();
-
-            return;
-        }
-
-        Notification::make()->title('Theme removed.')->success()->send();
     }
 
     // A Livewire page cannot constructor-inject, and the app() ratchet in
