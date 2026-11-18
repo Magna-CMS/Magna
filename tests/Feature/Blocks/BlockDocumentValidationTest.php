@@ -24,6 +24,22 @@ use Tests\TestCase;
 
 uses(TestCase::class, RefreshDatabase::class);
 
+/** Object keys sorted at every depth; list order left as it is. */
+function blocksDocumentKeysSorted(mixed $value): mixed
+{
+    if (! is_array($value)) {
+        return $value;
+    }
+
+    $value = array_map(blocksDocumentKeysSorted(...), $value);
+
+    if (! array_is_list($value)) {
+        ksort($value);
+    }
+
+    return $value;
+}
+
 function validSection(string $id = 'sec-1', array $blocks = []): array
 {
     return [
@@ -256,5 +272,9 @@ it('EntryManager persists a valid wrapped document unchanged (tolerant round-tri
 
     $read = Entry::type('doc_tolerant_page')->where($entry->getKeyName(), $entry->getKey())->firstOrFail();
 
-    expect($read->getAttribute('blocks_data'))->toBe($document);
+    // Postgres stores the column as jsonb, which keeps an object's keys but not
+    // their order, so compare with object keys sorted. Lists keep their order,
+    // and the comparison stays strict so a changed value type still fails.
+    expect(blocksDocumentKeysSorted($read->getAttribute('blocks_data')))
+        ->toBe(blocksDocumentKeysSorted($document));
 });
