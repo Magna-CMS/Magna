@@ -276,14 +276,14 @@ final class UpdateFinalizer
         $report = $this->forwarder->repair();
 
         foreach ($report['repaired'] as $file) {
-            $this->log->line("Root forwarder {$file} corrected: public media now reaches public/storage.");
+            $this->log->line("Root forwarder {$file} corrected to match a fresh archive's.");
         }
 
         if ($report['failed'] === []) {
             return;
         }
 
-        $body = 'PHP could not correct '.implode(' and ', $report['failed']).' at the site root, so public media keeps answering 403. Delete "storage|" from the deny list in that file by hand.';
+        $body = 'PHP could not correct '.implode(' and ', $report['failed']).' at the site root. By hand: delete "storage|" from the deny list (or public media keeps answering 403), and in .htaccess add "DirectorySlash Off" inside "<IfModule mod_dir.c>" above the rewrite block (or the Themes page can loop with too many redirects).';
 
         Log::warning('[magna.updater] '.$body);
         $this->log->line($body);

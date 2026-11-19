@@ -105,3 +105,33 @@ it('reports a file it cannot write instead of throwing', function (): void {
     expect((new RootForwarderRepair($readOnly, $paths))->repair())->toBe(['repaired' => [], 'failed' => ['.htaccess']])
         ->and((string) file_get_contents($paths->base('.htaccess')))->toBe(DENYING_HTACCESS);
 });
+
+/** An installed forwarder from before DirectorySlash Off, already past the storage fix. */
+const FORWARDER_WITHOUT_DIRECTORY_SLASH = "Options -Indexes\n\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteRule ^(.*)$ public/$1 [L]\n</IfModule>\n";
+
+it('turns off mod_dir slash redirects, so /themes stops looping once a theme is installed', function (): void {
+    $paths = forwarderSite();
+    file_put_contents($paths->base('.htaccess'), FORWARDER_WITHOUT_DIRECTORY_SLASH);
+
+    expect(repairForwarder($paths))->toBe(['repaired' => ['.htaccess'], 'failed' => []])
+        ->and((string) file_get_contents($paths->base('.htaccess')))->toBe(
+            "Options -Indexes\n\n<IfModule mod_dir.c>\n    DirectorySlash Off\n</IfModule>\n\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteRule ^(.*)$ public/$1 [L]\n</IfModule>\n",
+        );
+
+    // The block is what a fresh archive writes, and a second run adds nothing.
+    $builder = (string) file_get_contents(dirname(__DIR__, 3).'/bin/build-release.php');
+    expect($builder)->toContain("<IfModule mod_dir.c>\n    DirectorySlash Off\n</IfModule>")
+        ->and(repairForwarder($paths))->toBe(['repaired' => [], 'failed' => []]);
+});
+
+it('leaves an .htaccess that is not Magna\'s forwarder, or already decides DirectorySlash', function (): void {
+    $paths = forwarderSite();
+
+    file_put_contents($paths->base('.htaccess'), "<IfModule mod_rewrite.c>\n    RewriteRule ^ index.php [L]\n</IfModule>\n");
+    expect(repairForwarder($paths))->toBe(['repaired' => [], 'failed' => []]);
+
+    $own = "DirectorySlash On\n".FORWARDER_WITHOUT_DIRECTORY_SLASH;
+    file_put_contents($paths->base('.htaccess'), $own);
+    expect(repairForwarder($paths))->toBe(['repaired' => [], 'failed' => []])
+        ->and((string) file_get_contents($paths->base('.htaccess')))->toBe($own);
+});

@@ -23,9 +23,26 @@ use Symfony\Component\Filesystem\Filesystem;
  * only the exact original is touched. Anything else — the file absent, the
  * line already corrected, a list the operator rewrote — is left alone, which
  * also makes a repeat run do nothing.
+ *
+ * The .htaccess also gains `DirectorySlash Off` when it lacks it. Without it,
+ * mod_dir answers /themes with a 301 to /themes/ as soon as a theme is
+ * installed (themes/ is a real folder at the root), Laravel strips the slash
+ * again, and the admin's Themes page is unreachable on a site whose panel sits
+ * at the domain root. The block goes in just above the forwarder's rewrite
+ * block, exactly as a fresh archive writes it, and only into a file that is
+ * recognisably Magna's forwarder.
  */
 final class RootForwarderRepair
 {
+    /** What a fresh archive's .htaccess carries above its rewrite block. */
+    private const DIRECTORY_SLASH_OFF = "<IfModule mod_dir.c>\n    DirectorySlash Off\n</IfModule>\n\n";
+
+    /** The forwarder's own rewrite block, which the directive is placed above. */
+    private const REWRITE_BLOCK = '<IfModule mod_rewrite.c>';
+
+    /** The forward rule that marks a file as Magna's root forwarder. */
+    private const FORWARD_RULE = 'RewriteRule ^(.*)$ public/$1 [L]';
+
     /** @var array<string, array{0: string, 1: string}> */
     private const CORRECTIONS = [
         '.htaccess' => [
@@ -60,13 +77,18 @@ final class RootForwarderRepair
             }
 
             try {
-                $contents = $this->files->readFile($path);
+                $original = $this->files->readFile($path);
+                $contents = str_replace($denied, $corrected, $original);
 
-                if (! str_contains($contents, $denied)) {
+                if ($file === '.htaccess') {
+                    $contents = $this->withDirectorySlashOff($contents);
+                }
+
+                if ($contents === $original) {
                     continue;
                 }
 
-                $this->files->dumpFile($path, str_replace($denied, $corrected, $contents));
+                $this->files->dumpFile($path, $contents);
                 $report['repaired'][] = $file;
             } catch (IOException) {
                 $report['failed'][] = $file;
@@ -74,5 +96,22 @@ final class RootForwarderRepair
         }
 
         return $report;
+    }
+
+    /**
+     * The forwarder with `DirectorySlash Off` above its rewrite block, or the
+     * file as it was when it already has the directive or is not Magna's.
+     */
+    private function withDirectorySlashOff(string $contents): string
+    {
+        if (str_contains($contents, 'DirectorySlash')
+            || ! str_contains($contents, self::FORWARD_RULE)
+            || ! str_contains($contents, self::REWRITE_BLOCK)) {
+            return $contents;
+        }
+
+        $at = (int) strpos($contents, self::REWRITE_BLOCK);
+
+        return substr($contents, 0, $at).self::DIRECTORY_SLASH_OFF.substr($contents, $at);
     }
 }
