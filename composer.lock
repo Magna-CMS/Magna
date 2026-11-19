@@ -4059,16 +4059,16 @@
         },
         {
             "name": "magna-cms/plugin-sdk",
-            "version": "v1.8.0",
+            "version": "v1.9.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/Magna-CMS/Magna-Plugin-SDK.git",
-                "reference": "5d32f7c50be3d4949219efc7e26f895948320b61"
+                "reference": "c949966e85e9a96c5fa13cacee121f9b28881721"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/Magna-CMS/Magna-Plugin-SDK/zipball/5d32f7c50be3d4949219efc7e26f895948320b61",
-                "reference": "5d32f7c50be3d4949219efc7e26f895948320b61",
+                "url": "https://api.github.com/repos/Magna-CMS/Magna-Plugin-SDK/zipball/c949966e85e9a96c5fa13cacee121f9b28881721",
+                "reference": "c949966e85e9a96c5fa13cacee121f9b28881721",
                 "shasum": ""
             },
             "require": {
@@ -4119,7 +4119,7 @@
                 "issues": "https://github.com/Magna-CMS/Magna-Plugin-SDK/issues",
                 "source": "https://github.com/Magna-CMS/Magna-Plugin-SDK"
             },
-            "time": "2026-10-19T09:23:04+00:00"
+            "time": "2026-11-19T03:16:29+00:00"
         },
         {
             "name": "masterminds/html5",
