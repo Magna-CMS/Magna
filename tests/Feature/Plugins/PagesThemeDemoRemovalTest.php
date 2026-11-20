@@ -59,7 +59,11 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
-    (new Filesystem)->remove($this->themesRoot);
+    // beforeEach skips before it sets themesRoot when a dev plugin is absent
+    // (as in CI); a skipped test still runs this hook.
+    if (isset($this->themesRoot)) {
+        (new Filesystem)->remove($this->themesRoot);
+    }
 });
 
 function removalTextBlock(string $id, string $html): array
