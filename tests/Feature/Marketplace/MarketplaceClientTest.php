@@ -167,3 +167,22 @@ it('fetches the written reviews for a package', function (): void {
 
     expect($reviews)->toHaveCount(1)->and($reviews[0]['author'])->toBe('Ada');
 });
+
+it('caches listing details, and Check for updates drops them so an edited listing shows at once', function (): void {
+    $listing = fn (string $description): array => [...fakeCatalog()[0], 'description' => $description];
+
+    Http::fake([Marketplace::API_BASE.'/plugins/acme/forum*' => Http::sequence()
+        ->push($listing('First description.'))
+        ->push($listing('Edited on the marketplace.'))]);
+
+    $client = app(MarketplaceClient::class);
+
+    expect($client->details('acme/forum')?->description)->toBe('First description.')
+        ->and($client->details('acme/forum')?->description)->toBe('First description.');
+    Http::assertSentCount(1);
+
+    $client->clearCache();
+
+    expect($client->details('acme/forum')?->description)->toBe('Edited on the marketplace.');
+    Http::assertSentCount(2);
+});

@@ -50,6 +50,9 @@ class MarketplaceClient
     /** Cache key for the theme catalog — kept apart from the plugin one. */
     private const THEME_CACHE_KEY = Marketplace::CACHE_KEY.'.themes';
 
+    /** Bumped by clearCache() to retire every cached listing details entry at once. */
+    private const DETAILS_GENERATION_KEY = Marketplace::CACHE_KEY.'.details.generation';
+
     /**
      * All marketplace THEMES compatible with the running core version.
      *
@@ -106,7 +109,9 @@ class MarketplaceClient
      *
      * Cached briefly per package: opening the same details twice while
      * browsing should not cost a round trip each time, and a review posted
-     * minutes ago is allowed to appear on the next visit.
+     * minutes ago is allowed to appear on the next visit. "Check for updates"
+     * drops these too (see clearCache), so a listing edited on the marketplace
+     * shows as soon as an operator asks for it.
      */
     public function details(string $package): ?ListingDetails
     {
@@ -114,7 +119,7 @@ class MarketplaceClient
             return null;
         }
 
-        $key = Marketplace::CACHE_KEY.'.details.'.$package;
+        $key = Marketplace::CACHE_KEY.'.details.'.$this->detailsGeneration().'.'.$package;
         $raw = Cache::get($key);
 
         if (! is_array($raw)) {
@@ -153,11 +158,23 @@ class MarketplaceClient
         return $versions;
     }
 
-    /** Drop the cached catalog (e.g. after installing a plugin). */
+    /** Drop the cached catalog and listing details (e.g. after installing a plugin). */
     public function clearCache(): void
     {
         Cache::forget(Marketplace::CACHE_KEY);
         Cache::forget(self::THEME_CACHE_KEY);
+
+        // Details are cached one key per package, and no cache store can list
+        // its keys, so they are retired as a set: moving to a new generation
+        // leaves the old entries unread until their ten minutes run out.
+        Cache::forever(self::DETAILS_GENERATION_KEY, $this->detailsGeneration() + 1);
+    }
+
+    private function detailsGeneration(): int
+    {
+        $generation = Cache::get(self::DETAILS_GENERATION_KEY);
+
+        return is_int($generation) ? $generation : 0;
     }
 
     /**
